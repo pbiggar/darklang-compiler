@@ -1,0 +1,213 @@
+module Darklang.Stdlib.Int128
+
+
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.ParseError reason=compiler-implementation
+type ParseError =
+  | BadFormat
+  | OutOfRange
+
+
+// @compiler blocked: container-adaptation
+impl Modulo for Int128 =
+  /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
+  /// The modulus <param b> must be greater than 0.
+  /// Use <fn Int128.remainder> if you want the remainder after division, which has
+  /// a different behavior for negative numbers.
+  // @compiler blocked: container-adaptation
+  let modulo (a: Int128) (b: Int128) : Int128 = Builtin.int128Mod a b
+
+
+/// Returns the integer remainder left over after dividing <param value> by
+/// <param divisor>, as a <type Result>.
+/// For example, {{Int128.remainder 15 6 == Ok 3}}. The remainder will be
+/// negative only if {{<var value> < 0}}.
+/// The sign of <param divisor> doesn't influence the outcome.
+/// Returns an {{Error}} if <param divisor> is {{0}}.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.remainder reason=compiler-implementation
+let remainder
+  (value: Int128)
+  (divisor: Int128)
+  : Stdlib.Result.Result<Int128, String> =
+  Builtin.int128Remainder value divisor
+
+
+// @compiler blocked: container-adaptation
+impl Add for Int128 =
+  /// Adds two 128-bit signed integers together (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let add (a: Int128) (b: Int128) : Int128 = Builtin.int128Add a b
+
+
+// @compiler blocked: container-adaptation
+impl Subtract for Int128 =
+  /// Subtracts two 128-bit signed integers (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let subtract (a: Int128) (b: Int128) : Int128 = Builtin.int128Subtract a b
+
+
+// @compiler blocked: container-adaptation
+impl Multiply for Int128 =
+  /// Multiplies two 128-bit signed integers (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let multiply (a: Int128) (b: Int128) : Int128 = Builtin.int128Multiply a b
+
+
+// @compiler blocked: container-adaptation
+impl Divide for Int128 =
+  /// Divides two 128-bit signed integers
+  // @compiler blocked: container-adaptation
+  let divide (a: Int128) (b: Int128) : Int128 = Builtin.int128Divide a b
+
+
+// @compiler blocked: container-adaptation
+impl Power for Int128 =
+  /// Raise <param base> to the power of <param exponent>.
+  /// Overflow wraps around.
+  /// Raises an error if <param exponent> is negative.
+  // @compiler blocked: container-adaptation
+  let power (``base``: Int128) (exponent: Int128) : Int128 =
+    Builtin.int128Power ``base`` exponent
+
+
+// @compiler blocked: container-adaptation
+impl Negate for Int128 =
+  /// Returns the negation of <param a>, {{-a}}. Negating the minimum value wraps back to itself.
+  // @compiler blocked: container-adaptation
+  let negate (a: Int128) : Int128 = Builtin.int128Negate a
+
+
+// @compiler blocked: container-adaptation
+impl Compare for Int128 =
+  /// Returns {{true}} if <param a> is less than <param b>
+  // @compiler blocked: container-adaptation
+  let lessThan (a: Int128) (b: Int128) : Bool = Builtin.int128LessThan a b
+  /// Returns {{true}} if <param a> is less than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo (a: Int128) (b: Int128) : Bool =
+    Builtin.int128LessThanOrEqualTo a b
+  /// Returns {{true}} if <param a> is greater than <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThan (a: Int128) (b: Int128) : Bool = Builtin.int128GreaterThan a b
+  /// Returns {{true}} if <param a> is greater than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo (a: Int128) (b: Int128) : Bool =
+    Builtin.int128GreaterThanOrEqualTo a b
+
+
+/// Get the square root of an <type Int128>
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.sqrt reason=compiler-implementation
+let sqrt (a: Int128) : Float = Builtin.int128Sqrt a
+
+
+/// Converts an <type Int128> to a <type Float>
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.toFloat reason=compiler-implementation
+let toFloat (a: Int128) : Float = Builtin.int128ToFloat a
+
+
+/// Parses a <type String> into an <type Int128>, returning {{Ok}} with the
+/// parsed value on success, or {{Error}} with a <type ParseError> ({{BadFormat}}
+/// if the string isn't a valid integer, {{OutOfRange}} if it's outside the
+/// <type Int128> range).
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.parse reason=compiler-implementation
+let parse
+  (s: String)
+  : Stdlib.Result.Result<Int128, Stdlib.Int128.ParseError> =
+  Builtin.int128Parse s
+
+
+/// Converts an <type Int8> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromInt8 reason=compiler-implementation
+let fromInt8 (i: Int8) : Int128 = Builtin.int128FromInt8 i
+
+
+/// Converts a <type UInt8> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromUInt8 reason=compiler-implementation
+let fromUInt8 (i: UInt8) : Int128 = Builtin.int128FromUInt8 i
+
+
+/// Converts an <type Int16> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromInt16 reason=compiler-implementation
+let fromInt16 (i: Int16) : Int128 = Builtin.int128FromInt16 i
+
+
+/// Converts a <type UInt16> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromUInt16 reason=compiler-implementation
+let fromUInt16 (i: UInt16) : Int128 = Builtin.int128FromUInt16 i
+
+
+/// Converts an <type Int32> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromInt32 reason=compiler-implementation
+let fromInt32 (i: Int32) : Int128 = Builtin.int128FromInt32 i
+
+
+/// Converts a <type UInt32> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromUInt32 reason=compiler-implementation
+let fromUInt32 (i: UInt32) : Int128 = Builtin.int128FromUInt32 i
+
+
+/// Converts an <type Int64> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromInt64 reason=compiler-implementation
+let fromInt64 (i: Int64) : Int128 = Builtin.int128FromInt64 i
+
+
+/// Converts a <type UInt64> to an <type Int128>.
+// @compiler replace: packages/darklang/stdlib/int128.dark#Darklang.Stdlib.Int128.fromUInt64 reason=compiler-implementation
+let fromUInt64 (i: UInt64) : Int128 = Builtin.int128FromUInt64 i
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseAnd for Int128 =
+  /// Bitwise AND on two <type Int128> values
+  // @compiler blocked: container-adaptation
+  let bitwiseAnd (a: Int128) (b: Int128) : Int128 = Builtin.int128BitwiseAnd a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseOr for Int128 =
+  /// Bitwise OR on two <type Int128> values
+  // @compiler blocked: container-adaptation
+  let bitwiseOr (a: Int128) (b: Int128) : Int128 = Builtin.int128BitwiseOr a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseXor for Int128 =
+  /// Bitwise XOR on two <type Int128> values
+  // @compiler blocked: container-adaptation
+  let bitwiseXor (a: Int128) (b: Int128) : Int128 = Builtin.int128BitwiseXor a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseNot for Int128 =
+  /// Bitwise NOT on an <type Int128> value
+  // @compiler blocked: container-adaptation
+  let bitwiseNot (a: Int128) : Int128 = Builtin.int128BitwiseNot a
+
+
+// @compiler blocked: container-adaptation
+impl ShiftLeft for Int128 =
+  /// Bitwise left shift of an <type Int128> value
+  // @compiler blocked: container-adaptation
+  let shiftLeft (a: Int128) (b: Int128) : Int128 = Builtin.int128ShiftLeft a b
+
+
+// @compiler blocked: container-adaptation
+impl ShiftRight for Int128 =
+  /// Bitwise right shift of an <type Int128> value
+  // @compiler blocked: container-adaptation
+  let shiftRight (a: Int128) (b: Int128) : Int128 = Builtin.int128ShiftRight a b
+
+// @compiler blocked: container-adaptation
+impl ToString for Int128 =
+  /// Stringify <param int128>
+  // @compiler blocked: container-adaptation
+  let toString (int128: Int128) : String = Builtin.int128ToString int128
+
+// @compiler blocked: container-adaptation
+impl Zero for Int128 =
+  // @compiler blocked: container-adaptation
+  let zero () : Int128 = 0Q
+
+// @compiler blocked: container-adaptation
+impl One for Int128 =
+  // @compiler blocked: container-adaptation
+  let one () : Int128 = 1Q

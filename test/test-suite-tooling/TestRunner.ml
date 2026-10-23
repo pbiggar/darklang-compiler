@@ -132,6 +132,8 @@ let printHelp () =
       "  --target=TARGET     Validate host (default) or linux-x86_64";
       "  --timings-json=PATH  Write machine-readable timing data to PATH";
       "  --results-json=PATH  Write individual E2E outcomes for ledger updates";
+      "  --trial-upstream  Run pending imported tests to classify their actual \
+       outcomes";
       "  --codegen-profile-json=PATH  Write opt-in per-function ARM64 codegen \
        metrics";
       "  --quiet            Quiet mode: print 'success' or list failed tests";
@@ -589,6 +591,7 @@ let runTestsWithProgressReporter completedTestReporter args =
     let roundtripAllDark = TestRunnerArgs.hasRoundtripAllDarkArg args
     and showAllTestTimings = TestRunnerArgs.hasAllTestTimingsArg args
     and verbose = TestRunnerArgs.hasVerboseArg args in
+    let trialUpstream = Array.exists (( = ) "--trial-upstream") args in
     let timingsJsonPath = get (TestRunnerArgs.parseTimingsJsonArg args)
     and resultsJsonPath = get (TestRunnerArgs.parseResultsJsonArg args)
     and codegenProfileJsonPath =
@@ -659,7 +662,24 @@ let runTestsWithProgressReporter completedTestReporter args =
       else includeUpstreamDarkPathsForE2E
     in
     let e2eFiles = getTestFiles "e2e" "e2e" in
-    let e2eTestFiles = Array.append e2eFiles includeUpstreamDarkPathsForE2E in
+    let importedFiles =
+      FileIO.readText (RepositoryTestFiles.scriptPath "upstream/sources.list")
+      |> String.split_on_char '\n'
+      |> List.filter (fun line ->
+          line <> "" && not (String.starts_with ~prefix:"#" line))
+      |> List.map (fun path ->
+          RepositoryTestFiles.scriptPath ("upstream/" ^ path))
+      |> Array.of_list
+      |> fun paths ->
+      match filter with
+      | None -> paths
+      | Some _ ->
+          let matched = filterUpstreamDarkPaths paths in
+          if Array.length matched = 0 then paths else matched
+    in
+    let e2eTestFiles =
+      Array.concat [ e2eFiles; includeUpstreamDarkPathsForE2E; importedFiles ]
+    in
     let _roundtripCorpusTestFiles =
       Array.append e2eFiles includeUpstreamDarkPathsForRoundtrip
     in
@@ -919,6 +939,15 @@ let runTestsWithProgressReporter completedTestReporter args =
     in
     let runState = F.createStateWithProgressReporter completedTestReporter in
     let e2eOutcomes = Queue.create () in
+    let trialReceiptsPath =
+      if trialUpstream then
+        Option.map (fun path -> path ^ ".jsonl") resultsJsonPath
+      else None
+    in
+    Option.iter
+      (fun path -> Out_channel.with_open_bin path (fun _ -> ()))
+      trialReceiptsPath;
+
     let codegenMetrics = ref []
     and codegenLirOpMetrics = ref []
     and cacheCounts = ref M.empty in
@@ -1013,6 +1042,16 @@ let runTestsWithProgressReporter completedTestReporter args =
     let stdlibElapsed = elapsed start in
     recordPhaseOverhead "Stdlib Build Overhead" stdlibElapsed before
       (passTimingTotal ());
+    let importedStdlib =
+      lazy
+        (match
+           StdlibCompilation.buildImportedTestStdlibWithTrace target
+             (Some recordPassTiming)
+         with
+        | Ok value -> value
+        | Error message ->
+            Crash.crash ("Imported test library did not build: " ^ message))
+    in
     let allUnitTests = Array.append (buildUnitTests stdlib) [||] in
     let unitSuiteSupportsTarget name =
       let arm64 =
@@ -1088,8 +1127,14 @@ let runTestsWithProgressReporter completedTestReporter args =
               | Ok run -> run
               | Error failure -> failure.R.run
             in
-            let preambleFailure message =
-              Error { R.run = R.CompileFailed (1, message, 0L); message }
+            let preambleFailure test message =
+              match test.E.compilerDisposition with
+              | CompilerAnnotations.Xfail _ ->
+                  R.evaluateExpectations test (R.CompileFailed (1, message, 0L))
+              | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+              | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
+                ->
+                  Error { R.run = R.CompileFailed (1, message, 0L); message }
             in
             let collectExitCodeDetails (test : E.e2eTest) run =
               let code, _, _, _, _ = unpack run in
@@ -1174,16 +1219,54 @@ let runTestsWithProgressReporter completedTestReporter args =
               recordNonPassTiming F.testRuntimeTimingName runtime
             in
             let recordLogicalResult index (test : E.e2eTest) result =
-              let _, _, _, compile, runtime = unpack (fromResult result) in
+              let run = fromResult result in
+              let exitCode, stdout, stderr, compile, runtime = unpack run in
               results.(index) <- Some (test, result);
-              if Option.is_some resultsJsonPath then
-                Queue.add
-                  ( RepositoryTestFiles.relativePath test.E.sourceFile,
-                    test.E.name,
+              let outcome =
+                ( RepositoryTestFiles.relativePath test.E.sourceFile,
+                  test.E.name,
+                  let status, message =
                     match result with
                     | Ok _ -> ("pass", "")
-                    | Error failure -> ("fail", failure.R.message) )
-                  e2eOutcomes;
+                    | Error failure -> ("fail", failure.R.message)
+                  in
+                  [
+                    ("status", JString status);
+                    ("message", JString message);
+                    ("source_line", JInt test.E.sourceLine);
+                    ( "phase",
+                      JString
+                        (match run with
+                        | R.CompileFailed _ -> "compile"
+                        | R.Ran _ -> "runtime") );
+                    ("exit_code", JInt exitCode);
+                    ("stdout", JString stdout);
+                    ("stderr", JString stderr);
+                  ] )
+              in
+              if Option.is_some resultsJsonPath then
+                Queue.add outcome e2eOutcomes;
+              Option.iter
+                (fun path ->
+                  let file, name, outcome = outcome in
+                  let channel =
+                    open_out_gen
+                      [ Open_wronly; Open_append; Open_binary ]
+                      0o600 path
+                  in
+                  Fun.protect
+                    ~finally:(fun () -> close_out channel)
+                    (fun () ->
+                      output_string channel
+                        (serializeJson false 0
+                           (JObject
+                              ([
+                                 ("source_file", JString file);
+                                 ("name", JString name);
+                               ]
+                              @ outcome))
+                        ^ "\n")))
+                trialReceiptsPath;
               recordTiming
                 {
                   F.name = suiteName ^ ": " ^ test.E.name;
@@ -1217,9 +1300,16 @@ let runTestsWithProgressReporter completedTestReporter args =
             List.iter
               (function
                 | Single (index, test, prepared) ->
+                    if trialUpstream then
+                      println
+                        ("[trial] "
+                        ^ RepositoryTestFiles.relativePath test.E.sourceFile
+                        ^ ":"
+                        ^ string_of_int test.E.sourceLine
+                        ^ " " ^ test.E.name);
                     let result, delta =
                       match tryPreambleContext test with
-                      | Error message -> (preambleFailure message, 0L)
+                      | Error message -> (preambleFailure test message, 0L)
                       | Ok (stdlib, ctx) ->
                           stats.executions <- stats.executions + 1;
                           let before = passTimingTotal () in
@@ -1245,7 +1335,7 @@ let runTestsWithProgressReporter completedTestReporter args =
                         let batchCount = List.length indexedBatch in
                         match tryPreambleContext firstTest with
                         | Error message ->
-                            let result = preambleFailure message in
+                            let result = preambleFailure firstTest message in
                             recordPhysicalTiming (fromResult result) 0L;
                             List.iter
                               (fun (index, prepared) ->
@@ -1368,7 +1458,19 @@ let runTestsWithProgressReporter completedTestReporter args =
          specialized preamble for the complete suite costs gigabytes before the
          first assertion runs, and keeps unrelated codegen caches alive. *)
       List.iter
-        (runE2EFile baseStdlib suiteName progressLabel)
+        (fun tests ->
+          let library =
+            if
+              Array.exists
+                (fun test ->
+                  Text.contains test.E.sourceFile "upstream/packages/"
+                  || Text.contains test.E.sourceFile
+                       "upstream/backend/testfiles/execution/")
+                tests
+            then Lazy.force importedStdlib
+            else baseStdlib
+          in
+          runE2EFile library suiteName progressLabel tests)
         (R.sourceFileGroups testsArray)
     in
 
@@ -1625,6 +1727,28 @@ let runTestsWithProgressReporter completedTestReporter args =
           println (C.cyan ^ title ^ C.reset);
           let parseStart = now () in
           let allTests, parseErrors = loadE2ETests files in
+          let allTests =
+            if trialUpstream then
+              Array.map
+                (fun test ->
+                  match test.E.compilerDisposition with
+                  | CompilerAnnotations.Blocked "pending-validation" ->
+                      {
+                        test with
+                        E.compilerDisposition = CompilerAnnotations.Run;
+                        skipReason = None;
+                      }
+                  | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+                  | CompilerAnnotations.Excluded _
+                  | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _
+                    ->
+                      {
+                        test with
+                        E.skipReason = Some "trial: already classified";
+                      })
+                allTests
+            else allTests
+          in
           recordNonPassTiming parseTiming (elapsed parseStart);
           reportParseErrors suite parseErrors;
           if Array.length allTests > 0 then begin
@@ -1644,7 +1768,9 @@ let runTestsWithProgressReporter completedTestReporter args =
               println
                 (C.gray
                 ^ Printf.sprintf
-                    "  Skipping %d test(s) marked with skip=\"...\"" skipped
+                    "  Skipping %d test(s) marked with skip or compiler \
+                     annotations"
+                    skipped
                 ^ C.reset);
             if Array.length tests > 0 then begin
               if showStdlib then
@@ -1806,14 +1932,10 @@ let runTestsWithProgressReporter completedTestReporter args =
           queueList e2eOutcomes
           |> List.sort (fun (fileA, nameA, _) (fileB, nameB, _) ->
               compare (fileA, nameA) (fileB, nameB))
-          |> List.map (fun (file, name, (status, message)) ->
+          |> List.map (fun (file, name, outcome) ->
               JObject
-                [
-                  ("source_file", JString file);
-                  ("name", JString name);
-                  ("status", JString status);
-                  ("message", JString message);
-                ])
+                ([ ("source_file", JString file); ("name", JString name) ]
+                @ outcome))
         in
         writeJson false path
           (JObject

@@ -1,0 +1,153 @@
+module Darklang.Stdlib.Dict
+
+
+/// Returns an empty dictionary
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.empty reason=compiler-implementation
+val empty = Dict { }
+
+/// The empty dict, for the same reason an empty list is a zero
+// @compiler blocked: container-adaptation
+impl Stdlib.Zero for Dict<'k, 'v> =
+  // @compiler blocked: container-adaptation
+  let zero () : Dict<'k, 'v> = Dict { }
+
+/// Returns {{true}} if the <param dict> contains no entries
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.isEmpty reason=compiler-implementation
+let isEmpty (dict: Dict<'k, 'v>) : Bool = dict == Dict.empty
+
+/// Returns a dictionary with a single entry {{<param key>: <param value>}}
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.singleton reason=compiler-implementation
+let singleton (key: 'k) (value: 'v) : Dict<'k, 'v> =
+  Stdlib.Dict.set (Dict { }) key value
+
+/// Returns the number of entries in <param dict>
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.size reason=compiler-implementation
+let size (dict: Dict<'k, 'v>) : Int =
+  Builtin.dictSize dict
+
+
+/// If the <param dict> contains <param key>, returns the corresponding value,
+/// wrapped in an <type Option>: {{Some value}}. Otherwise, returns {{None}}.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.get reason=compiler-implementation
+let get (dict: Dict<'k, 'v>) (key: 'k) : Stdlib.Option.Option<'v> =
+  Builtin.dictGet dict key
+
+
+/// Returns a copy of <param dict> with the <param key> set to <param val>.
+/// Raises an error if <param key> is already in <param dict>; use
+/// <fn Dict.setOverridingDuplicates> to replace an existing value.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.set reason=compiler-implementation
+let set (dict: Dict<'k, 'v>) (key: 'k) (``val``: 'v) : Dict<'k, 'v> =
+  Builtin.dictSet dict key ``val``
+
+
+/// Returns a copy of <param dict> with the <param key> set to <param val>,
+/// replacing any existing value for <param key>.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.setOverridingDuplicates reason=compiler-implementation
+let setOverridingDuplicates (dict: Dict<'k, 'v>) (key: 'k) (``val``: 'v) : Dict<'k, 'v> =
+  Builtin.dictSetOverridingDuplicates dict key ``val``
+
+
+/// If the <param dict> contains <param key>, returns a copy of <param dict> with <param key> and its associated value removed. Otherwise, returns <param dict> unchanged.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.remove reason=compiler-implementation
+let remove (dict: Dict<'k, 'v>) (key: 'k) : Dict<'k, 'v> =
+  Builtin.dictRemove dict key
+
+
+/// Returns a combined dictionary with both dictionaries' entries. If the same key exists in both <param left> and <param right>, it will have the value from <param right>.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.merge reason=compiler-implementation
+let merge (left: Dict<'k, 'v>) (right: Dict<'k, 'v>) : Dict<'k, 'v> =
+  Builtin.dictMerge left right
+
+
+/// Returns <param dict>'s keys in a <type List>, in key order
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.keys reason=compiler-implementation
+let keys (dict: Dict<'k, 'v>) : List<'k> =
+  Builtin.dictKeys dict
+
+
+/// Returns <param dict>'s values in a <type List>, in key order
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.values reason=compiler-implementation
+let values (dict: Dict<'k, 'v>) : List<'v> =
+  Builtin.dictValues dict
+
+
+/// Returns <param dict>'s entries as a list of {{(key, value)}} tuples, in key order. This function is the opposite of <fn Dict.fromList>
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.toList reason=compiler-implementation
+let toList (dict: Dict<'k, 'v>) : List<('k * 'v)> =
+  Builtin.dictToList dict
+
+
+/// Returns a <type dict> with <param entries>. Each value in <param entries>
+/// must be a {{(key, value)}} tuple.
+/// If <param entries> contains duplicate <var key>s, the last entry with that
+/// key will be used in the resulting dictionary (use <fn Dict.fromList> if you
+/// want to enforce unique keys).
+/// This function is the opposite of <fn Dict.toList>.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.fromListOverwritingDuplicates reason=compiler-implementation
+let fromListOverwritingDuplicates (entries: List<('k * 'v)>) : Dict<'k, 'v> =
+  Builtin.dictFromListOverwritingDuplicates entries
+
+
+/// Each value in <param entries> must be a {{(key, value)}} tuple.
+/// If <param entries> contains no duplicate keys, returns {{Some <var dict>}}
+/// where <var dict> has <param entries>.
+/// Otherwise, returns {{None}} (use <fn Dict.fromListOverwritingDuplicates>
+/// if you want to overwrite duplicate keys).
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.fromList reason=compiler-implementation
+let fromList (entries: List<('k * 'v)>) : Stdlib.Option.Option<Dict<'k, 'v>> =
+  Builtin.dictFromList entries
+
+
+/// Returns {{true}} if the <param dict> contains an entry with <param key>,
+/// and {{false}} otherwise
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.member reason=compiler-implementation
+let ``member`` (dict: Dict<'k, 'v>) (key: 'k) : Bool =
+  Builtin.dictMember dict key
+
+
+/// Returns a new dictionary that contains the same keys as the original <param
+/// dict> with values that have been transformed by {{fn}}, which operates on
+/// each key-value pair.
+/// Consider <fn Dict.filterMap> if you also want to drop some of the entries.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.map reason=compiler-implementation
+let map (dict: Dict<'k, 'v>) (fn: 'k -> 'v -> 'b) : Dict<'k, 'b> =
+  dict
+  |> Stdlib.Dict.toList
+  |> List.map (fun (k, v) -> (k, fn k v))
+  |> Dict.fromListOverwritingDuplicates
+
+
+/// Evaluates {{fn key value}} on every entry in <param dict>. Returns {{()}}.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.iter reason=compiler-implementation
+let iter (dict: Dict<'k, 'v>) (fn: 'k -> 'v -> Unit) : Unit =
+  dict |> Stdlib.Dict.toList |> List.iter (fun (k, v) -> fn k v)
+
+
+/// Evaluates {{fn key value}} on every entry in <param dict>. Returns a <type
+/// dict> that contains only the entries of <param dict> for which <param fn>
+/// returned {{true}}.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.filter reason=compiler-implementation
+let filter (dict: Dict<'k, 'v>) (fn: 'k -> 'v -> Bool) : Dict<'k, 'v> =
+  dict
+  |> Stdlib.Dict.toList
+  |> List.filter (fun (k, v) -> fn k v)
+  |> Dict.fromListOverwritingDuplicates
+
+
+/// Calls <param fn> on every entry in <param dict>, returning a <type dict> that drops some entries (filter) and transforms others (map).
+/// If {{fn key value}} returns {{None}}, does not add <var key> or <var value> to the new dictionary, dropping the entry.
+/// If {{fn key value}} returns {{Some newValue}}, adds the entry <var key>: <var newValue> to the new dictionary.
+/// This function combines <fn Dict.filter> and <fn Dict.map>.
+// @compiler replace: packages/darklang/stdlib/dict.dark#Darklang.Stdlib.Dict.filterMap reason=compiler-implementation
+let filterMap
+  (dict: Dict<'k, 'v>)
+  (fn: 'k -> 'v -> Option.Option<'b>)
+  : Dict<'k, 'b> =
+  dict
+  |> Stdlib.Dict.toList
+  |> List.filterMap (fun (k, v) ->
+    match fn k v with
+    | None -> Option.Option.None
+    | Some newValue -> Option.Option.Some ((k, newValue)))
+  |> Dict.fromListOverwritingDuplicates

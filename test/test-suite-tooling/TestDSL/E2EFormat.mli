@@ -23,6 +23,7 @@ type e2eTest = {
   errorExpectation : errorExpectation option;
   expectedErrorMessage : string option;
   skipReason : string option;
+  compilerDisposition : Dark_compiler.CompilerAnnotations.disposition;
   disableFreeList : bool;
   disableANFOpt : bool;
   disableANFConstFolding : bool;

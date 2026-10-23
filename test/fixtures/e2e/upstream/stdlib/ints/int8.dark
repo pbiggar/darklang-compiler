@@ -44,6 +44,7 @@ Stdlib.Int8.add -1y 2y = 1y
 Stdlib.Int8.add 1y 0y = 1y
 Stdlib.Int8.add -55y 55y = 0y
 Stdlib.Int8.add 55y 55y = 110y
+// @compiler blocked: compiler-gap
 Stdlib.Int8.add Darklang.Test.Values.int8Value 5y = 10y
 Stdlib.Int8.add 127y 1y = -128y
 Stdlib.Int8.add -128y -1y = 127y

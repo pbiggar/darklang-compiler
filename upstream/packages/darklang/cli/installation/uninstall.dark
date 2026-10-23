@@ -1,0 +1,65 @@
+module Darklang.Cli.Installation.Uninstall
+
+
+// @compiler blocked: missing-implementation
+let removeDarklangDirectory
+  (host: Stdlib.Cli.Host.Host)
+  : Stdlib.Result.Result<Unit, String> =
+  let darklangDir = Config.getDarklangHomeDir host
+  Stdlib.Cli.Unix.removeDirectory darklangDir
+
+
+// @compiler blocked: missing-implementation
+let runUninstall
+  (host: Stdlib.Cli.Host.Host)
+  : Stdlib.Result.Result<Unit, String> =
+  let result =
+    (Stdlib.Cli.Unix.deleteAlias host.defaultShell "dark")
+    |> Stdlib.Result.andThen (fun _ -> removeDarklangDirectory host)
+
+  match result with
+  | Ok _ -> Stdlib.Result.Result.Ok()
+  | Error err -> Stdlib.Result.Result.Error $"Error uninstalling dark: {err}"
+
+// CLI interface functions
+// @compiler blocked: missing-implementation
+let execute (state: AppState) (args: List<String>) : AppState =
+  let currentMode = Installation.System.getInstallationMode ()
+  let host = (Stdlib.Cli.Host.getRuntimeHost ()) |> Builtin.unwrap
+
+  // Parse flags
+  let autoConfirm =
+    (Stdlib.List.contains args "--yes") || (Stdlib.List.contains args "-y")
+
+  match currentMode with
+  | Installed ->
+    match Installation.System.uninstallWithConfirmation host autoConfirm with
+    | Ok message ->
+      Stdlib.printLine (View.formatSuccess message)
+      // Exit after successful uninstall since the executable is being removed
+      { state with isExiting = true }
+    | Error e ->
+      Stdlib.printErrorLine (View.formatError e)
+      Cli.exitWith state false
+  | Portable ->
+    Stdlib.printLine (View.formatError "Cannot uninstall - running in portable mode")
+    Stdlib.printLine "To remove this portable installation, simply delete the current directory"
+    state
+
+
+// @compiler blocked: missing-implementation
+let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
+  []
+
+
+// @compiler blocked: missing-implementation
+let help (_state: AppState) : String =
+  [ "Usage: uninstall [--yes|-y]"
+    "Uninstall Darklang CLI from global installation."
+    ""
+    "Removes the CLI from ~/.darklang/ and cleans up shell configuration."
+    "Only available for global installations."
+    ""
+    "Flags:"
+    "  --yes, -y  Skip confirmation prompt" ]
+  |> Stdlib.String.join "\n"

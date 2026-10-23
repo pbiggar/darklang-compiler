@@ -73,7 +73,10 @@ let slice s first count =
 
 let isInternalTestFile path =
   let path = replace "\\" "/" path in
-  Text.contains path "/stdlib-internal/" || Text.contains path "/verification/"
+  Text.contains path "/stdlib-internal/"
+  || Text.contains path "/verification/"
+  || Text.contains path "/upstream/packages/"
+  || Text.contains path "/upstream/backend/testfiles/execution/"
 
 let sourceOffset source (position : Tokenizer.pos) =
   let lines = String.split_on_char '\n' source in
@@ -290,6 +293,7 @@ let tryPrepareBatchTest (test : e2eTest) =
     && (not test.isolated) && test.expectedExitCode = 0
     && Option.is_none test.errorExpectation
     && Option.is_none test.skipReason
+    && test.compilerDisposition = CompilerAnnotations.Run
   in
   if not eligible then None
   else
@@ -398,7 +402,9 @@ let filterSpecsByDefs defs specs =
 
 let isUpstreamDarkTestFile file =
   let file = replace "\\" "/" file in
-  Text.contains file "/e2e/upstream/"
+  (Text.contains file "/e2e/upstream/"
+  || Text.contains file "/upstream/packages/"
+  || Text.contains file "/upstream/backend/testfiles/execution/")
   && String.ends_with ~suffix:".dark" (String.lowercase_ascii file)
 
 let parsePreambleAsProgram _allowInternal preamble = parseWritten preamble
@@ -620,7 +626,18 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
   let runnable =
     List.filter
       (fun (t : e2eTest) ->
-        t.errorExpectation <> Some CompileError && Option.is_none t.skipReason)
+        t.errorExpectation <> Some CompileError
+        && Option.is_none t.skipReason
+        &&
+        match t.compilerDisposition with
+        | CompilerAnnotations.Xfail { phase = CompilerAnnotations.Compile; _ }
+          ->
+            false
+        | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+        | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
+        | CompilerAnnotations.Xfail { phase = CompilerAnnotations.Runtime; _ }
+          ->
+            true)
       tests
   in
   let testProgram t =
@@ -915,7 +932,7 @@ let isRenderedResultError expected run =
   | None -> true
   | Some message -> Text.contains (stdoutFromRun run) message
 
-let evaluateExpectations (test : e2eTest) run =
+let evaluateNormalExpectations (test : e2eTest) run =
   let unexpectedLeak =
     match run with
     | Ran (_, _, stderr, _, _) when not test.disableLeakCheck ->
@@ -1010,6 +1027,41 @@ let evaluateExpectations (test : e2eTest) run =
             ^ "', actual '"
             ^ visibleOutput (stderrFromRun run)
             ^ "'")
+
+let evaluateExpectations (test : e2eTest) run =
+  let normal = evaluateNormalExpectations test run in
+  match test.compilerDisposition with
+  | CompilerAnnotations.Run -> normal
+  | CompilerAnnotations.Blocked _ | CompilerAnnotations.Excluded _ ->
+      failRun run "Blocked or excluded test reached execution"
+  | CompilerAnnotations.Replace _ ->
+      failRun run "Replacement annotation on a test"
+  | CompilerAnnotations.Xfail { phase; diagnostic; reason } -> (
+      match normal with
+      | Ok _ -> failRun run ("Unexpected pass for compiler xfail: " ^ reason)
+      | Error failure ->
+          let phaseMatches =
+            match (phase, run) with
+            | CompilerAnnotations.Compile, CompileFailed (code, _, _) ->
+                code > 0 && code < 128
+            | CompilerAnnotations.Runtime, Ran (code, _, _, _, _) ->
+                code >= 0 && code < 128
+            | CompilerAnnotations.Compile, Ran _
+            | CompilerAnnotations.Runtime, CompileFailed _ ->
+                false
+          in
+          let output = stderrFromRun run ^ "\n" ^ stdoutFromRun run in
+          if
+            phaseMatches
+            && (not
+                  (String.starts_with ~prefix:"Compiled program leaked:"
+                     failure.message))
+            && Text.contains output diagnostic
+          then Ok run
+          else
+            failRun run
+              ("Compiler xfail did not match its phase and diagnostic ("
+             ^ reason ^ "): " ^ failure.message))
 
 let buildCompilerOptions (test : e2eTest) =
   {

@@ -1,0 +1,309 @@
+module Darklang.Cli.Packages.ModuleCommand
+
+
+// @compiler blocked: missing-implementation
+let collectDecls
+  (modules: List<String>)
+  (decls: List<LanguageTools.WrittenTypes.ModuleDeclaration.Declaration>)
+  : List<List<String>
+      * LanguageTools.WrittenTypes.ModuleDeclaration.Declaration> =
+  decls
+  |> Stdlib.List.map (fun decl ->
+    match decl with
+    | SubModule modul ->
+      let nestedModules =
+        Stdlib.List.append modules [ Stdlib.Tuple2.second modul.name ]
+      collectDecls nestedModules modul.declarations
+    | _ -> [ (modules, decl) ])
+  |> Stdlib.List.flatten
+
+
+// @compiler blocked: missing-implementation
+let declarationName
+  (decl: LanguageTools.WrittenTypes.ModuleDeclaration.Declaration)
+  : Stdlib.Option.Option<String> =
+  match decl with
+  | Type typ -> Stdlib.Option.Option.Some typ.name.name
+  | Function fn -> Stdlib.Option.Option.Some fn.name.name
+  | Value value -> Stdlib.Option.Option.Some value.name.name
+  | Trait t -> Stdlib.Option.Option.Some t.name.name
+  // An impl's location is `<Type>.<Trait>` beneath the module it is written in
+  | Impl i ->
+    Stdlib.Option.Option.Some
+      ($"{LanguageTools.WrittenTypesToProgramTypes.ImplDeclaration.typeReferenceHeadName i.forType}.{i.trait_.typ.name}")
+  | Test test -> Stdlib.Option.Option.Some test.name.name
+  | SubModule modul ->
+    Stdlib.Option.Option.Some (Stdlib.Tuple2.second modul.name)
+  | Expr _ -> Stdlib.Option.Option.None
+
+
+/// Return every declaration path that occurs more than once in the input.
+/// `collectDecls` has already flattened submodules, so the relative module path
+/// plus declaration name uniquely identifies the eventual package location.
+// @compiler blocked: missing-implementation
+let duplicateDeclarationNames
+  (declarations:
+    List<List<String>
+      * LanguageTools.WrittenTypes.ModuleDeclaration.Declaration>)
+  : List<String> =
+  let (_, duplicates) =
+    declarations
+    |> Stdlib.List.fold ([], []) (fun (seen, duplicates) (modules, decl) ->
+      match declarationName decl with
+      | None -> (seen, duplicates)
+      | Some name ->
+        let path =
+          Stdlib.List.append modules [name]
+          |> Stdlib.String.join "."
+
+        if Stdlib.List.contains seen path then
+          (seen, Stdlib.List.push duplicates path)
+        else
+          (Stdlib.List.push seen path, duplicates))
+
+  Stdlib.List.unique duplicates
+
+
+/// Write the doc comments a save changed without moving any version, and say how many items that was.
+///
+/// Docs are not part of the content hash, so a doc-only edit stores nothing new: every item lands on
+/// the hash it already had and the batch folds to nothing. It has to be said with an `UpdateDoc`, as
+/// `dark fn` says it (`updateDocsThatChanged`). Per item, because a module is one batch and
+/// `updateDocsThatChanged` reads every doc in the ops it is given: an item's words are compared with
+/// that item's own declaration, never with another's.
+// @compiler blocked: missing-implementation
+let landDocEdits
+  (branchId: Uuid)
+  (ops: List<LanguageTools.ProgramTypes.PackageOp>)
+  : Int =
+  // The Add for the item a SetName binds: they carry the same placeholder hash before the save.
+  let addFor
+    (h: LanguageTools.ProgramTypes.Hash)
+    : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageOp> =
+    ops
+    |> Stdlib.List.findFirst (fun op ->
+      match op with
+      | AddFn f -> f.hash == h
+      | AddType t -> t.hash == h
+      | AddValue v -> v.hash == h
+      | AddTrait t -> t.hash == h
+      | AddTraitImpl i -> i.hash == h
+      | _ -> false)
+
+  ops
+  |> Stdlib.List.filterMap (fun op ->
+    match op with
+    | SetName(location, reference, _) ->
+      match addFor (LanguageTools.ProgramTypes.Reference.hash reference) with
+      | Some add ->
+        match Packages.Rename.referenceAt branchId location with
+        | Some bound ->
+          if
+            updateDocsThatChanged
+              branchId
+              location
+              (LanguageTools.ProgramTypes.Reference.kind reference)
+              (LanguageTools.ProgramTypes.Reference.hash bound)
+              [ add ]
+          then
+            Stdlib.Option.Option.Some location.name
+          else
+            Stdlib.Option.Option.None
+        | None -> Stdlib.Option.Option.None
+      | None -> Stdlib.Option.Option.None
+    | _ -> Stdlib.Option.Option.None)
+  |> Stdlib.List.length
+
+// @compiler blocked: missing-implementation
+let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
+  let input =
+    match args with
+    | [ modulePath, "-" ] ->
+      Stdlib.Result.Result.Ok((modulePath, Stdlib.Cli.Stdin.readAll ()))
+    | [ modulePath, sourcePath ] ->
+      match Stdlib.Cli.File.readText sourcePath with
+      | Ok source -> Stdlib.Result.Result.Ok((modulePath, source))
+      | Error err ->
+        Stdlib.Result.Result.Error
+          $"Could not read '{sourcePath}': {err.message}"
+    | _ ->
+      Stdlib.Result.Result.Error
+        "Usage: module <module> <source-file|->"
+
+  match input with
+  | Error message ->
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.error message)
+    { state with exitCode = 1 }
+  | Ok((modulePath, source)) ->
+    // Package input is declaration scope at its root. In particular, `val x`
+    // declares a package value while `let x` is diagnosed directly instead of
+    // being consumed as a script binding and failing later at EOF.
+    match LanguageTools.Parser.Parse.packageToWrittenTypes source with
+    | Error diagnostics ->
+      let _ = Errors.reportParseErrors diagnostics
+      // Nothing was saved: an agent's authoring loop branches on the exit.
+      { state with exitCode = 1 }
+    | Ok(SourceFile sourceFile) ->
+      let declarations =
+        let moduleDecls =
+          sourceFile.declarations
+          |> Stdlib.List.map LanguageTools.Parser.Parse.toModuleDeclaration
+        collectDecls [] moduleDecls
+      let duplicateNames = duplicateDeclarationNames declarations
+
+      if Stdlib.List.isEmpty declarations then
+        Stdlib.printLine (Stdlib.Cli.UI.Colors.error "Package source contains no declarations")
+        { state with exitCode = 1 }
+      else if Stdlib.Bool.not (Stdlib.List.isEmpty duplicateNames) then
+        Stdlib.printLine
+          (Stdlib.Cli.UI.Colors.error "Package source contains duplicate declaration names:")
+        duplicateNames
+        |> Stdlib.List.iter (fun name ->
+          Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"  - {name}"))
+        { state with exitCode = 1 }
+      else
+        // Resolve a synthetic item path below the requested module so the
+        // module path follows the same rules as `fn`, `type`, and `val`.
+        let locationInput = modulePath + ".__module__"
+        match
+          Location.parseRelativeTo
+            state.packageData.currentLocation
+            locationInput
+        with
+        | Error message ->
+          Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"Invalid module location: {message}")
+          Cli.exitWith state false
+        | Ok baseLocation ->
+          let basePm = LanguageTools.PackageManager.pm ()
+          let branchId = state.currentBranchId
+          let rootModule =
+            LanguageTools.WrittenTypes.ModuleDeclaration.ModuleDeclaration
+              { range = sourceFile.range
+                name = (sourceFile.range, "__module__")
+                declarations =
+                  sourceFile.declarations
+                  |> Stdlib.List.map LanguageTools.Parser.Parse.toModuleDeclaration
+                keywordModule = sourceFile.range }
+          let ctx =
+            LanguageTools.NameResolver.NRContext
+              { onMissing = LanguageTools.NameResolver.OnMissing.Allow
+                pm = basePm
+                branchId = branchId
+                owner = baseLocation.owner
+                currentModule = baseLocation.modules }
+
+          let (ops, unresolvedNames) =
+            LanguageTools.Parser.Parse.moduleToPackageOps ctx rootModule
+          let updates = Propagate.updatedItems branchId ops
+
+          if Errors.reportUnresolvedNames branchId unresolvedNames then
+            state
+          else
+            // Stabilize and store the module as one mutually recursive batch.
+            match SCM.PackageOps.addAuthored branchId ops with
+            | Error message ->
+              Stdlib.printLine
+                (Stdlib.Cli.UI.Colors.error $"Failed to define module: {message}")
+              { state with exitCode = 1 }
+            | Ok report ->
+              Propagate.printFollowed (Propagate.repointSaved branchId updates)
+
+              let docsUpdated = landDocEdits branchId ops
+
+              // Counted from the ops that were recorded, not from the declarations
+              // that were parsed, so the number is what happened rather than what
+              // was asked for.
+              let definedNames =
+                ops
+                |> Stdlib.List.filterMap (fun op ->
+                  match op with
+                  // Three fields, and a two-field pattern silently matches nothing rather than
+                  // failing to compile.
+                  | SetName(location, _, _) -> Stdlib.Option.Option.Some location.name
+                  | _ -> Stdlib.Option.Option.None)
+
+              let count = Stdlib.List.length definedNames
+
+              // "1 declarations" is the sort of thing you stop reading, and `edit`
+              // routes through here for a single item, so the singular is a common
+              // case rather than an edge one.
+              let what = if count == 1 then "declaration" else "declarations"
+
+              // `!` rather than a tick when the check did not pass, and the report AFTER this
+              // line, both matching a single-item save in `core.dark`. A tick printed under the
+              // reasons a save is broken is read as success by anybody who reads the last line.
+              let glyph =
+                match report.verdict with
+                | Checked -> Stdlib.Cli.UI.Colors.success "✓"
+                | Failed | Incomplete -> Stdlib.Cli.UI.Colors.warning "!"
+
+              // A doc-only edit is otherwise indistinguishable from a save that changed nothing.
+              let docNote =
+                if docsUpdated == 0 then ""
+                else if docsUpdated == 1 then "; updated 1 doc comment"
+                else $"; updated {Stdlib.toString docsUpdated} doc comments"
+
+              Stdlib.printLine
+                $"{glyph} Defined {Stdlib.toString count} {what} in {modulePath}{docNote}"
+
+              // main's at-rest type check reports on every save; keep it ahead of propagation
+              // so a type error is on screen before anything follows the change.
+              AtRestCheck.printSaveReport branchId report
+
+              // Name what did not, so a rejected declaration is something you find out now rather than
+              // the next time you call it.
+              // `declarationName` returns an Option, so unwrap with filterMap before comparing:
+              // `List.contains` against a list of Options silently never matches, which would report
+              // every declaration as missing.
+              // An impl's declaration name is `<Type>.<Trait>`; its SetName carries the
+              // trait as the location's name, so compare on the last segment.
+              let missing =
+                declarations
+                |> Stdlib.List.filterMap (fun d ->
+                  declarationName (Stdlib.Tuple2.second d))
+                |> Stdlib.List.filter (fun n ->
+                  let leaf =
+                    Stdlib.String.split n "." |> Stdlib.List.last |> Stdlib.Option.withDefault n
+                  Stdlib.Bool.not (Stdlib.List.contains definedNames leaf))
+
+              if Stdlib.List.isEmpty missing then
+                ()
+              else
+                Stdlib.printLine
+                  (Stdlib.Cli.UI.Colors.error
+                    $"""not defined: {Stdlib.String.join missing ", "}""")
+
+                Stdlib.printLine
+                  (Stdlib.Cli.UI.Colors.hint
+                    "  the rest of the module was defined; fix these and run it again.")
+
+              state
+
+
+// @compiler blocked: missing-implementation
+let help (_state: Cli.AppState) : String =
+  [ "Define a module from multiple package declarations atomically"
+    ""
+    "Usage: module <module> <source-file|->"
+    ""
+    "The source may contain functions, types, values, tests, and nested modules."
+    "All declarations are validated, then saved as WIP in one batch; the at-rest"
+    "type check is reported and `commit` refuses definite type errors."
+    ""
+    "Example:"
+    "  dark module /Me.Example - <<'EOF'"
+    "  val greeting = \"hello\""
+    "  let double (n: Int) : Int = n * 2"
+    "  let quadruple (n: Int) : Int = double (double n)"
+    "  test doubles = double 4 |> Stdlib.Test.equal 8"
+    "  EOF"
+    "  dark eval 'Me.Example.quadruple 5'"
+  ] |> Stdlib.String.join "\n"
+
+
+// @compiler blocked: missing-implementation
+let complete
+  (_state: Cli.AppState)
+  (_args: List<String>)
+  : List<Cli.Completion.CompletionItem> =
+  []

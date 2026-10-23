@@ -23,24 +23,32 @@ module Kinds =
     | Ok _ -> ""
 
 // Harmful is fn-only.
+// @compiler blocked: compiler-gap
 Kinds.parse Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "harmful" =
   Stdlib.Result.Result.Ok Darklang.LanguageTools.ProgramTypes.DeprecationKind.Harmful
 
+// @compiler blocked: compiler-gap
 (Stdlib.String.contains (Kinds.refusalText Darklang.LanguageTools.ProgramTypes.ItemKind.Value "harmful") "only applies to fns") = true
+// @compiler blocked: compiler-gap
 (Stdlib.String.contains (Kinds.refusalText Darklang.LanguageTools.ProgramTypes.ItemKind.Type "harmful") "only applies to fns") = true
 
 // Obsolete is the kind that DOES apply to all three, and is what the refusal points at.
+// @compiler blocked: compiler-gap
 Kinds.parse Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "obsolete" =
   Stdlib.Result.Result.Ok Darklang.LanguageTools.ProgramTypes.DeprecationKind.Obsolete
 
+// @compiler blocked: compiler-gap
 Kinds.parse Darklang.LanguageTools.ProgramTypes.ItemKind.Value "obsolete" =
   Stdlib.Result.Result.Ok Darklang.LanguageTools.ProgramTypes.DeprecationKind.Obsolete
 
+// @compiler blocked: compiler-gap
 Kinds.parse Darklang.LanguageTools.ProgramTypes.ItemKind.Type "obsolete" =
   Stdlib.Result.Result.Ok Darklang.LanguageTools.ProgramTypes.DeprecationKind.Obsolete
 
 // superseded-by needs a replacement, whatever the item kind.
+// @compiler blocked: compiler-gap
 (Stdlib.String.contains (Kinds.refusalText Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "superseded-by") "requires --replacement") = true
 
 // An unknown kind is still an unknown kind, not a harmful-shaped refusal.
+// @compiler blocked: compiler-gap
 (Stdlib.String.contains (Kinds.refusalText Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "not-a-kind") "Unknown kind") = true

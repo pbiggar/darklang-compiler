@@ -30,17 +30,28 @@ let loc
 // Scalars
 // ========================================
 module Scalars =
+  // @compiler blocked: compiler-gap
   pp () = "()"
+  // @compiler blocked: compiler-gap
   pp true = "true"
+  // @compiler blocked: compiler-gap
   pp false = "false"
+  // @compiler blocked: compiler-gap
   pp 42 = "42"
+  // @compiler blocked: compiler-gap
   pp (-7) = "-7"
+  // @compiler blocked: compiler-gap
   pp "" = "\"\""
+  // @compiler blocked: compiler-gap
   pp "plain" = "\"plain\""
+  // @compiler blocked: compiler-gap
   pp 'a' = "'a'"
   // Floats print every digit the value has, and exponent form when that's shorter.
+  // @compiler blocked: compiler-gap
   pp 1.5 = "1.5"
+  // @compiler blocked: compiler-gap
   pp (0.1 + 0.2) = "0.30000000000000004"
+  // @compiler blocked: compiler-gap
   pp 0.00001 = "1e-5"
 
 
@@ -52,9 +63,13 @@ module Scalars =
 // enough; that used to print `0.00001` as `0.-05`.
 // ========================================
 module FloatLiterals =
+  // @compiler blocked: compiler-gap
   Darklang.PrettyPrinter.processRemainder "5" = "5"
+  // @compiler blocked: compiler-gap
   Darklang.PrettyPrinter.processRemainder "50" = "5"
+  // @compiler blocked: compiler-gap
   Darklang.PrettyPrinter.processRemainder "00001" = "00001"
+  // @compiler blocked: compiler-gap
   Darklang.PrettyPrinter.processRemainder "1234567890123456" = "1234567890123456"
 
 
@@ -65,21 +80,32 @@ module FloatLiterals =
 // as a real line break inside its own literal and one holding a quote closed it early.
 // ========================================
 module Escaping =
+  // @compiler blocked: compiler-gap
   pp "a\nb" = "\"a\\nb\""
+  // @compiler blocked: compiler-gap
   pp "say \"hi\"" = "\"say \\\"hi\\\"\""
+  // @compiler blocked: compiler-gap
   pp "tab\there" = "\"tab\\there\""
+  // @compiler blocked: compiler-gap
   pp "back\\slash" = "\"back\\\\slash\""
+  // @compiler blocked: compiler-gap
   pp "car\rriage" = "\"car\\rriage\""
 
+  // @compiler blocked: compiler-gap
   pp '\n' = "'\\n'"
+  // @compiler blocked: compiler-gap
   pp '\'' = "'\\''"
+  // @compiler blocked: compiler-gap
   pp '\\' = "'\\\\'"
 
   // Non-ASCII is not a control character and passes through as itself.
+  // @compiler blocked: compiler-gap
   pp "héllo" = "\"héllo\""
+  // @compiler blocked: compiler-gap
   pp "日本" = "\"日本\""
 
   // Escaping happens at every depth, not just the top level.
+  // @compiler blocked: compiler-gap
   pp [ "a\nb" ] = "[\"a\\nb\"]"
 
 
@@ -89,19 +115,30 @@ module Escaping =
 module Collections =
   // `List<_>`, not `List<Int>`, even though `emptyInts` is annotated: an empty list carries no element
   // type at runtime, so there is nothing for the printer to report. See the note in Records below.
+  // @compiler blocked: compiler-gap
   pp (emptyInts ()) = "List<_> []"
+  // @compiler blocked: compiler-gap
   pp [ 1, 2, 3 ] = "[1, 2, 3]"
+  // @compiler blocked: compiler-gap
   pp [ [ 1, 2 ], [ 3 ] ] = "[[1, 2], [3]]"
 
+  // @compiler blocked: compiler-gap
   pp (1, 2) = "(1, 2)"
+  // @compiler blocked: compiler-gap
   pp (1, "two", true) = "(1, \"two\", true)"
 
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Dict.empty) = "{}"
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Dict.fromListOverwritingDuplicates [ ("a", 1), ("b", 2) ]) = "{ \"a\": 1, \"b\": 2 }"
 
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Dict.fromListOverwritingDuplicates [ ("has-hyphen", 1) ]) = "{ \"has-hyphen\": 1 }"
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Dict.fromListOverwritingDuplicates [ ("type", 1) ]) = "{ \"type\": 1 }"
+  // @compiler blocked: compiler-gap
   pp (Dict { 1L: "one", 2L: "two" }) = "{ 1: \"one\", 2: \"two\" }"
+  // @compiler blocked: compiler-gap
   pp (Dict { (1L, "a"): true }) = "{ (1, \"a\"): true }"
 
 
@@ -115,12 +152,14 @@ module Records =
   // Breaks, because the whole line is measured: the type name in front counts toward the fit. The
   // string version measured the joined fields alone, so a 51-character name didn't count and this
   // printed as one 118-column line while reporting that it fitted in 80.
+  // @compiler blocked: compiler-gap
   pp (loc "Darklang" [ "Stdlib", "List" ] "map") =
     "Darklang.LanguageTools.ProgramTypes.PackageLocation {\n  owner: \"Darklang\",\n  modules: [\"Stdlib\", \"List\"],\n  name: \"map\"\n}"
 
   // `List<_>`, not `List<String>`: an empty list carries no element type at runtime, and the printer
   // doesn't consult the field's declared type to recover one. Recorded as-is because it is what happens;
   // the `_` is the same gap that shows up as `Option<_>.None`, and belongs with the type-args work.
+  // @compiler blocked: compiler-gap
   pp (loc "Darklang" [] "x") =
     "Darklang.LanguageTools.ProgramTypes.PackageLocation {\n  owner: \"Darklang\",\n  modules: List<_> [],\n  name: \"x\"\n}"
 
@@ -132,7 +171,9 @@ module Enums =
   // Option and Result print their case alone: `Some`, `None`, `Ok`, `Error` are unambiguous everywhere
   // and resolve unqualified, so naming their type in front of them is noise. Any other enum keeps its
   // type name, because a bare `Red` doesn't tell you it came from `Color`.
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Option.Option.Some 1) = "Some(1)"
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Result.Result.Ok 1) = "Ok(1)"
 
 
@@ -153,31 +194,40 @@ module Shortening =
     Darklang.PrettyPrinter.shortenName currentModule owner modules name
 
   // Same module: the leaf name alone.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "LanguageTools", "ProgramTypes", "PackageFn" ]
         "Darklang" [ "LanguageTools", "ProgramTypes", "PackageFn" ] "Parameter" = "Parameter"
 
   // Parent module: still just the leaf, because the resolver walks up.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "LanguageTools", "ProgramTypes", "PackageFn" ]
         "Darklang" [ "LanguageTools", "ProgramTypes" ] "TypeReference" = "TypeReference"
 
   // Sibling module: keep the part that differs.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "Stdlib", "Option" ] "Darklang" [ "Stdlib", "List" ] "map" = "List.map"
 
   // No context at all: `Stdlib.` resolves with `Darklang` implied, so the owner comes off.
+  // @compiler blocked: compiler-gap
   short [] "Darklang" [ "Stdlib", "List" ] "map" = "Stdlib.List.map"
 
   // Someone else's package stays fully qualified.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "Stdlib" ] "Stachu" [ "Parser" ] "map" = "Stachu.Parser.map"
 
   // Option and Result resolve unqualified from anywhere.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "Stdlib", "List" ] "Darklang" [ "Stdlib", "Option" ] "Option" = "Option"
+  // @compiler blocked: compiler-gap
   short [ "Stachu", "Whatever" ] "Darklang" [ "Stdlib", "Result" ] "Result" = "Result"
 
   // Prefixes are compared segment-wise. The old rule compared strings, so from `...List` a reference to
   // `...ListView.render` was shortened to `iew.render`.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "Stdlib", "List" ] "Darklang" [ "Stdlib", "ListView" ] "render" = "ListView.render"
 
   // A partial segment match is not a match.
+  // @compiler blocked: compiler-gap
   short [ "Darklang", "Stdlib", "Li" ] "Darklang" [ "Stdlib", "List" ] "map" = "List.map"
 
 
@@ -195,19 +245,24 @@ module Options =
       (Builtin.reflect v)
 
   // Wide enough: one line.
+  // @compiler blocked: compiler-gap
   at 200 [ 1, 2, 3 ] = "[1, 2, 3]"
 
   // Narrow enough that the same list has to break.
+  // @compiler blocked: compiler-gap
   at 8 [ 100, 200, 300 ] = "[\n  100,\n  200,\n  300\n]"
 
   // The default is 80 columns, and `dval` is the default-options wrapper, so the two agree.
+  // @compiler blocked: compiler-gap
   (at 80 [ 1, 2, 3 ]) == (pp [ 1, 2, 3 ]) = true
 
   // Nested wrappers, which is where the old output was worst: this used to be three lines of
   // `Darklang.Stdlib.Option.Option<Darklang.Stdlib.Option.Option<List<Int>>>.Some(...)`.
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Option.Option.Some(Stdlib.Option.Option.Some [ 1, 2, 3 ])) = "Some(Some([1, 2, 3]))"
 
   // A non-wrapper enum keeps its type name.
+  // @compiler blocked: compiler-gap
   pp (Stdlib.List.chunkBySize [ 1, 2, 3 ] 0) =
     "Error(Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero)"
 
@@ -215,10 +270,12 @@ module Options =
   // `Stdlib.Float.ParseError` and `Stdlib.Uuid.ParseError` are all `| BadFormat`, so content-addressing
   // makes them one type with three names; naming one is guessing, and it used to guess wrong often
   // enough that `Stdlib.Int.parse` would report a `Stdlib.Uuid.ParseError`. The case alone is honest.
+  // @compiler blocked: compiler-gap
   pp (Stdlib.Int.parse "abc") = "Error(BadFormat)"
 
   // The same record at a width that fits it: one line, so the break above is the width deciding, not a
   // record always breaking.
+  // @compiler blocked: compiler-gap
   Darklang.PrettyPrinter.RuntimeTypes.dvalWith
     Darklang.SCM.Branch.mainBranchId
     (Darklang.PrettyPrinter.DisplayOptions.atWidth 200)

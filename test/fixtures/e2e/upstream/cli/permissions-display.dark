@@ -41,6 +41,7 @@ module PermissionsDisplay =
         approvedAs = [ "Acme.Client.fetch" ]
         instancePolicy = instancePolicy () }
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Permissions.Command.renderAccessReport (approved ()))
   = [ "access"
       "  version: 12345678"
@@ -70,6 +71,7 @@ module PermissionsDisplay =
         packagePolicy = Stdlib.Option.Option.None
         approvedAs = [] }
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Permissions.Command.renderAccessReport (unapproved ()))
   = [ "access"
       "  version: 12345678"

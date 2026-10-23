@@ -1,0 +1,153 @@
+module Darklang.Cli.Packages.Type
+
+
+// @compiler blocked: missing-implementation
+let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
+  match args with
+  | [] ->
+    Stdlib.printLine (help state)
+    state
+
+  // type SomeModule.myType = definition
+  | location :: definitionParts ->
+    let inlineDefinition = Packages.definitionFromArgs definitionParts
+
+    if Stdlib.String.isEmpty inlineDefinition then
+      [
+        (Stdlib.Cli.UI.Colors.error "Error: Inline type definition required")
+        ""
+        "Usage: type <location> <definition>"
+        "       type <location> -    (read definition from stdin, for multi-line input)"
+        ""
+        "Examples:"
+        "  dark type Me.Demo.Status '| Active | Inactive'"
+        "  dark type Me.Demo.User '{ name: String, age: Int }'"
+        ""
+      ] |> Stdlib.printLines
+
+      Cli.exitWith state false
+    else
+      createTypeInline
+        state.packageData.currentLocation
+        location
+        inlineDefinition
+        state
+
+
+// @compiler blocked: missing-implementation
+let createTypeInline
+  (currentLocation: Packages.PackageLocation)
+  (locationStr: String)
+  (definition: String)
+  (state: Cli.AppState)
+  : Cli.AppState =
+  match Location.parseRelativeTo currentLocation locationStr with
+  | Ok location ->
+    let fullSource = $"type {location.name} = {definition}"
+
+    match LanguageTools.Parser.Parse.toWrittenTypes fullSource with
+    | Some(SourceFile sourceFile) ->
+      // The parser may recover a tree after errors; do not save it.
+      let hasParseError =
+        (Errors.reportParseErrors (LanguageTools.Parser.Parse.diagnostics fullSource))
+        || (Errors.reportTrailing sourceFile)
+      let found =
+        if hasParseError then
+          Stdlib.Option.Option.None
+        else
+          sourceFile.declarations
+          |> Stdlib.List.findFirst (fun d ->
+            match d with
+            | Type _ -> true
+            | _ -> false)
+
+      match found with
+      | Some(Type writtenType) ->
+        Packages.saveAuthored
+          state
+          location
+          LanguageTools.ProgramTypes.ItemKind.Type
+          "type"
+          { state with exitCode = 1 }
+          (fun ctx ->
+            let (packageType, unresolvedNames) =
+              LanguageTools.WrittenTypesToProgramTypes.TypeDeclaration.toPackageTypePT
+                ctx
+                writtenType
+
+            let ops =
+              [ LanguageTools.ProgramTypes.PackageOp.AddType packageType
+                LanguageTools.ProgramTypes.PackageOp.SetName (location, LanguageTools.ProgramTypes.Reference.PackageType packageType.hash, Stdlib.Option.Option.None) ]
+
+            Stdlib.Option.Option.Some((ops, packageType.hash, unresolvedNames)))
+
+      | _ ->
+        // a precise parse error was already printed above; don't stack the
+        // generic hint on top of it
+        if hasParseError then
+          Cli.exitWith state false
+        else
+          [
+            (Stdlib.Cli.UI.Colors.error "Failed to parse type definition")
+            ""
+            "Make sure your syntax is correct. Examples:"
+            "  dark type Me.Demo.Status '| Active | Inactive'"
+            "  dark type Me.Demo.User '{ name: String, age: Int }'"
+            ""
+          ] |> Stdlib.printLines
+          Cli.exitWith state false
+    | None ->
+      [
+        (Stdlib.Cli.UI.Colors.error "Failed to parse type definition")
+        ""
+        "Make sure your syntax is correct. Examples:"
+        "  dark type Me.Demo.Status '| Active | Inactive'"
+        "  dark type Me.Demo.User '{ name: String, age: Int }'"
+        ""
+      ] |> Stdlib.printLines
+      Cli.exitWith state false
+  | Error msg ->
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"Invalid location: {msg}")
+    Cli.exitWith state false
+
+
+// @compiler blocked: missing-implementation
+let help (_state: Cli.AppState) : String =
+  [
+    "Create or update a type"
+    ""
+    "Usage: type <location> <definition>"
+    "       type <location> <source-file>"
+    ""
+    "When updating an existing type, dependents are automatically updated"
+    "to use the new version."
+    ""
+    "A name has three parts, Owner.Module.Name. `Me` is a fine owner to start"
+    "with; `Darklang` is reserved for the standard library."
+    ""
+    "Examples:"
+    "  dark type Me.Demo.Status '| Active | Inactive'"
+    "  dark type Me.Demo.Size '| Small | Large of Int'"
+    "  dark type Me.Demo.User '{ name: String, age: Int }'"
+    "  dark type Me.Demo.UserId 'Uuid'"
+    "  dark eval 'Me.Demo.User { name = \"Ada\", age = 36 }'"
+    ""
+    "  # Several lines, from stdin:"
+    "  dark type Me.Demo.Account - <<'EOF'"
+    "  {"
+    "    owner: String"
+    "    balance: Int"
+    "  }"
+    "  EOF"
+    ""
+    "A leading `/` makes a name absolute (`/Me.Demo.User`); without one it is"
+    "relative to the module `nav` put you in."
+    ""
+  ] |> Stdlib.String.join "\n"
+
+
+/// CLEANUP could offer useful completions: nav-style help on the LHS of the `=`;
+/// probably nothing on the RHS.
+// @compiler blocked: missing-implementation
+let complete (_state: Cli.AppState) (_args: List<String>) : List<Cli.Completion.CompletionItem> =
+  []

@@ -6,6 +6,7 @@
 
 // CREATE + READ — a column of text, with a quoted value inserted via params.
 module CreateRead =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-a.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"
@@ -17,6 +18,7 @@ module CreateRead =
 // type carries blobs through rather than stringifying them; without an accessor a caller
 // matches the case by hand, which is where a stringified blob comes from.
 module Blobs =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-blob.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"
@@ -32,11 +34,13 @@ module Blobs =
    | _ -> Stdlib.Option.Option.None) = Stdlib.Option.Option.Some "hi"
 
   // A TEXT cell is not a blob, and asking for one says so rather than coercing.
+  // @compiler blocked: sqlite-runtime
   Stdlib.Sqlite.asBytes (Stdlib.Sqlite.Value.Text "hi") = Stdlib.Option.Option.None
 
 
 // UPDATE + DELETE — final state after renaming id=1 and removing id=2 is just ["updated"].
 module UpdateDelete =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-b.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"
@@ -48,6 +52,7 @@ module UpdateDelete =
 
 // scalarInt (count) + scalarIntP (per-key lookup), read as a body tuple.
 module Scalars =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-c.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"
@@ -59,6 +64,7 @@ module Scalars =
 
 // queryOneP + textField + intField, read in the body via an inline match.
 module Row =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-d.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"
@@ -70,6 +76,7 @@ module Row =
 
 // execBatch — several statements in ONE transaction, one statement run per parameter row.
 module Batch =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-e.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"
@@ -84,6 +91,7 @@ module Batch =
 // The whole point of the batch: a statement that fails takes the ones before it with it. Without
 // the transaction, "bob" would be sitting in the table after a call that reported an error.
 module BatchIsAtomic =
+  // @compiler blocked: sqlite-runtime
   (let db = "/tmp/dark-test-sqlite-f.db"
    let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
    let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"

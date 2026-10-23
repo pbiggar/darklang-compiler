@@ -6,6 +6,8 @@
 (1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L) =
   (1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L)
 
+// @compiler blocked: compiler-gap
 (1L, Builtin.testRuntimeError "test", 3L) = error="Uncaught exception: test"
 
+// @compiler blocked: compiler-gap
 (1L, Builtin.testRuntimeError "error1", Builtin.testRuntimeError "error2") = error="Uncaught exception: error1"

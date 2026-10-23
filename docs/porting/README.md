@@ -1,107 +1,75 @@
 # Understanding the compiler port
 
-This ledger answers: what exists in the pinned Darklang interpreter, what has
-been ported to the native compiler, and what remains? Start with the
-[current status](generated/ledger.md), then open the relevant YAML file.
+The [current status](generated/ledger.md) counts declarations and tests directly
+from the complete imported interpreter corpus in [`upstream/`](../../upstream/).
+Every `.dark` file under interpreter `packages/` and
+`backend/testfiles/execution/` is included at the revision in
+[`sources.yaml`](../../porting/sources.yaml).
 
-| Area | Entries |
-| --- | --- |
-| [Language](../../porting/language-features.yaml) | Specific capabilities and known limitations. |
-| [Parser](../../porting/parser.yaml) | Syntax behaviors and remaining gaps. |
-| [StdLib](../../porting/generated/stdlib.yaml) | Upstream declarations, grouped by relative source path. |
-| [Packages](../../porting/generated/packages.yaml) | Other upstream package declarations; excludes StdLib. |
-| [Builtins](../../porting/generated/builtins.yaml) | Interpreter operations and whether a compiler binding is identified. |
-| [Tests](../../porting/generated/tests.yaml) | Upstream tests, compiler counterparts, exclusions and expectation changes. |
+Compiler decisions live beside each imported item. There are no file-level
+exclusions or separately maintained test/declaration ledgers:
 
-Each item is keyed by its name. A plain status is enough for an ordinary entry;
-an entry with a gap or decision can also have notes. Repository, revision and
-path roots are recorded once rather than repeated on every item. Paths in each
-file are relative to its declared root. Test source keys start with `execution/`
-or `packages/`, using the two upstream roots declared in that file; compiler
-selectors use `compiler_root`. A rare `repo:` selector is repository-relative.
+- No annotation selects the original declaration or test.
+- `// @compiler blocked: tag` retains an item awaiting compiler support.
+- `// @compiler excluded: tag` records an intentional compiler exclusion.
+- `// @compiler replace: packages/path.dark#Qualified.name reason=tag` selects
+  a separately maintained compiler implementation with a checked public contract.
+- `// @compiler xfail compile: "diagnostic" reason=tag` runs a test that must
+  currently fail compilation with the specified diagnostic. `runtime` requires
+  a runtime failure instead. Unexpected passes, wrong phases, unrelated output
+  and abnormal process termination fail the check.
 
-## What the statuses mean
+Reasons are short tags from the [glossary](../../porting/compiler-reasons.json).
+The [import guide](upstream-import.md) describes source selection and validation.
+Annotations are real lexer comments; marker text in strings and documentation
+examples is not metadata. Named tests containing multiple assertions remain one
+case. Test discovery and counting do not require successful compilation.
 
-**Language and parser:** `supported`, `partial`, `missing`, `unassessed`, or `excluded`.
-These are maintained assessments, not inferred test outcomes. Excluded capabilities
-are intentional compiler differences, not pending porting work. Partial, missing,
-and excluded entries must explain their gap or decision. Runtime trait dispatch
-and runtime reflection/dynamic execution are excluded from the compiler's language model.
-Parser entries concern accepting and interpreting
-syntax; language entries concern typing and execution. Replacing parser-file
-mappings does not establish syntax support: entries without a separate review
-are explicitly unassessed.
-
-The parser assessment covers current source acceptance and written syntax at
-the pin in `sources.yaml`. Ahead-of-time typing, name resolution, execution and
-source-unit composition differences are explicitly out of bounds and are not
-parser compatibility issues. Unicode source handling and positions, runtime
-parser APIs, and historical accounting are outside this review. A reviewed
-status can be based on source comparison and focused syntax evidence; it does
-not claim exhaustive differential execution of both parsers.
-
-**StdLib and packages:** `identical`, `different`, `missing`, or `ambiguous`.
-These compare each declaration's own text with a same-name compiler counterpart.
-They do not claim behavioral compatibility. Internal comments, whitespace and
-line endings are significant; surrounding blank lines and comments are excluded.
-A helper change does not change the comparison of its callers. Repeated names
-are disambiguated by declaration kind and, only when necessary, source line.
-Compiler-only declarations are outside the upstream port inventory.
-
-**Builtins:** `present` means a compiler binding was identified; `missing` means
-none was identified; `unassessed` means an existing wrapper counterpart needs
-review before claiming a binding. Presence does not establish signature or
-behavioral compatibility. Function names include their version; values have a
-`value/` prefix. Computed registrations that cannot be enumerated safely are
-reported during generation for review rather than silently counted as supported.
-
-**Tests:** `enabled`, `disabled`, `partial`, `unmapped`, or `ambiguous`. Enabled
-means included in the compiler suite, not executed successfully by this update.
-Partial means only part of an upstream assertion group has counterparts. Disabled
-counterparts retain the suite's exclusion reason; changed compiler expectations
-remain explicit. Tests matched by name with different bodies carry a note.
-Unmapped and ambiguous tests need investigation. Compiler-only tests remain in
-the test suite, not this ledger.
-
-The ledger stores no per-item test lists, paths to compiler implementations,
-signatures, inferred coverage counts, file inventories, or dependency graphs.
-Existing sources and tests own those facts. Compilation receipts belong to their
-run, separately from port status; compiling a containing file does not establish
-that each declaration behaves correctly.
+Existing adapted fixtures remain compiler regression tests. They are not used
+to infer counterparts, partial test coverage or ambiguous source equivalence.
+Execution receipts from `--results-json=...` belong to their individual runs;
+source dispositions alone never claim successful execution.
 
 ## Update and check
 
-Use an interpreter checkout at the revision in
-[sources.yaml](../../porting/sources.yaml). From the compiler repository root:
+Build the native adapters with `./build --ai`, then run:
 
 ```bash
-python3 -m pip install -r scripts/porting-requirements.txt
-python3 scripts/update-ledger.py --upstream /path/to/interpreter
-python3 scripts/update-ledger.py --upstream /path/to/interpreter --check
+python3 scripts/update-ledger.py
+python3 scripts/update-ledger.py --check
 ```
 
-Generation reads committed pinned upstream sources and current compiler sources.
-It writes compact YAML inventories, a summary, and the Markdown status page.
-Neither command builds the compiler or runs tests. Unfamiliar source forms are
-printed for review; resolve them in the scanner or exceptional mappings.
+Use `--build-dir=...` for a separate Dune directory. To verify that every imported
+source body is byte-for-byte identical to the pin after removing only actual
+annotation comments:
 
-Edit `porting/language-features.yaml` and `porting/parser.yaml` for reviewed
-capabilities. Edit `porting/ledger-inputs.yaml` only for exceptional declaration
-source mappings, builtin binding mappings, test mappings or gap explanations.
-Change exclusions in the actual suite, then regenerate. Ordinary updates need
-no model and do not require fixing every recorded gap.
+```bash
+python3 scripts/update-ledger.py --check --upstream /path/to/interpreter
+```
 
-Optional package compilation still uses original pinned source files and their
-computed dependencies. After building the native adapter, run the generator with
-`--compile-packages` to write `porting/package-results.json`, a separate run
-receipt. Dependencies are compilation inputs, not declaration identities or
-maintained compatibility entries.
+The check reads committed Git blobs, ignoring dirty and untracked interpreter
+files, and verifies the complete source scope. `scripts/check-porting` runs the
+helper tests and obtains an isolated pinned checkout when none is supplied.
+The only generated source ledger artifacts are aggregate counts and the status
+page; names, compiler targets and per-item dispositions remain in the sources.
 
-Source discovery is limited to the inputs needed by these compact ledgers.
-There is no separate file-inventory generator, policy framework, or report CLI.
+Language and parser capability assessments remain in
+[`language-features.yaml`](../../porting/language-features.yaml) and
+[`parser.yaml`](../../porting/parser.yaml). Partial, missing and excluded
+capabilities require explanatory notes. Interpreter host builtin assessments
+and their explicit binding locations remain separately maintained in
+[`builtins.yaml`](../../porting/builtins.yaml); host-language F# tests are outside
+this Dark source import.
 
-Compiler libraries live under `packages/`, with StdLib under
-`packages/darklang/stdlib/`, following the interpreter's directory casing.
-Existing split modules and compiler-only helpers remain beside their packages.
-Directory moves update exceptional source mappings; they do not change the
-declaration statuses or add compiler paths to the generated ledgers.
+The native `check_sources` tool validates the selected original bodies and all
+replacement contracts together; it runs as part of ledger updates and Dune
+regression checks. `probe_helpers` can check blocked test functions, types and
+values against the current library to identify portable candidates. A candidate
+must also pass the complete selection check before its annotation is removed:
+constructor identities and other constraints can conflict across files.
+
+When `--trial-upstream` and `--results-json=PATH` are supplied together, the
+runner runs only pending imported tests, and flushes each completed outcome to `PATH.jsonl` and logs the current
+test before compiling it. These are execution receipts for investigation, not a
+maintained ledger. They preserve completed results if an unsupported test hangs
+or terminates the compiler process.

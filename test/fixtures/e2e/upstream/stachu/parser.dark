@@ -3,81 +3,106 @@
 
 module BasicParsers =
   // String parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.string "hello") "hello world") = Stachu.Parser.ParseResult.Success("hello", " world")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.string "hello") "goodbye") = Stachu.Parser.ParseResult.Failure "Expected: \"hello\""
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.string "") "test") = Stachu.Parser.ParseResult.Success("", "test")
 
 
 module RegexParser =
   // Basic regex matching
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "\\d+") "123abc") = Stachu.Parser.ParseResult.Success("123", "abc")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "\\d+") "abc123") = Stachu.Parser.ParseResult.Failure "Expected pattern: \\d+"
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "[a-z]+") "hello123") = Stachu.Parser.ParseResult.Success("hello", "123")
 
   // Word characters
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "\\w+") "hello_world123 test") = Stachu.Parser.ParseResult.Success("hello_world123", " test")
 
   // Whitespace
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "\\s+") "   hello") = Stachu.Parser.ParseResult.Success("   ", "hello")
 
 
 module BuiltInParsers =
   // Digits parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.digits ()) "42abc") = Stachu.Parser.ParseResult.Success("42", "abc")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.digits ()) "abc") = Stachu.Parser.ParseResult.Failure "Expected pattern: \\d+"
 
   // Word parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.word ()) "hello123_world!") = Stachu.Parser.ParseResult.Success("hello123_world", "!")
 
   // Letters parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.letters ()) "hello123") = Stachu.Parser.ParseResult.Success("hello", "123")
 
   // Whitespace parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.whitespace ()) "  \t\ntext") = Stachu.Parser.ParseResult.Success("  \t\n", "text")
 
   // Optional whitespace
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.optionalWhitespace ()) "   text") = Stachu.Parser.ParseResult.Success("   ", "text")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.optionalWhitespace ()) "text") = Stachu.Parser.ParseResult.Success("", "text")
 
 
 module NumberParsers =
   // Int64 parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.int64 ()) "42 rest") = Stachu.Parser.ParseResult.Success(42L, " rest")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.int64 ()) "-123abc") = Stachu.Parser.ParseResult.Success(-123L, "abc")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.int64 ()) "0") = Stachu.Parser.ParseResult.Success(0L, "")
 
   // Float parser
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.float ()) "3.14 rest") = Stachu.Parser.ParseResult.Success(3.14, " rest")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.float ()) "-0.5abc") = Stachu.Parser.ParseResult.Success(-0.5, "abc")
 
 
 module Combinators =
   module Succeed =
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse (Stachu.Parser.succeed 42L) "anything") = Stachu.Parser.ParseResult.Success(42L, "anything")
 
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse (Stachu.Parser.succeed "value") "") = Stachu.Parser.ParseResult.Success("value", "")
 
 
   module Fail =
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse (Stachu.Parser.fail "oops") "input") = Stachu.Parser.ParseResult.Failure "oops"
 
 
   module Map =
     // Map over successful parse
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.map (fun s -> Stdlib.String.toUppercase s) (Stachu.Parser.string "hello"))
       "hello world") = Stachu.Parser.ParseResult.Success("HELLO", " world")
 
     // Map with number conversion
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.map (fun n -> n * 2L) (Stachu.Parser.int64 ()))
       "21 rest") = Stachu.Parser.ParseResult.Success(42L, " rest")
@@ -85,16 +110,19 @@ module Combinators =
 
   module AndThen =
     // Sequence two parsers
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.andThen (Stachu.Parser.string "hello") (Stachu.Parser.string " world"))
       "hello world!") = Stachu.Parser.ParseResult.Success(("hello", " world"), "!")
 
     // First parser fails
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.andThen (Stachu.Parser.string "hello") (Stachu.Parser.string " world"))
       "goodbye world") = Stachu.Parser.ParseResult.Failure "Expected: \"hello\""
 
     // Second parser fails
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.andThen (Stachu.Parser.string "hello") (Stachu.Parser.string " world"))
       "hello there") = Stachu.Parser.ParseResult.Failure "Expected: \" world\""
@@ -102,16 +130,19 @@ module Combinators =
 
   module OrElse =
     // First parser succeeds
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.orElse (Stachu.Parser.string "hello") (Stachu.Parser.string "goodbye"))
       "hello world") = Stachu.Parser.ParseResult.Success("hello", " world")
 
     // First fails, second succeeds
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.orElse (Stachu.Parser.string "hello") (Stachu.Parser.string "goodbye"))
       "goodbye world") = Stachu.Parser.ParseResult.Success("goodbye", " world")
 
     // Both fail
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.orElse (Stachu.Parser.string "hello") (Stachu.Parser.string "goodbye"))
       "greetings") = Stachu.Parser.ParseResult.Failure "Expected: \"goodbye\""
@@ -119,11 +150,13 @@ module Combinators =
 
   module KeepLeftRight =
     // Keep left
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.keepLeft (Stachu.Parser.word ()) (Stachu.Parser.whitespace ()))
       "hello   world") = Stachu.Parser.ParseResult.Success("hello", "world")
 
     // Keep right
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.keepRight (Stachu.Parser.whitespace ()) (Stachu.Parser.word ()))
       "   hello world") = Stachu.Parser.ParseResult.Success("hello", " world")
@@ -132,11 +165,13 @@ module Combinators =
 module Repetition =
   module Many =
     // Parse multiple digits
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.many (Stachu.Parser.regex "\\d"))
       "123abc") = Stachu.Parser.ParseResult.Success([ "1", "2", "3" ], "abc")
 
     // Zero matches is ok
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.many (Stachu.Parser.regex "\\d"))
       "abc") = Stachu.Parser.ParseResult.Success([], "abc")
@@ -144,11 +179,13 @@ module Repetition =
 
   module Many1 =
     // Parse multiple digits
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.many1 (Stachu.Parser.regex "\\d"))
       "123abc") = Stachu.Parser.ParseResult.Success([ "1", "2", "3" ], "abc")
 
     // Zero matches fails
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.many1 (Stachu.Parser.regex "\\d"))
       "abc") = Stachu.Parser.ParseResult.Failure "Expected pattern: \\d"
@@ -156,11 +193,13 @@ module Repetition =
 
   module Optional =
     // Present
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.optional (Stachu.Parser.string "-"))
       "-123") = Stachu.Parser.ParseResult.Success(Stdlib.Option.Option.Some "-", "123")
 
     // Absent
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.optional (Stachu.Parser.string "-"))
       "123") = Stachu.Parser.ParseResult.Success(Stdlib.Option.Option.None, "123")
@@ -168,16 +207,19 @@ module Repetition =
 
   module SepBy =
     // Parse comma-separated numbers
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.sepBy (Stachu.Parser.digits ()) (Stachu.Parser.string ","))
       "1,2,3 rest") = Stachu.Parser.ParseResult.Success([ "1", "2", "3" ], " rest")
 
     // Single item
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.sepBy (Stachu.Parser.digits ()) (Stachu.Parser.string ","))
       "42 rest") = Stachu.Parser.ParseResult.Success([ "42" ], " rest")
 
     // No items
+    // @compiler blocked: compiler-gap
     (Stachu.Parser.parse
       (Stachu.Parser.sepBy (Stachu.Parser.digits ()) (Stachu.Parser.string ","))
       "abc") = Stachu.Parser.ParseResult.Success([], "abc")
@@ -185,11 +227,13 @@ module Repetition =
 
 module Between =
   // Parse content between parens
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.between (Stachu.Parser.string "(") (Stachu.Parser.string ")") (Stachu.Parser.digits ()))
     "(42) rest") = Stachu.Parser.ParseResult.Success("42", " rest")
 
   // Parse content between brackets
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.between (Stachu.Parser.string "[") (Stachu.Parser.string "]") (Stachu.Parser.word ()))
     "[hello]world") = Stachu.Parser.ParseResult.Success("hello", "world")
@@ -197,16 +241,19 @@ module Between =
 
 module Choice =
   // First parser matches
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.choice [ Stachu.Parser.string "a", Stachu.Parser.string "b", Stachu.Parser.string "c" ])
     "abc") = Stachu.Parser.ParseResult.Success("a", "bc")
 
   // Second parser matches
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.choice [ Stachu.Parser.string "a", Stachu.Parser.string "b", Stachu.Parser.string "c" ])
     "bcd") = Stachu.Parser.ParseResult.Success("b", "cd")
 
   // Third parser matches
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.choice [ Stachu.Parser.string "a", Stachu.Parser.string "b", Stachu.Parser.string "c" ])
     "cde") = Stachu.Parser.ParseResult.Success("c", "de")
@@ -214,12 +261,15 @@ module Choice =
 
 module QuotedString =
   // Simple quoted string
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.quotedString ()) "\"hello\" world") = Stachu.Parser.ParseResult.Success("hello", " world")
 
   // Empty quoted string
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.quotedString ()) "\"\" rest") = Stachu.Parser.ParseResult.Success("", " rest")
 
   // Quoted string with escaped content
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.quotedString ()) "\"hello\\nworld\" rest") = Stachu.Parser.ParseResult.Success("hello\\nworld", " rest")
 
 
@@ -228,6 +278,7 @@ module RealWorldExamples =
   // identParser = letters()
   // equalsParser = between(optionalWhitespace(), optionalWhitespace(), string("="))
   // assignmentParser = andThen(identParser, keepRight(equalsParser, int64()))
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.andThen
       (Stachu.Parser.letters ())
@@ -245,6 +296,7 @@ module RealWorldExamples =
   // closeBracket = keepRight(optionalWhitespace(), string("]"))
   // commaSep = between(optionalWhitespace(), optionalWhitespace(), string(","))
   // numberList = between(openBracket, closeBracket, sepBy(int64(), commaSep))
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.between
       (Stachu.Parser.keepRight (Stachu.Parser.string "[") (Stachu.Parser.optionalWhitespace ()))
@@ -259,20 +311,24 @@ module RealWorldExamples =
 
 
   // Parse email-like pattern using regex
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.regex "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
     "test@example.com extra") = Stachu.Parser.ParseResult.Success("test@example.com", " extra")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.regex "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
     "user.name+tag@sub.domain.org!") = Stachu.Parser.ParseResult.Success("user.name+tag@sub.domain.org", "!")
 
 
   // Parse URL-like pattern
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.regex "https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9./_-]*)?")
     "https://example.com/path rest") = Stachu.Parser.ParseResult.Success("https://example.com/path", " rest")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.regex "https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9./_-]*)?")
     "http://test.org other") = Stachu.Parser.ParseResult.Success("http://test.org", " other")

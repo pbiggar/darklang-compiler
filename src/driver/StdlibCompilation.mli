@@ -4,6 +4,12 @@ val buildStdlibWithTrace :
   CompilerOptions.passTimingRecorder option ->
   (CompilationContexts.stdlibResult, string) result
 
+(* Imported test helpers are checked together without entering application scope. *)
+val buildImportedTestStdlibWithTrace :
+  Platform.target ->
+  CompilerOptions.passTimingRecorder option ->
+  (CompilationContexts.stdlibResult, string) result
+
 val buildStdlib :
   Platform.target -> (CompilationContexts.stdlibResult, string) result
 

@@ -1,0 +1,125 @@
+module Darklang.Stdlib.Char
+
+
+/// Return the uppercase value of <param c>. If <param c> does not have an uppercase value, returns <param c>
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.toUppercase reason=compiler-implementation
+let toUppercase (c: Char) : Char = Builtin.charToUppercase c
+
+
+/// Return the lowercase value of <param c>. If <param c> does not have a lowercase value, returns <param c>
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.toLowercase reason=compiler-implementation
+let toLowercase (c: Char) : Char = Builtin.charToLowercase c
+
+
+/// Return whether <param c> is a lowercase character.
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isLowercase reason=compiler-implementation
+let isLowercase (c: Char) : Bool =
+  Stdlib.Char.toLowercase c == c && Stdlib.Char.toUppercase c != c
+
+
+/// Return whether <param c> is an uppercase character.
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isUppercase reason=compiler-implementation
+let isUppercase (c: Char) : Bool =
+  Stdlib.Char.toLowercase c != c && Stdlib.Char.toUppercase c == c
+
+
+/// Return whether <param c> is a digit (that is, the digits 0-9)
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isDigit reason=compiler-implementation
+let isDigit (c: Char) : Bool =
+  (Stdlib.Char.isGreaterThanOrEqualTo c '0')
+  && (Stdlib.Char.isLessThanOrEqualTo c '9')
+
+
+/// Return whether the first scalar in <param c> is a Unicode letter.
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isLetter reason=compiler-implementation
+let isLetter (c: Char) : Bool = Builtin.charIsLetter c
+
+
+/// Return whether the first scalar in <param c> is Unicode whitespace.
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isWhitespace reason=compiler-implementation
+let isWhitespace (c: Char) : Bool = Builtin.charIsWhitespace c
+
+
+/// Return whether the first scalar in <param c> is a Unicode letter or digit.
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isAlphanumeric reason=compiler-implementation
+let isAlphanumeric (c: Char) : Bool = Builtin.charIsAlphanumeric c
+
+
+/// Return whether <param c> is an ASCII letter
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isASCIILetter reason=compiler-implementation
+let isASCIILetter (c: Char) : Bool =
+  (Stdlib.Char.isGreaterThanOrEqualTo c 'a')
+  && (Stdlib.Char.isLessThanOrEqualTo c 'z')
+  || (Stdlib.Char.isGreaterThanOrEqualTo c 'A')
+      && (Stdlib.Char.isLessThanOrEqualTo c 'Z')
+
+
+/// Return whether <param c> is a valid ASCII character
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isASCII reason=compiler-implementation
+let isASCII (c: Char) : Bool =
+  let asciiCode = Stdlib.Char.toAsciiCode c
+
+  match asciiCode with
+  | Some ascii -> (ascii >= 0) && (ascii <= 127)
+  | None -> false
+
+
+/// Return {{Some <var code>}} if <param c> is a valid ASCII character, otherwise {{None}}"
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.toAsciiCode reason=compiler-implementation
+let toAsciiCode (c: Char) : Stdlib.Option.Option<Int> =
+  Builtin.charToAsciiCode c
+
+
+/// Return whether <param c1> is less than <param c2>
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isLessThan reason=compiler-implementation
+let isLessThan (c1: Char) (c2: Char) : Bool = Builtin.charIsLessThan c1 c2
+
+
+/// Return whether <param c1> is less than or equal to <param c2>
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isLessThanOrEqualTo reason=compiler-implementation
+let isLessThanOrEqualTo (c1: Char) (c2: Char) : Bool =
+  Builtin.charIsLessThanOrEqualTo c1 c2
+
+
+/// Return whether <param c1> is greater than <param c2>
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isGreaterThan reason=compiler-implementation
+let isGreaterThan (c1: Char) (c2: Char) : Bool =
+  Builtin.charIsGreaterThan c1 c2
+
+
+/// Return whether <param c1> is greater than or equal to <param c2>
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.isGreaterThanOrEqualTo reason=compiler-implementation
+let isGreaterThanOrEqualTo (c1: Char) (c2: Char) : Bool =
+  Builtin.charIsGreaterThanOrEqualTo c1 c2
+
+/// `a < b` on Chars: ordinal, the rule the four comparisons above already use.
+// @compiler blocked: container-adaptation
+impl Compare for Char =
+  // @compiler blocked: container-adaptation
+  let lessThan = Stdlib.Char.isLessThan
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo = Stdlib.Char.isLessThanOrEqualTo
+  // @compiler blocked: container-adaptation
+  let greaterThan = Stdlib.Char.isGreaterThan
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo = Stdlib.Char.isGreaterThanOrEqualTo
+
+
+// @compiler blocked: container-adaptation
+impl ToString for Char =
+  /// Stringify <param c>
+  // @compiler blocked: container-adaptation
+  let toString (c: Char) : String = Builtin.charToString c
+
+
+/// Return {{Some <var c>}} for the Unicode codepoint <param codepoint>,
+/// or {{None}} if the value is not a valid scalar (negative, > 0x10FFFF, or a surrogate).
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.fromCodepoint reason=compiler-implementation
+let fromCodepoint (codepoint: Int) : Stdlib.Option.Option<Char> =
+  Builtin.charFromCodepoint codepoint
+
+
+/// Return the codepoint when <param c> contains exactly one Unicode scalar.
+/// This is the inverse of <fn Char.fromCodepoint>.
+// @compiler replace: packages/darklang/stdlib/char.dark#Darklang.Stdlib.Char.toCodepoint reason=compiler-implementation
+let toCodepoint (c: Char) : Stdlib.Option.Option<Int> = Builtin.charToCodepoint c

@@ -49,6 +49,21 @@ def main():
                 content = content.replace(marker, build_hash.encode("ascii"))
             target.write(f"  ({ocaml_string(name.encode())}, {ocaml_string(content)});\n")
         target.write("]\n")
+        imported = root / "upstream/sources.list"
+        target.write("let upstreamSources = [\n")
+        if imported.exists():
+            paths = [line.strip() for line in imported.read_text().splitlines()
+                     if line.strip() and not line.startswith("#")]
+            for name in paths:
+                path = Path(name)
+                if path.is_absolute() or ".." in path.parts or path.suffix != ".dark":
+                    raise ValueError(f"Invalid imported source: {name}")
+                if name.startswith("packages/"):
+                    content = (root / "upstream" / path).read_bytes()
+                    target.write(f"  ({ocaml_string(('upstream/' + name).encode())}, {ocaml_string(content)});\n")
+        target.write("]\n")
+        reasons = (root / "porting/compiler-reasons.json").read_bytes()
+        target.write(f"let compilerReasons = {ocaml_string(reasons)}\n")
     build_info.write_text(
         "(* BuildInfo.ml - Build-time compiler revision, shared with Builtin.getBuildHash. *)\n"
         f"let hash = {ocaml_string(build_hash.encode('ascii'))}\n", encoding="utf-8")

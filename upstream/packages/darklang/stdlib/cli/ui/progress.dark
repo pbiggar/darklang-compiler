@@ -1,0 +1,29 @@
+module Darklang.Stdlib.Cli.UI.Progress
+
+
+/// Print a progress bar.
+/// current: current progress value
+/// total: total value
+/// label: text to show after the bar
+// @compiler replace: packages/darklang/stdlib/cli/ui/progress.dark#Darklang.Stdlib.Cli.UI.Progress.bar reason=compiler-implementation
+let bar (current: Int) (total: Int) (label: String) : Unit =
+  let width = 30
+
+  let filled =
+    if total == 0 then 0
+    else ((current * width) / total)
+
+  let empty = width - filled
+
+  let filledStr = Stdlib.String.repeat "#" filled
+  let emptyStr = Stdlib.String.repeat "-" empty
+
+  let pct =
+    if total == 0 then 0
+    else ((current * 100) / total)
+
+  Stdlib.print
+    $"\r[{filledStr}{emptyStr}] {Stdlib.toString pct}% {label}"
+
+  if current >= total then Stdlib.printLine ""
+  else ()

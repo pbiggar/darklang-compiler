@@ -1,29 +1,73 @@
 upstream:
-  repository: darklang/dark
-  revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
+  schema: 1
+  upstream_repository: darklang/dark
+  upstream_revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
+  target: linux-x64
+source_files: 433
+kinds:
+  assertion: 239
+  expression: 2
+  function: 4460
+  implementation: 214
+  named-test: 2120
+  trait: 21
+  trait-method: 25
+  type: 707
+  val: 272
 features:
-  supported: 199
   excluded: 6
   missing: 9
   partial: 1
+  supported: 199
 parser:
-  supported: 30
   partial: 1
-stdlib:
-  different: 834
-  missing: 569
-  identical: 595
-packages:
-  missing: 3709
-  identical: 5
-  different: 41
+  supported: 30
 builtins:
-  present: 79
   missing: 169
+  present: 79
   unassessed: 533
-tests:
-  enabled: 554
-  unmapped: 1584
-  ambiguous: 10
-  disabled: 83
-  partial: 128
+dispositions:
+  packages:
+    blocked: 3240
+    excluded: 2
+    replace: 35
+    run: 426
+  stdlib:
+    blocked: 848
+    excluded: 3
+    replace: 1142
+    run: 5
+  tests:
+    blocked: 16
+    run: 1484
+    xfail: 859
+reasons:
+  packages:
+    compiler-contract: 12
+    compiler-gap: 7
+    compiler-implementation: 34
+    constructor-identity: 1
+    container-adaptation: 33
+    missing-implementation: 3023
+    runtime-reflection: 2
+    test-counter: 1
+    test-diagnostics: 1
+    upstream-dependency: 161
+    value-specialization: 2
+  stdlib:
+    compiler-contract: 6
+    compiler-implementation: 1139
+    container-adaptation: 490
+    interpreter-intrinsic: 1
+    missing-implementation: 350
+    runtime-reflection: 3
+    test-counter: 2
+    test-diagnostics: 2
+  tests:
+    compiler-crash: 1
+    compiler-gap: 262
+    compiler-resource: 3
+    compiler-timeout: 12
+    test-counter: 7
+    test-diagnostics: 2
+    upstream-dependency: 588

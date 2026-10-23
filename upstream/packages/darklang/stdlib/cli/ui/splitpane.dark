@@ -1,0 +1,69 @@
+/// SplitPane — split a region into two focus-aware bordered panes. The layout primitive every multi-pane
+/// view (Inspect, Changes, History, Mesh, …) mounts into. Render helpers, called during a render pass:
+/// the child callbacks run immediately and are never stored in state (so the lambda-persistence rule is
+/// safe here).
+module Darklang.Stdlib.Cli.UI.SplitPane
+
+// @compiler blocked: missing-implementation
+type Orientation =
+  | Horizontal
+  | Vertical
+
+// @compiler blocked: missing-implementation
+type Focus =
+  | First
+  | Second
+  /// Neither pane has focus; both borders are dim.
+  | Neither
+
+/// Split `region` into two bordered panes by `firstPct` (0-100), render each child into its inner region.
+/// `focused` marks which pane gets the bright border. Below `minTotal`, collapses to the focused child only
+/// (with a "‹1/2›" hint), per the narrow-terminal rule.
+// @compiler blocked: missing-implementation
+let render
+  (region: Layout.Region)
+  (orientation: Orientation)
+  (firstPct: Int)
+  (focused: Focus)
+  (titleFirst: String)
+  (titleSecond: String)
+  (renderFirst: Layout.Region -> List<Layout.Span>)
+  (renderSecond: Layout.Region -> List<Layout.Span>)
+  : List<Layout.Span> =
+  let firstFocused = focused == Focus.First
+  let secondFocused = focused == Focus.Second
+  let minTotal = 46
+
+  let tooNarrow =
+    match orientation with
+    | Horizontal -> region.cols < minTotal
+    | Vertical -> region.rows < 8
+
+  if tooNarrow then
+    // Collapse: show only the focused pane, full region, with a which-of-two hint in the title.
+    let (title, renderFn) =
+      if secondFocused then (titleSecond + " ‹2/2›", renderSecond)
+      else (titleFirst + " ‹1/2›", renderFirst)
+    Box.panel region title (focused != Focus.Neither) renderFn
+  else
+    match orientation with
+    | Horizontal ->
+      let firstCols = (region.cols * firstPct) / 100
+      let secondCols = region.cols - firstCols
+      let firstRegion =
+        Layout.Region { top = region.top, left = region.left, rows = region.rows, cols = firstCols }
+      let secondRegion =
+        Layout.Region { top = region.top, left = region.left + firstCols, rows = region.rows, cols = secondCols }
+      Stdlib.List.flatten
+        [ Box.panel firstRegion titleFirst firstFocused renderFirst
+          Box.panel secondRegion titleSecond secondFocused renderSecond ]
+    | Vertical ->
+      let firstRows = (region.rows * firstPct) / 100
+      let secondRows = region.rows - firstRows
+      let firstRegion =
+        Layout.Region { top = region.top, left = region.left, rows = firstRows, cols = region.cols }
+      let secondRegion =
+        Layout.Region { top = region.top + firstRows, left = region.left, rows = secondRows, cols = region.cols }
+      Stdlib.List.flatten
+        [ Box.panel firstRegion titleFirst firstFocused renderFirst
+          Box.panel secondRegion titleSecond secondFocused renderSecond ]

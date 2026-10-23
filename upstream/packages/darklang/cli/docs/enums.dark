@@ -1,0 +1,30 @@
+module Darklang.Cli.Docs.Enums
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Enums
+
+## Define
+  type Status = | Pending | Done of Int
+
+## Construct
+  Status.Pending
+  Status.Done 42
+  Some 5             # Option/Result constructors can be bare
+  Ok "yes"
+  MyType.Case value  # other enums need the type prefix
+
+## Match (no type prefix)
+  match status with
+  | Pending -> "waiting"
+  | Done n -> $"done: {n}"
+
+  match opt with
+  | Some v -> v
+  | None -> default
+
+## Gotcha: a tuple inside a constructor needs double parens
+  match x with
+  | Some ((a, b)) -> ...    # one field containing a tuple
+  | None -> ...
+  # `Some (a, b)` is read as two fields and rejected."""

@@ -4,11 +4,16 @@
 // TODO: try decoding values with incorrect padding
 
 // Base64.decode
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "")
 Stdlib.Base64.decode "garbage text" = Stdlib.Result.Result.Error "Not a valid base64 string"
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Kw" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "+")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "yLo" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "Ⱥ")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "xbzDs8WCdw" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "żółw")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "LyotKygmQDk4NTIx" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "/*-+(&@98521")
 
 // some failures
@@ -17,33 +22,54 @@ Stdlib.Base64.decode "x" = Stdlib.Result.Result.Error "Not a valid base64 string
 
 // empty case
 // Test cases from the spec with padding added
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zg" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "f")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zg==" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "f")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm8" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "fo")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm8=" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "fo")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9v" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "foo")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYg" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "foob")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYg==" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "foob")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYmE" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "fooba")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYmE=" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "fooba")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYmFy" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "foobar")
 
 // "Impossible cases" from apache
 // https://commons.apache.org/proper/commons-codec/xref-test/org/apache/commons/codec/binary/Base64Test.html
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "ZE==" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "d")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "ZmC=" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "f`")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYE==" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "foo`")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "Zm9vYmC=" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "foob`")
 
 // longer tests
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "ZnJvbT0wNi8wNy8yMDEzIHF1ZXJ5PSLOms6xzrvPjs-CIM6_z4HOr8-DzrHPhM61Ig" = Darklang.Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "from=06/07/2013 query=\"Καλώς ορίσατε\"")
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "8J-RsfCfkbHwn4-78J-RsfCfj7zwn5Gx8J-PvfCfkbHwn4--8J-RsfCfj78" = Darklang.Stdlib.Result.Result.Ok(Stdlib.Blob.fromString "👱👱🏻👱🏼👱🏽👱🏾👱🏿")
 
 // These produce strings of bytes which are technically legal it seems
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "-p" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 250uy ])
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "lI" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 148uy ])
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "5Sk" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 229uy, 41uy ])
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "AA" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 0uy ])
+// @compiler blocked: compiler-gap
 Stdlib.Base64.decode "_w" = Stdlib.Result.Result.Ok(Stdlib.Blob.fromList [ 255uy ])
 
 

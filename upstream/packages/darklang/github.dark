@@ -1,0 +1,142 @@
+/// Darklang's interactions with the API
+///
+/// This isn't meant for general use outside of our org.
+///
+/// It'd probably be best to write a new module for your own API,
+/// or contribute general-purpose package types/fns for interacting with GitHub's API
+module Darklang.GitHub
+
+
+// @compiler blocked: missing-implementation
+val darklangRepoBaseUrl = "https://api.github.com/repos/darklang/dark"
+
+/// A baseline function for fetching data from the GitHub API
+// @compiler blocked: missing-implementation
+let fetchString
+  (url: String)
+  : Stdlib.Result.Result<String, String> =
+  let headers =
+    [ ("accept", "application/vnd.github+json")
+      ("user-Agent", "darklang") ]
+
+  match Stdlib.HttpClient.get url headers with
+  | Ok r ->
+    r.body |> Stdlib.String.fromBlobWithReplacement |> Stdlib.Result.Result.Ok
+  | Error _e -> Stdlib.Result.Result.Error "Failed to make GitHub API request"
+
+
+module Releases =
+  // @compiler blocked: missing-implementation
+  type Asset =
+    { name: String
+      browser_download_url: String }
+
+  // @compiler blocked: missing-implementation
+  type Release =
+    { tag_name: String
+      assets: List<Asset> }
+
+  /// Get tag of the most recent Darklang release, from the GitHub API
+  /// (i.e. `v0.0.19`)
+  ///
+  /// TODO: typify the error type
+  // @compiler blocked: missing-implementation
+  let getLatestReleaseTag () : Stdlib.Result.Result<String, String> =
+    match fetchString $"{darklangRepoBaseUrl}/releases" with
+    | Ok releasesJsonString ->
+      match Stdlib.Json.parse<List<Release>> releasesJsonString with
+      | Ok releases ->
+        match Stdlib.List.head releases with
+        | Some latestRelease -> latestRelease.tag_name |> Stdlib.Result.Result.Ok
+        | None -> Stdlib.Result.Result.Error "No releases found"
+      | Error _e ->
+        Stdlib.Result.Result.Error "Couldn't parse releases JSON string"
+    | Error _e ->
+      Stdlib.Result.Result.Error "Couldn't fetch releases list from GitHub API"
+
+  /// Get the build hash version from the latest release assets
+  /// Returns in CLI format (e.g. "alpha-abe74e7") for version comparison
+  // @compiler blocked: missing-implementation
+  let getLatestReleaseBuildHash () : Stdlib.Result.Result<String, String> =
+    match fetchString $"{darklangRepoBaseUrl}/releases" with
+    | Ok releasesJsonString ->
+      match Stdlib.Json.parse<List<Release>> releasesJsonString with
+      | Ok releases ->
+        match Stdlib.List.head releases with
+        | Some latestRelease ->
+          match Stdlib.List.head latestRelease.assets with
+          | Some firstAsset ->
+            // Asset name format: darklang-alpha-BUILDHASH-platform
+            let parts = Stdlib.String.split firstAsset.name "-"
+            match Stdlib.List.getAt parts 2 with
+            | Some hash ->
+              // Return in same format as CLI version (first 7 chars)
+              Stdlib.Result.Result.Ok $"alpha-{Stdlib.String.slice hash 0 7}"
+            | None ->
+              // Fallback to tag name if we can't parse hash
+              Stdlib.Result.Result.Ok latestRelease.tag_name
+          | None ->
+            // No assets, fallback to tag name
+            Stdlib.Result.Result.Ok latestRelease.tag_name
+        | None -> Stdlib.Result.Result.Error "No releases found"
+      | Error _e ->
+        Stdlib.Result.Result.Error "Couldn't parse releases JSON string"
+    | Error _e ->
+      Stdlib.Result.Result.Error "Couldn't fetch releases list from GitHub API"
+
+
+  /// The asset for one platform id, matched by SUFFIX.
+  ///
+  /// `install.sh` matches `-<rid>.gz` for the same reason: `contains` lets `linux-arm` match the
+  /// `linux-arm64` asset, so an armv7l machine is handed an arm64 binary.
+  // @compiler blocked: missing-implementation
+  let assetUrlFor
+    (assets: List<Asset>)
+    (platformId: String)
+    : Stdlib.Option.Option<String> =
+    assets
+    |> Stdlib.List.findFirst (fun a ->
+      Stdlib.String.endsWith a.name $"-{platformId}.gz")
+    |> Stdlib.Option.map (fun a -> a.browser_download_url)
+
+
+  /// The runtime id whose asset this host wants, as the release matrix spells it.
+  /// Its own function so it can be tested; `getDownloadUrl` fetches before it is observable.
+  // @compiler blocked: missing-implementation
+  let platformId (host: Stdlib.Cli.Host.Host) : Stdlib.Result.Result<String, String> =
+    match host.os, host.arch with
+    | Linux, Arm -> "linux-arm" |> Stdlib.Result.Result.Ok
+    | Linux, Arm64 | Linux, Aarch64 -> "linux-arm64" |> Stdlib.Result.Result.Ok
+    | Linux, X86_64 -> "linux-x64" |> Stdlib.Result.Result.Ok
+    | MacOS, Arm64 -> "osx-arm64" |> Stdlib.Result.Result.Ok
+    | MacOS, X86_64 -> "osx-x64" |> Stdlib.Result.Result.Ok
+    | _, _ -> Stdlib.Result.Result.Error "Unsupported OS or Arch"
+
+
+  /// Get the appropriate URL to download the latest release of the `darklang` cli exe,
+  /// corresponding to the current OS and Architecture
+  ///
+  /// TODO typify the error type
+  // @compiler blocked: missing-implementation
+  let getDownloadUrl
+    (host: Stdlib.Cli.Host.Host)
+    (releaseTag: String)
+    : Stdlib.Result.Result<String, String> =
+    match platformId host with
+    | Ok hostStr ->
+      let fetched =
+        fetchString $"{darklangRepoBaseUrl}/releases/tags/{releaseTag}"
+
+      match fetched with
+      | Ok releaseJsonString ->
+        match Stdlib.Json.parse<Release> releaseJsonString with
+        | Ok release ->
+          match assetUrlFor release.assets hostStr with
+          | Some url -> url |> Stdlib.Result.Result.Ok
+          | None ->
+            Stdlib.Result.Result.Error $"No asset named `-{hostStr}.gz` in this release"
+        | Error _e ->
+          Stdlib.Result.Result.Error "Couldn't parse release JSON string"
+      | Error _e ->
+        Stdlib.Result.Result.Error "Couldn't fetch release from GitHub API"
+    | Error e -> Stdlib.Result.Result.Error $"Couldn't determine host: {e}"

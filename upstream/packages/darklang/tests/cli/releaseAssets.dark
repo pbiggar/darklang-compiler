@@ -1,0 +1,131 @@
+module Darklang.Cli.Tests.ReleaseAssets
+
+// Which release asset the in-CLI updater downloads.
+//
+// `linux-arm` and `linux-arm64` are both real platform ids and one is a prefix of the other, so a
+// `contains` match hands an armv7l machine the arm64 binary. `install.sh` suffix-matches `-<rid>.gz`
+// for this reason; these assert that the updater does the same.
+
+module AssetForPlatform =
+  // @compiler blocked: upstream-dependency
+  let asset (name: String) : Darklang.GitHub.Releases.Asset =
+    Darklang.GitHub.Releases.Asset
+      { name = name
+        browser_download_url = $"https://example.com/{name}" }
+
+  // The LONGER name first, deliberately. `findFirst` with a `contains` match returns the arm64
+  // asset when asked for `linux-arm`, so this order is what gives the assertions teeth; with arm
+  // first, a prefix match is accidentally right and the test proves nothing.
+  //
+  // A function, not a `val`: a `val` holding a custom type carries the type identity it was built
+  // against, and the testfile harness rebuilds the package set underneath it.
+
+  // @compiler blocked: upstream-dependency
+  let assets () : List<Darklang.GitHub.Releases.Asset> =
+    [ asset "darklang-alpha-abc1234-linux-arm64.gz"
+      asset "darklang-alpha-abc1234-linux-arm.gz"
+      asset "darklang-alpha-abc1234-linux-musl-x64.gz"
+      asset "darklang-alpha-abc1234-linux-x64.gz"
+      asset "darklang-alpha-abc1234-osx-arm64.gz" ]
+
+  // The one that was wrong: arm64 must not be served the 32-bit build, and arm must not be
+  // served the 64-bit one.
+  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" reason=upstream-dependency
+  test armBuilds =
+    Stdlib.Test.all
+      [ Darklang.GitHub.Releases.assetUrlFor (assets ()) "linux-arm64"
+        |> Stdlib.Test.equal
+          (Stdlib.Option.Option.Some
+             "https://example.com/darklang-alpha-abc1234-linux-arm64.gz")
+        Darklang.GitHub.Releases.assetUrlFor (assets ()) "linux-arm"
+        |> Stdlib.Test.equal
+          (Stdlib.Option.Option.Some
+             "https://example.com/darklang-alpha-abc1234-linux-arm.gz") ]
+
+  // `linux-x64` is also a suffix of `linux-musl-x64`, the same trap one letter along.
+  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" reason=upstream-dependency
+  test muslSuffix =
+    Stdlib.Test.all
+      [ Darklang.GitHub.Releases.assetUrlFor (assets ()) "linux-x64"
+        |> Stdlib.Test.equal
+          (Stdlib.Option.Option.Some
+             "https://example.com/darklang-alpha-abc1234-linux-x64.gz")
+        Darklang.GitHub.Releases.assetUrlFor (assets ()) "linux-musl-x64"
+        |> Stdlib.Test.equal
+          (Stdlib.Option.Option.Some
+             "https://example.com/darklang-alpha-abc1234-linux-musl-x64.gz")
+        Darklang.GitHub.Releases.assetUrlFor (assets ()) "osx-arm64"
+        |> Stdlib.Test.equal
+          (Stdlib.Option.Option.Some
+             "https://example.com/darklang-alpha-abc1234-osx-arm64.gz") ]
+
+  // A platform this release has no build for is None, not the first thing that looks close.
+  // `osx-x64` is a real runtime we publish, so this is the "a tag is missing one asset" case
+  // rather than "we do not build that at all".
+  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" reason=upstream-dependency
+  test missingPlatform =
+    Darklang.GitHub.Releases.assetUrlFor (assets ()) "osx-x64"
+    |> Stdlib.Test.equal Stdlib.Option.Option.None
+
+  // An empty list, and an asset list that carries something other than a `.gz`.
+  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" reason=upstream-dependency
+  test emptyAndNonGzAssets =
+    Stdlib.Test.all
+      [ Darklang.GitHub.Releases.assetUrlFor [] "linux-x64"
+        |> Stdlib.Test.equal Stdlib.Option.Option.None
+        Darklang.GitHub.Releases.assetUrlFor
+          [ asset "darklang-alpha-abc1234-linux-x64.tar" ]
+          "linux-x64"
+        |> Stdlib.Test.equal Stdlib.Option.Option.None ]
+
+
+// Which runtime id a host maps to. Every id here is one `ALL_RUNTIMES` publishes.
+module PlatformForHost =
+  // A function rather than a `val`: a `val` holding a custom type carries the type identity it
+  // was built against, and the testfile harness rebuilds the package set underneath it.
+  let host
+    (os: Stdlib.Cli.OS.OS)
+    (arch: Stdlib.Cli.Architecture.Architecture)
+    : Stdlib.Cli.Host.Host =
+    Stdlib.Cli.Host.Host
+      { os = os
+        arch = arch
+        defaultShell = Stdlib.Cli.Shell.Shell.Bash }
+
+  // @compiler blocked: upstream-dependency
+  let idFor
+    (os: Stdlib.Cli.OS.OS)
+    (arch: Stdlib.Cli.Architecture.Architecture)
+    : Stdlib.Result.Result<String, String> =
+    Darklang.GitHub.Releases.platformId (PlatformForHost.host os arch)
+
+  // @compiler xfail compile: "Unknown function or value 'PlatformForHost.idFor'" reason=upstream-dependency
+  test everySupportedHost =
+    Stdlib.Test.all
+      [ PlatformForHost.idFor
+          Stdlib.Cli.OS.OS.Linux
+          Stdlib.Cli.Architecture.Architecture.Arm
+        |> Stdlib.Test.equal (Stdlib.Result.Result.Ok "linux-arm")
+        PlatformForHost.idFor
+          Stdlib.Cli.OS.OS.Linux
+          Stdlib.Cli.Architecture.Architecture.Aarch64
+        |> Stdlib.Test.equal (Stdlib.Result.Result.Ok "linux-arm64")
+        PlatformForHost.idFor
+          Stdlib.Cli.OS.OS.Linux
+          Stdlib.Cli.Architecture.Architecture.X86_64
+        |> Stdlib.Test.equal (Stdlib.Result.Result.Ok "linux-x64")
+        PlatformForHost.idFor
+          Stdlib.Cli.OS.OS.MacOS
+          Stdlib.Cli.Architecture.Architecture.Arm64
+        |> Stdlib.Test.equal (Stdlib.Result.Result.Ok "osx-arm64")
+        PlatformForHost.idFor
+          Stdlib.Cli.OS.OS.MacOS
+          Stdlib.Cli.Architecture.Architecture.X86_64
+        |> Stdlib.Test.equal (Stdlib.Result.Result.Ok "osx-x64") ]
+
+  // @compiler xfail compile: "Unknown function or value 'PlatformForHost.idFor'" reason=upstream-dependency
+  test unsupportedCombination =
+    PlatformForHost.idFor
+      Stdlib.Cli.OS.OS.MacOS
+      Stdlib.Cli.Architecture.Architecture.Arm
+    |> Stdlib.Test.equal (Stdlib.Result.Result.Error "Unsupported OS or Arch")

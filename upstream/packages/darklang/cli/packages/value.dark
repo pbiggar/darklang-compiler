@@ -1,0 +1,148 @@
+module Darklang.Cli.Packages.Value
+
+
+// @compiler blocked: missing-implementation
+let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
+  match args with
+  | [] ->
+    Stdlib.printLine (help state)
+    state
+
+  // val SomeModule.myValue = expression
+  | location :: definitionParts ->
+    let inlineDefinition = Packages.definitionFromArgs definitionParts
+
+    if Stdlib.String.isEmpty inlineDefinition then
+      [
+        (Stdlib.Cli.UI.Colors.error "Error: Inline value expression required")
+        ""
+        "Usage: val <location> <expression>"
+        "       val <location> -    (read expression from stdin, for multi-line input)"
+        ""
+        "Examples:"
+        "  dark val Me.Demo.answer '42'"
+        "  dark val Me.Demo.message '\"hello world\"'"
+        ""
+      ] |> Stdlib.printLines
+
+      Cli.exitWith state false
+    else
+      createValueInline
+        state.packageData.currentLocation
+        location
+        inlineDefinition
+        state
+
+
+// @compiler blocked: missing-implementation
+let createValueInline
+  (currentLocation: Packages.PackageLocation)
+  (locationStr: String)
+  (expression: String)
+  (state: Cli.AppState)
+  : Cli.AppState =
+  match Location.parseRelativeTo currentLocation locationStr with
+  | Ok location ->
+    let fullSource = $"val {location.name} = {expression}"
+
+    // Parse the value definition with the unified (ranged) parser
+    match LanguageTools.Parser.Parse.toWrittenTypes fullSource with
+    | Some(SourceFile sourceFile) ->
+      // The parser may recover a tree after errors; do not save it.
+      let hasParseError =
+        (Errors.reportParseErrors (LanguageTools.Parser.Parse.diagnostics fullSource))
+        || (Errors.reportTrailing sourceFile)
+      let found =
+        if hasParseError then
+          Stdlib.Option.Option.None
+        else
+          sourceFile.declarations
+          |> Stdlib.List.findFirst (fun d ->
+            match d with
+            | Value _ -> true
+            | _ -> false)
+
+      match found with
+      | Some(Value writtenValue) ->
+        Packages.saveAuthored
+          state
+          location
+          LanguageTools.ProgramTypes.ItemKind.Value
+          "value"
+          { state with exitCode = 1 }
+          (fun ctx ->
+            let (packageValue, unresolvedNames) =
+              LanguageTools.WrittenTypesToProgramTypes.ValueDeclaration.toPackageValuePT
+                ctx
+                writtenValue
+
+            let ops =
+              [ LanguageTools.ProgramTypes.PackageOp.AddValue packageValue
+                LanguageTools.ProgramTypes.PackageOp.SetName (location, LanguageTools.ProgramTypes.Reference.PackageValue packageValue.hash, Stdlib.Option.Option.None) ]
+
+            Stdlib.Option.Option.Some((ops, packageValue.hash, unresolvedNames)))
+
+      | _ ->
+        // a precise parse error was already printed above; don't stack the
+        // generic hint on top of it
+        if hasParseError then
+          Cli.exitWith state false
+        else
+          [
+            (Stdlib.Cli.UI.Colors.error "Failed to parse value expression")
+            ""
+            "Make sure your syntax is correct. Examples:"
+            "  dark val Me.Demo.answer '42'"
+            "  dark val Me.Demo.message '\"hello world\"'"
+            ""
+          ] |> Stdlib.printLines
+          Cli.exitWith state false
+    | None ->
+      [
+        (Stdlib.Cli.UI.Colors.error "Failed to parse value expression")
+        ""
+        "Make sure your syntax is correct. Examples:"
+        "  dark val Me.Demo.answer '42'"
+        "  dark val Me.Demo.message '\"hello world\"'"
+        ""
+      ] |> Stdlib.printLines
+      Cli.exitWith state false
+  | Error msg ->
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"Invalid location: {msg}")
+    Cli.exitWith state false
+
+
+// @compiler blocked: missing-implementation
+let help (_state: Cli.AppState) : String =
+  [
+    "Create or update a value"
+    ""
+    "Usage: val <location> <expression>"
+    ""
+    "When updating an existing value, dependents are automatically updated"
+    "to use the new version."
+    ""
+    "A name has three parts, Owner.Module.name. `Me` is a fine owner to start"
+    "with; `Darklang` is reserved for the standard library."
+    ""
+    "Examples:"
+    "  dark val Me.Demo.answer '42'"
+    "  dark val Me.Demo.message '\"hello world\"'"
+    "  dark val Me.Demo.smallPrimes '[2, 3, 5, 7]'"
+    "  dark val Me.Demo.capitals 'Dict { \"France\": \"Paris\", \"Peru\": \"Lima\" }'"
+    "  dark eval 'Me.Demo.answer + 1'"
+    ""
+    "  # Several lines, from stdin:"
+    "  dark val Me.Demo.morePrimes - <<'EOF'"
+    "  [ 11, 13,"
+    "    17, 19 ]"
+    "  EOF"
+    ""
+    "A leading `/` makes a name absolute (`/Me.Demo.answer`); without one it is"
+    "relative to the module `nav` put you in."
+    ""
+  ] |> Stdlib.String.join "\n"
+
+
+// @compiler blocked: missing-implementation
+let complete (_state: Cli.AppState) (_args: List<String>) : List<Cli.Completion.CompletionItem> = []

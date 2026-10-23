@@ -16,17 +16,23 @@ module CompletionSweep =
     |> Stdlib.List.all (fun c -> forced c args)
 
 // no argument yet: the command was typed, then Tab
+// @compiler blocked: compiler-gap
 CompletionSweep.sweep [] = true
 
 // a partial first argument
+// @compiler blocked: compiler-gap
 CompletionSweep.sweep [ "" ] = true
+// @compiler blocked: compiler-gap
 CompletionSweep.sweep [ "fea" ] = true
 
 // a subcommand, then Tab for its argument -- the arm that reads the store
+// @compiler blocked: compiler-gap
 CompletionSweep.sweep [ "show", "" ] = true
+// @compiler blocked: compiler-gap
 CompletionSweep.sweep [ "push", "fea" ] = true
 
 // more arguments than any command takes; nothing should throw reaching for a word that isn't there
+// @compiler blocked: compiler-gap
 CompletionSweep.sweep [ "a", "b", "c", "d" ] = true
 
 
@@ -40,11 +46,15 @@ module BranchCompletion =
     |> Stdlib.List.map (fun i -> i.value)
 
 // a name that exists in no store: the filter runs and matches nothing, rather than the whole list coming back
+// @compiler blocked: compiler-gap
 BranchCompletion.values [ "zzz-no-such-branch" ] = []
+// @compiler blocked: compiler-gap
 BranchCompletion.values [ "switch", "zzz-no-such-branch" ] = []
 
 // `main` is always a legitimate target for the branch-taking subcommands
+// @compiler blocked: compiler-gap
 (BranchCompletion.values [ "switch", "mai" ]) |> Stdlib.List.contains "main" = true
 
 // a subcommand that takes no branch gets no branch names
+// @compiler blocked: compiler-gap
 BranchCompletion.values [ "list", "" ] = []

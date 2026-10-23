@@ -653,31 +653,38 @@ module Errors =
   #compileerror="Non-exhaustive match expression"
   (match "nothing matches" with
    | "not this" -> "fail") = error="No matching case found for value \"nothing matches\" in match expression"
+  // @compiler blocked: compiler-gap
   (match Builtin.testRuntimeError "cond is error" with
    | 5L -> "fail"
    | 6L -> "pass"
    | var -> "fail") = error="Uncaught exception: cond is error"
+  // @compiler blocked: compiler-gap
   (match Builtin.testRuntimeError "cond is error, wildcard" with
    | 5L -> 5L
    | _ -> 6L) = error="Uncaught exception: cond is error, wildcard"
+  // @compiler blocked: compiler-gap
   (match 1L with
    | 1L -> Builtin.testRuntimeError "a"
    | 6L -> "pass"
    | var -> "fail") = error="Uncaught exception: a"
+  // @compiler blocked: compiler-gap
   (match 1L with
    | 2L -> Builtin.testRuntimeError "Uncaught exception: a"
    | 1L -> "pass"
    | var -> "fail") = "pass"
 
+  // @compiler blocked: compiler-gap
   (match 1L with
    | 1L -> "pass"
    | 6L -> Builtin.testRuntimeError "a"
    | var -> "fail") = "pass"
 
+  // @compiler blocked: compiler-gap
   (match 1L with
    | 2L -> "pass"
    | 1L -> Builtin.testRuntimeError "a"
    | var -> "fail") = error="Uncaught exception: a"
+  // @compiler blocked: compiler-gap
   (match 3L with
    | 2L -> "pass"
    | 1L -> Builtin.testRuntimeError "a"

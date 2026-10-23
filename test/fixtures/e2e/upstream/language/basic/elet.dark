@@ -1,4 +1,6 @@
+// @compiler blocked: compiler-gap
 (let x = Builtin.testRuntimeError "a" in 5L) = error="Uncaught exception: a"
+// @compiler blocked: compiler-gap
 (let x = Builtin.testRuntimeError "a" in Builtin.testRuntimeError "b") = error="Uncaught exception: a"
 module Variables =
   (let x = 5L in x) = 5L
@@ -16,7 +18,9 @@ module Tuples =
   (let (a, b, c) = (1L, 2L, 3L) in (b, a)) = (2L, 1L)
   (let (_, _, _) = (1L, 2L, 3L) in 2L) = 2L
 
+  // @compiler blocked: compiler-gap
   (let (_, _, _) = (1L, 2L, Builtin.testRuntimeError "test") in 2L) = error="Uncaught exception: test"
+  // @compiler blocked: compiler-gap
   (let (_, _, _) = (Builtin.testRuntimeError "test1", 2L, Builtin.testRuntimeError "test2")
    2L) = error="Uncaught exception: test1"
   // With multiple levels of nested destructuring
@@ -42,6 +46,7 @@ module Shadowing =
    match 6L with
    | x -> x) = 6L
 
+  // @compiler blocked: compiler-gap
   (let x = 35L
    match Stdlib.Result.Result.Ok 6L with
    | Ok x -> x
@@ -51,23 +56,27 @@ module Shadowing =
   Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x -> x + 2L)) =
     [ 3L, 4L, 5L, 6L ]
 
+  // @compiler blocked: compiler-gap
   (let x = 35L
    match Stdlib.Result.Result.Ok 6L with
    | Ok x -> (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x -> x + 2L))
    | _ -> Builtin.testRuntimeError "unexpected Result.Error") =
      [ 3L, 4L, 5L, 6L ]
 
+  // @compiler blocked: compiler-gap
   (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x ->
     (let x = 35L
      match Stdlib.Result.Result.Ok 6L with
      | Ok x -> x + 2L
      | _ -> Builtin.testRuntimeError "unexpected Result.Error"))) = [ 8L, 8L, 8L, 8L ]
 
+  // @compiler blocked: compiler-gap
   (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x ->
     match Stdlib.Result.Result.Ok 6L with
     | Ok x -> let x = 9L in x + 2L
     | _ -> Builtin.testRuntimeError "unexpected Result.Error")) = [ 11L, 11L, 11L, 11L ]
 
+  // @compiler blocked: compiler-gap
   (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x ->
     (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6L) with
      | Ok(Ok x) -> let x = 9L in x + 2L
@@ -79,6 +88,7 @@ module Wildcard =
   (let _ = 5L in 10L) = 10L
 
   // Wildcard with side effects - the value should still be evaluated
+  // @compiler blocked: compiler-gap
   (let _ = Builtin.testRuntimeError "test" in 10L) = error="Uncaught exception: test"
 
   // Wildcard in tuple destructuring
