@@ -25,7 +25,6 @@ test collect =
       Stdlib.Result.collect []
       |> Stdlib.Test.equal (Ok []) ]
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
 test fromOption =
   Stdlib.Test.all
     [ Stdlib.Result.fromOption (Some 6L) "test"

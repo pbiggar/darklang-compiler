@@ -20,9 +20,7 @@ let check checkExpression literal globals locals symbols expected
     match (typeName.modules, typeName.typ.name, caseName) with
     | [], "", ("Some" | "None" | "Ok" | "Error") ->
         let owner =
-          match caseName with
-          | "Some" | "None" -> "Option"
-          | _ -> "Result"
+          match caseName with "Some" | "None" -> "Option" | _ -> "Result"
         in
         {
           typeName with
@@ -107,7 +105,15 @@ let check checkExpression literal globals locals symbols expected
       let inferred =
         bind (findNamedType globals typeName) (fun (canonical, entry) ->
             bind (fieldsForInference canonical entry) (fun types ->
-                if typeName.typeArgs <> [] || entry.params = [] then Ok None
+                let hasExpectedOwner =
+                  match expected with
+                  | Some (AST.TSum (owner, _)) -> owner = canonical
+                  | _ -> false
+                in
+                if
+                  typeName.typeArgs <> [] || entry.params = []
+                  || hasExpectedOwner
+                then Ok None
                 else
                   match types with
                   | None -> Ok None

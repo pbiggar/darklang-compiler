@@ -1,18 +1,28 @@
 // Standard constructors resolve to Option and Result even when other enums collide.
 
 // None must keep its standard meaning without an expected enum type.
-[None; Some 5L] = [Stdlib.Option.Option.None; Stdlib.Option.Option.Some 5L]
+[None, Some 5L] = [Stdlib.Option.Option.None, Stdlib.Option.Option.Some 5L]
 
 // A competing local Some must not change the standard shorthand.
-type Other = Some of Int64 | Other [Some 5L; None] = [Stdlib.Option.Option.Some 5L; Stdlib.Option.Option.None]
+type Other = Some of Int64 | Other [Some 5L, None] = [Stdlib.Option.Option.Some 5L, Stdlib.Option.Option.None]
 
 // Both Result shorthands must resolve without relying on an expected type.
-type Other = Ok of Int64 | Error of String [Ok 5L; Error "failure"] = [Stdlib.Result.Result.Ok 5L; Stdlib.Result.Result.Error "failure"]
+type Other = Ok of Int64 | Error of String [Ok 5L, Error "failure"] = [Stdlib.Result.Result.Ok 5L, Stdlib.Result.Result.Error "failure"]
 
-type Other = Ok of Int64 | Error of String [Error "failure"; Ok 5L] = [Stdlib.Result.Result.Error "failure"; Stdlib.Result.Result.Ok 5L]
+type Other = Ok of Int64 | Error of String [Error "failure", Ok 5L] = [Stdlib.Result.Result.Error "failure", Stdlib.Result.Result.Ok 5L]
 
 // Explicit qualification must still select the other enum.
-Stdlib.Cli.Stdin.Key.None = Stdlib.Cli.Stdin.Key.None
+type Key = Other | None match Key.None with | Other -> false | None -> true = true
 
 // Ordinary constructors retain their existing resolution.
 type Color = Red | Blue Red = Red
+
+// Expected payload types disambiguate nested constructors.
+type Detail = Invalid of String let make (): Result<Int64, Detail> = Error (Invalid "x") match make () with | Ok _ -> false | Error (Invalid _) -> true = true
+
+// An expected keyboard-like enum cannot capture the standard bare None.
+type Key = Other | None let key (): Key = None let value = key () in value = compileerror="Expected TSum"
+
+// Valid assertions retained from the mixed-type upstream mapWithDefault test.
+Stdlib.Option.mapWithDefault (Some 5L) 6L (fun x -> x + 1L) = 6L
+Stdlib.Option.mapWithDefault None 6L (fun x -> x + 1L) = 6L
