@@ -1,7 +1,6 @@
 // All certs from https://fm4dd.com/openssl/certexamples.shtm
 module Darklang.Stdlib.X509.Tests
 
-// @compiler blocked: pending-validation
 test errors =
   Stdlib.Test.all
     [ Stdlib.X509.pemCertificatePublicKey ""
@@ -15,7 +14,6 @@ test errors =
         "-----BEGIN CERTIFICATE-----\nABC-----END CERTIFICATE-----"
       |> Stdlib.Test.equal (Error "No certificates") ]
 
-// @compiler blocked: pending-validation
 test rsa =
   Stdlib.Test.all
     [ // 512B Cert PEM
@@ -31,7 +29,6 @@ test rsa =
         "-----BEGIN RSA PRIVATE KEY-----\nMIIBOwIBAAJBAJv8ZpB5hEK7qxP9K3v43hUS5fGT4waKe7ix4Z4mu5UBv+cw7WSF\nAt0Vaag0sAbsPzU8Hhsrj/qPABvfB8asUwcCAwEAAQJAG0r3ezH35WFG1tGGaUOr\nQA61cyaII53ZdgCR1IU8bx7AUevmkFtBf+aqMWusWVOWJvGu2r5VpHVAIl8nF6DS\nkQIhAMjEJ3zVYa2/Mo4ey+iU9J9Vd+WoyXDQD4EEtwmyG1PpAiEAxuZlvhDIbbce\n7o5BvOhnCZ2N7kYb1ZC57g3F+cbJyW8CIQCbsDGHBto2qJyFxbAO7uQ8Y0UVHa0J\nBO/g900SAcJbcQIgRtEljIShOB8pDjrsQPxmI1BLhnjD1EhRSubwhDw5AFUCIQCN\nA24pDtdOHydwtSB5+zFqFLfmVZplQM/g5kb4so70Yw==\n-----END RSA PRIVATE KEY-----"
       |> Stdlib.Test.equal (Error "No certificates") ]
 
-// @compiler blocked: pending-validation
 test dsa =
   Stdlib.Test.all
     [ // DSA 512B Cert PEM
@@ -47,7 +44,6 @@ test dsa =
         "-----BEGIN CERTIFICATE REQUEST-----\nMIIBhDCCAUQCAQAwSjELMAkGA1UEBhMCSlAxDjAMBgNVBAgMBVRva3lvMREwDwYD\nVQQKDAhGcmFuazRERDEYMBYGA1UEAwwPd3d3LmV4YW1wbGUuY29tMIHwMIGoBgcq\nhkjOOAQBMIGcAkEAylbe2WLRUQs65tvzU45eOWLTIFXLUKS2nQKMBUcnWNd7oRsP\niV8jPqpp4H0JFyJkKaGHSHvgPA1htr2jt8CkNwIVAMcenXmg7PlzR3G7IlUNaLL8\naxvLAkB0GGQ5UsvwOQBV61l1DZUyWzYVg54rYhv/eamAnhRp8GD6f1soV/v5Ww5k\nLo5K23eMGErbnWTNHHOIgwFnjh0NA0MAAkA7Sv0ujzjEBPGiPrJAXTUJ/goe+pDQ\n4c7Qv7Ljq/RWwksZ2fwn4UoBNaYTichJHUdo4BK5d7oedZaPu7aO+iy1oAAwCQYH\nKoZIzjgEAwMvADAsAhRez3atcWJFwJLLuKsrblhcrLhQ7AIUEstUTOWpjOZX5V+q\ngGAv5jN7zm8=\n-----END CERTIFICATE REQUEST-----"
       |> Stdlib.Test.equal (Error "No certificates") ]
 
-// @compiler blocked: pending-validation
 test ecc =
   Stdlib.Test.all
     [ // ECC 570B Cert PEM
@@ -63,7 +59,6 @@ test ecc =
         "-----BEGIN CERTIFICATE REQUEST-----\nMIIBpDCB+wIBADBKMQswCQYDVQQGEwJKUDEOMAwGA1UECAwFVG9reW8xETAPBgNV\nBAoMCEZyYW5rNEREMRgwFgYDVQQDDA93d3cuZXhhbXBsZS5jb20wgacwEAYHKoZI\nzj0CAQYFK4EEACcDgZIABAIZ0Rc0Y3jsqPqqptRz3tiSAuvTHA9vUigM2gUjM6Yk\nTKofP7RRls4dqt6aM7/1eLbFg4Jdh9DXS4zU1EFeiZQZ+drSQYAmAgAtTzpmtmUo\ny+miwtiSBomu3CSUe6YrVvWb+Oirmvw2x3BCTJW2Xjhy5y6tDPVRRyhg0nh5wm/U\nxZv4jo7AZuJV8ztZKwCEAKAAMAkGByqGSM49BAEDgZgAMIGUAkgDHvgliw56MDT1\nB0L3VTRKsaqp0xGIUKAPJOOuqn0UxyzuVktk9Rna467bXll0UJwOuUVbEjdL7B13\nvyDpRnafKiUX7oDbsW0CSAP8EY0n79AiJwLYDhghUBAsGMCw4uaLEIOE0sAWqOdT\nWTCAhu/gJh9e+4lAFiKoMpM3XWoplCqKuvvNqenGda6EOMuTk/S4Bw==\n-----END CERTIFICATE REQUEST-----"
       |> Stdlib.Test.equal (Error "No certificates") ]
 
-// @compiler blocked: pending-validation
 test variations =
   Stdlib.Test.all
     [ // RSA 999B Cert PEM
