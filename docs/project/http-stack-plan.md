@@ -354,7 +354,14 @@ mean the entire branch has passed its integration or performance gates.
   critical-stream, identifier, settings and QPACK instruction error codes.
   Critical-stream failures retain post-read flow credit and packet state before
   the terminal owner sends its encrypted close and releases the connection.
-  Transport failures still need the broader typed migration.
+  QUIC STREAM/RESET final-size, receive flow-control, stream-limit and direction
+  violations now carry transport codes through the latest authenticated owner.
+  Transport closes preserve the triggering frame type, packet/key state and
+  close reason on retransmission. Listener rejection retains its sealed outbox
+  until flush; direct owners send once and release even after a failed send.
+  Frame parsing, ACK/recovery, CRYPTO/reassembly, connection-ID and key-validation
+  failures still need the broader typed migration; opaque failures are not
+  guessed into transport codes.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
   - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
     `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int

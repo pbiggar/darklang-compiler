@@ -4,18 +4,24 @@ let transportClose (mode: Int64) : Bool =
   let keys = match Stdlib.__QuicCrypto.derive secret with | Ok keys -> keys | Error _ -> Builtin.crash "Test keys" in
   let encode = fun id offset bytes fin -> match Stdlib.__QuicApplication.stream id offset (Stdlib.String.toBlob bytes) fin with | Ok frame -> frame | Error _ -> Builtin.crash "Test frame" in
   let payload =
-    if mode == 0L then Stdlib.Blob.concat [encode 0L 0L "abc" true, encode 0L 2L "" true]
+    if mode == 0L || mode == 6L || mode == 8L || mode == 13L then Stdlib.Blob.concat [encode 0L 0L "abc" true, encode 0L 2L "" true]
     else if mode == 1L then encode 0L 65536L "a" false
     else if mode == 2L then encode 0L 0L "abcde" false
     else if mode == 3L then encode 128L 0L "a" false
     else if mode == 4L then encode 3L 0L "a" false
+    else if mode == 9L then Stdlib.Blob.__fromInt64List [8L, 64L, 128L, 97L]
+    else if mode == 10L then Stdlib.Blob.concat [encode 0L 0L "abc" true, Stdlib.Blob.__fromInt64List [4L, 0L, 0L, 2L]]
+    else if mode == 11L then Stdlib.Blob.__fromInt64List [5L, 2L, 0L]
+    else if mode == 12L then Stdlib.Blob.__fromInt64List [17L, 2L, 10L]
     else Stdlib.Blob.concat [encode 0L 0L "abc" true, encode 0L 0L "abc" true] in
-  let wire = match Stdlib.__QuicPacket.sealShort keys (Stdlib.String.toBlob "serverID") false payload 0L with | Ok wire -> wire | Error _ -> Builtin.crash "Test packet" in
+  let generation = match Stdlib.__QuicKeys.create secret with | Ok state -> state.next | Error _ -> Builtin.crash "Test update" in
+  let sendingKeys = if mode == 6L then generation.keys else if mode == 7L then { keys with key = generation.keys.key } else keys in
+  let wire = match Stdlib.__QuicPacket.sealShort sendingKeys (Stdlib.String.toBlob "serverID") (mode == 6L) payload 0L with | Ok wire -> wire | Error _ -> Builtin.crash "Test packet" in
   let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L } in
   let packets = Stdlib.Stream.__cellNew<List<Blob>> [] in
   let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
   let socket = Stdlib.__Datagram.Socket { lifecycle = life, watch = None,
-    send = fun _peer bytes _timeout -> let previous = Stdlib.Stream.__cellGet<List<Blob>> packets in Stdlib.Stream.__cellSet packets (previous @ [bytes]); Ok (),
+    send = fun _peer bytes _timeout -> let previous = Stdlib.Stream.__cellGet<List<Blob>> packets in Stdlib.Stream.__cellSet packets (previous @ [bytes]); if mode == 8L && previous != [] then Error 5L else Ok (),
     receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = peer, payload = wire }) } in
   let parameters = Stdlib.__QuicParameters.Parameters { originalDestination = None, initialSource = Stdlib.String.toBlob "clientID", retrySource = None, resetToken = None,
     idleTimeout = 0L, maxUdpPayload = 1200L, maxData = 262144L, maxStreamDataBidiLocal = 65536L, maxStreamDataBidiRemote = 65536L, maxStreamDataUni = 65536L,
@@ -25,27 +31,38 @@ let transportClose (mode: Int64) : Bool =
   let initial = match Stdlib.__QuicConnection.fromServer ready (Stdlib.__Network.ShutdownSignals { lifecycle = life }) with | Ok state -> state | Error _ -> Builtin.crash "Test connection" in
   let initial = if mode == 2L then { initial with flow = { initial.flow with credit = 4L } } else initial in
   let initial = if mode == 4L then match Stdlib.__QuicConnection.openStream initial 3L with | Ok state -> state | Error _ -> Builtin.crash "Test stream" else initial in
-  let result = Stdlib.__QuicConnection.poll initial 1L in
+  let result =
+    if mode != 13L then Stdlib.__QuicConnection.poll initial 1L
+    else
+      let now = match Stdlib.__Network.monotonicMillis () with | Ok now -> now | Error _ -> Builtin.crash "Test clock" in
+      let connection = match Stdlib.__QuicConnection.__tick initial now with | Ok state -> state | Error _ -> Builtin.crash "Test send" in
+      let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
+      let context = Stdlib.HttpServer.Quic.Context { config = Stdlib.HttpServer.Config.defaults 443, identity = identity, signals = Stdlib.__Network.ShutdownSignals { lifecycle = life }, socket = socket, secret = secret, limit = 1024L } in
+      let owner = Stdlib.HttpServer.Quic.__Owner { source = connection.transport.source, peer = peer, socket = socket, outbox = packets,
+        phase = Stdlib.HttpServer.Quic.__Phase.Initializing (Stdlib.HttpServer.Quic.__Bootstrap { connection = connection, opened = false, index = 0L, offset = 0L, deadline = now + 10000L }) } in
+      match Stdlib.HttpServer.Quic.__advance context (fun _request -> Stdlib.Http.responseWithText "unused" 200) owner (Some (Stdlib.__Datagram.Message { peer = peer, payload = wire })) now with
+      | Ok (Some owner) -> (match owner.phase with | Closing closing -> if closing.reason == Stdlib.__QuicConnection.CloseReason.TransportCloseReason ((6L, 15L)) && closing.number == 2L then Error "Expected terminal close" else Ok initial | _ -> Ok initial)
+      | _ -> Ok initial in
+  if mode == 8L then Stdlib.__QuicConnection.reject initial 1L else ()
+
   let sent = Stdlib.Stream.__cellGet<List<Blob>> packets in
   let closed = Stdlib.Option.isNone (Stdlib.Stream.next life) in
   let valid =
-    if mode == 5L then Stdlib.Result.isOk result && Stdlib.Bool.not closed && Stdlib.List.length sent == 1
+    if mode == 5L || mode == 7L then Stdlib.Result.isOk result && Stdlib.Bool.not closed && Stdlib.List.length sent == 1
     else match sent with
     | [first, last] ->
-      let decoded = match Stdlib.__QuicCrypto.openPacket keys first 9L -1L, Stdlib.__QuicCrypto.openPacket keys last 9L 0L with
+      let decoded = match Stdlib.__QuicCrypto.openPacket keys first 9L -1L, Stdlib.__QuicCrypto.openPacket (if mode == 6L then generation.keys else keys) last 9L 0L with
       | Ok first, Ok last ->
         first.number == 0L && last.number == 1L && (match Stdlib.__QuicApplication.parse true last.payload |> Stdlib.Result.map (fun frames -> Stdlib.List.map frames (fun received -> received.frame)) with
-        | Ok [Handshake (Close close)] -> close.code == (if mode == 0L then 6L else if mode == 1L || mode == 2L then 3L else if mode == 3L then 4L else 5L) && close.kind == (if mode == 0L then 15L else 14L)
+        | Ok [Handshake (Close close)] -> close.code == (if mode == 0L || mode == 6L || mode == 8L || mode == 10L || mode == 13L then 6L else if mode == 1L || mode == 2L then 3L else if mode == 3L || mode == 9L then 4L else 5L) && close.kind == (if mode == 0L || mode == 6L || mode == 8L || mode == 13L then 15L else if mode == 9L then 8L else if mode == 10L then 4L else if mode == 11L then 5L else if mode == 12L then 17L else 14L)
         | _ -> false)
       | _, _ -> false in
-      Stdlib.Result.isError result && closed && decoded
+      Stdlib.Result.isError result && (closed == (mode != 13L)) && decoded
     | _ -> false in
   Stdlib.__Datagram.close socket
   Stdlib.Stream.__cellDispose<List<Blob>> packets
   valid
-transportClose 0L = true // leak_check
-transportClose 1L = true // leak_check
-transportClose 2L = true // leak_check
-transportClose 3L = true // leak_check
-transportClose 4L = true // leak_check
-transportClose 5L = true // leak_check
+// Final size, stream/connection credit, limit, direction, valid retransmission,
+// key update, invalid AEAD, failed send, STREAM flags, RESET, STOP, MAX_STREAM_DATA,
+// and listener-owned closing. Compile the common fixture once for all cases.
+Stdlib.List.map [0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L] transportClose = [true, true, true, true, true, true, true, true, true, true, true, true, true, true] // leak_check
