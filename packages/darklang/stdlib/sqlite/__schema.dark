@@ -43,9 +43,11 @@ let __columnKeys (column: Stdlib.Sqlite.__Sql.__Column) (tokens: List<Stdlib.Sql
   | Word word :: rest ->
     let word = __lower word
     if word == "primary" then Stdlib.Sqlite.__Sql.__eat rest "key" |> Stdlib.Result.andThen (fun rest ->
-      let rest = match rest with | Word direction :: tail -> if __lower direction == "asc" || __lower direction == "desc" then tail else rest | _ -> rest
-      __columnKeys column rest |> Stdlib.Result.map (fun keys ->
-        if column.primary then keys else [__Key { fields = [Stdlib.Sqlite.__Sql.__Expr.Column column.name], primary = true }] @ keys))
+      if (match rest with | Word direction :: _ -> __lower direction == "desc" | _ -> false) then Error "SQLite: descending primary keys are unsupported"
+      else
+        let rest = match rest with | Word direction :: tail -> if __lower direction == "asc" then tail else rest | _ -> rest
+        __columnKeys column rest |> Stdlib.Result.map (fun keys ->
+          if column.primary then keys else [__Key { fields = [Stdlib.Sqlite.__Sql.__Expr.Column column.name], primary = true }] @ keys))
     else if word == "unique" then __columnKeys column rest |> Stdlib.Result.map (fun keys ->
       [__Key { fields = [Stdlib.Sqlite.__Sql.__Expr.Column column.name], primary = false }] @ keys)
     else if word == "not" then Stdlib.Sqlite.__Sql.__eat rest "null" |> Stdlib.Result.andThen (fun rest -> __columnKeys column rest)

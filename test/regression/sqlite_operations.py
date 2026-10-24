@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from sqlite_package_store import PROGRAM as QUERY_PROGRAM
 
 PREFIX=QUERY_PROGRAM[:QUERY_PROGRAM.index('let params =')]
@@ -76,6 +77,16 @@ def main():
             first=version();assert version()==first
             assert command('UPDATE t SET v=2')=='Ok 1 '
             assert version()==first,'a connection counted its own commit'
+            # BEGIN IMMEDIATE waits for the other writer; its intervening commit
+            # must remain visible to data_version even after our own commit.
+            waiting_version=version()
+            connection.execute('BEGIN IMMEDIATE');connection.execute('UPDATE t SET v=20')
+            process.stdin.write('UPDATE t SET v=21\n');process.stdin.flush()
+            time.sleep(.2)
+            connection.commit()
+            assert read()=='Ok 1 '
+            assert version()!=waiting_version,'waiting for a writer lost its external commit'
+
             connection.execute('UPDATE t SET v=3');connection.commit()
             second=version();assert second!=first
             assert rows('SELECT v FROM t')==[{'v':'I3'}]
@@ -114,6 +125,8 @@ def main():
             assert command('CREATE TABLE child(id INTEGER PRIMARY KEY,p TEXT REFERENCES parent(id))')=='Ok -1 '
             assert command("INSERT INTO child VALUES (1,'absent')")=='Ok 1 '
             assert rows('PRAGMA foreign_key_check')==[{'table':'T6368696C64','rowid':'I1','parent':'T706172656E74','fkid':'I0'}]
+            assert command('PRAGMA foreign_keys=ON')=='Ok -1 '
+            assert rows('SELECT count(*) AS n FROM child')==[{'n':'I1'}]
             assert command("INSERT INTO parent VALUES ('absent')")=='Ok 1 '
             assert rows('PRAGMA foreign_key_check')==[]
             assert command('PRAGMA foreign_keys=ON')=='Ok -1 '

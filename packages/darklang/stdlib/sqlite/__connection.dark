@@ -37,7 +37,15 @@ let __begin (state: __State) (immediate: Bool) : Stdlib.Result.Result<__State,St
           | None when immediate -> Stdlib.Sqlite.__Locks.__try pager.fd 1073741825 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired -> if acquired then Ok () else Error "SQLite: database is locked")
           | None -> Ok ()
         match locked with
-        | Ok _ -> Ok { state with pager = pager,active = true }
+        | Ok _ ->
+          // A writer may have committed while BEGIN IMMEDIATE waited for its
+          // lease. Account for that commit before recording our own later one.
+          let captured = match pager.wal with
+            | Some wal -> Ok (Stdlib.Sqlite.__Wal.__le wal.index 8 4)
+            | None -> Stdlib.Sqlite.__Pager.__stamp pager
+          match captured with
+          | Error e -> let _ = Stdlib.Sqlite.__Pager.__release pager in Error e
+          | Ok stamp -> Ok { state with pager = pager,active = true,stamp = stamp,version = state.version + (if stamp == state.stamp then 0 else 1) }
         | Error e -> let _ = Stdlib.Sqlite.__Pager.__release pager in Error e))
 let __rollback (state: __State) : Stdlib.Result.Result<__State,String> =
   if Stdlib.Bool.not state.active then Error "SQLite: no active transaction"
@@ -99,7 +107,7 @@ let __sql (state: __State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params:
   let running = if state.active then Ok state else __begin state (match statement with | Select _ -> false | _ -> true)
   running |> Stdlib.Result.andThen (fun opened ->
     let result = Stdlib.Sqlite.__Engine.__run opened.pager statement params |> Stdlib.Result.andThen (fun outcome ->
-      (if Stdlib.Bool.not opened.foreignKeys then Ok outcome.state else Stdlib.Sqlite.__Engine.__foreignKeyCheck outcome.state |> Stdlib.Result.andThen (fun checked ->
+      (if Stdlib.Bool.not opened.foreignKeys || (match statement with | Select _ -> true | _ -> false) then Ok outcome.state else Stdlib.Sqlite.__Engine.__foreignKeyCheck outcome.state |> Stdlib.Result.andThen (fun checked ->
         if Stdlib.List.isEmpty checked.rows then Ok checked.state else Error "SQLite: FOREIGN KEY constraint failed"))
       |> Stdlib.Result.map (fun pager -> __Outcome { connection = { opened with pager = pager },affected = outcome.affected,rows = outcome.rows }))
     if state.active then result
