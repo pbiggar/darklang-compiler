@@ -42,7 +42,7 @@ let returnsInt () : Int64 = 5L
 
 let returnsString () : String = "string"
 
-// @compiler blocked: compiler-gap
+// @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.Apply.shouldReturnStringButDoesNot: Expected TString, got TInt64"
 let shouldReturnStringButDoesNot () : String = 5L
 
 let returnsOptionSome () : Stdlib.Option.Option<Int64> =
@@ -53,7 +53,7 @@ let returnsOptionNone () : Stdlib.Option.Option<Int64> = Stdlib.Option.Option.No
 let returnsResultOk () : Stdlib.Result.Result<Int64, 'err> =
   Stdlib.Result.Result.Ok 5L
 
-// @compiler blocked: compiler-gap
+// @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.Apply.derrorFn: Expected TString, got TInt64"
 let derrorFn (msg: String) : String = msg + Stdlib.Test.raiseRuntimeError msg
 
 let fnWithTypeArgs<'a, 'b> (a: 'a) (b: 'b) : 'a = a

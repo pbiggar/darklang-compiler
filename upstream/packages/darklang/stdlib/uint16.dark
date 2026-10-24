@@ -7,42 +7,42 @@ type ParseError =
   | OutOfRange
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Modulo for UInt16 requires an explicit replacement contract"
 impl Modulo for UInt16 =
   /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
   /// The modulus <param b> must be greater than 0.
   /// Use <fn UInt16.remainder> if you want the remainder after division, which has
   /// a different behavior for negative numbers.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Modulo for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Modulo for UInt16 requires an explicit replacement contract"
   let modulo (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16Mod a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Add for UInt16 requires an explicit replacement contract"
 impl Add for UInt16 =
   /// Adds two 16-bit unsigned integers together (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Add for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Add for UInt16 requires an explicit replacement contract"
   let add (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16Add a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Subtract for UInt16 requires an explicit replacement contract"
 impl Subtract for UInt16 =
   /// Subtracts two 16-bit unsigned  integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Subtract for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Subtract for UInt16 requires an explicit replacement contract"
   let subtract (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16Subtract a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Multiply for UInt16 requires an explicit replacement contract"
 impl Multiply for UInt16 =
   /// Multiplies two 16-bit unsigned  integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Multiply for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Multiply for UInt16 requires an explicit replacement contract"
   let multiply (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16Multiply a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Power for UInt16 requires an explicit replacement contract"
 impl Power for UInt16 =
   /// Raise <param base> to the power of <param exponent>.
   /// Overflow wraps around.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Power for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Power for UInt16 requires an explicit replacement contract"
   let power (``base``: UInt16) (exponent: UInt16) : UInt16 =
     // The signed types push this into the builtin; here the ladder stays, because an
     // unsigned exponent is never negative, so there is no error case to push.
@@ -52,27 +52,27 @@ impl Power for UInt16 =
     else Builtin.uint16Power ``base`` exponent
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Divide for UInt16 requires an explicit replacement contract"
 impl Divide for UInt16 =
   /// Divides two 16-bit unsigned integers
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Divide for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Divide for UInt16 requires an explicit replacement contract"
   let divide (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16Divide a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Compare for UInt16 requires an explicit replacement contract"
 impl Compare for UInt16 =
   /// Returns {{true}} if <param a> is less than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Compare for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Compare for UInt16 requires an explicit replacement contract"
   let lessThan (a: UInt16) (b: UInt16) : Bool = Builtin.uint16LessThan a b
   /// Returns {{true}} if <param a> is less than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Compare for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Compare for UInt16 requires an explicit replacement contract"
   let lessThanOrEqualTo (a: UInt16) (b: UInt16) : Bool =
     Builtin.uint16LessThanOrEqualTo a b
   /// Returns {{true}} if <param a> is greater than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Compare for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Compare for UInt16 requires an explicit replacement contract"
   let greaterThan (a: UInt16) (b: UInt16) : Bool = Builtin.uint16GreaterThan a b
   /// Returns {{true}} if <param a> is greater than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Compare for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Compare for UInt16 requires an explicit replacement contract"
   let greaterThanOrEqualTo (a: UInt16) (b: UInt16) : Bool =
     Builtin.uint16GreaterThanOrEqualTo a b
 
@@ -157,59 +157,59 @@ let fromUInt128 (i: UInt128) : Stdlib.Option.Option<UInt16> =
   Builtin.uint16FromUInt128 i
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseAnd for UInt16 requires an explicit replacement contract"
 impl BitwiseAnd for UInt16 =
   /// Bitwise AND on two <type UInt16> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl BitwiseAnd for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseAnd for UInt16 requires an explicit replacement contract"
   let bitwiseAnd (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16BitwiseAnd a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseOr for UInt16 requires an explicit replacement contract"
 impl BitwiseOr for UInt16 =
   /// Bitwise OR on two <type UInt16> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl BitwiseOr for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseOr for UInt16 requires an explicit replacement contract"
   let bitwiseOr (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16BitwiseOr a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseXor for UInt16 requires an explicit replacement contract"
 impl BitwiseXor for UInt16 =
   /// Bitwise XOR on two <type UInt16> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl BitwiseXor for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseXor for UInt16 requires an explicit replacement contract"
   let bitwiseXor (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16BitwiseXor a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseNot for UInt16 requires an explicit replacement contract"
 impl BitwiseNot for UInt16 =
   /// Bitwise NOT on a <type UInt16> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl BitwiseNot for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl BitwiseNot for UInt16 requires an explicit replacement contract"
   let bitwiseNot (a: UInt16) : UInt16 = Builtin.uint16BitwiseNot a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl ShiftLeft for UInt16 requires an explicit replacement contract"
 impl ShiftLeft for UInt16 =
   /// Bitwise left shift of a <type UInt16> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl ShiftLeft for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl ShiftLeft for UInt16 requires an explicit replacement contract"
   let shiftLeft (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16ShiftLeft a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl ShiftRight for UInt16 requires an explicit replacement contract"
 impl ShiftRight for UInt16 =
   /// Bitwise right shift of a <type UInt16> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl ShiftRight for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl ShiftRight for UInt16 requires an explicit replacement contract"
   let shiftRight (a: UInt16) (b: UInt16) : UInt16 = Builtin.uint16ShiftRight a b
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl ToString for UInt16 requires an explicit replacement contract"
 impl ToString for UInt16 =
   /// Stringify <param uint16>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl ToString for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl ToString for UInt16 requires an explicit replacement contract"
   let toString (uint16: UInt16) : String = Builtin.uint16ToString uint16
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Zero for UInt16 requires an explicit replacement contract"
 impl Zero for UInt16 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl Zero for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl Zero for UInt16 requires an explicit replacement contract"
   let zero () : UInt16 = 0us
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl One for UInt16 requires an explicit replacement contract"
 impl One for UInt16 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt16.impl One for UInt16: Already selected from packages/darklang/stdlib/uint16.dark; importing another declaration of Darklang.Stdlib.UInt16.impl One for UInt16 requires an explicit replacement contract"
   let one () : UInt16 = 1us

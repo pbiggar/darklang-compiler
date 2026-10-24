@@ -19,7 +19,7 @@ module RuntimeError =
   /// ---------------
   /// Segments allow us to build error messages where the UI and CLI can both
   /// decorate/link to the sources in a native way
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/prettyPrinter/runtimeTypes/runtimeError.dark; importing another declaration of Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.ErrorSegment requires an explicit replacement contract"
   type ErrorSegment =
     // -- Basic types
     | String of String

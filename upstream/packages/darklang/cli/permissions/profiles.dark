@@ -24,7 +24,6 @@ val all =
           "read/write a directory and local stores; HTTPS GET, HTTP serving, following edits"
         needsRoot = true } ]
 
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Profiles.readEffects: Unknown type 'LanguageTools.Permissions.Effect'"
 val readEffects =
   [ LanguageTools.Permissions.Effect.PackageRead
     LanguageTools.Permissions.Effect.DbRead
@@ -35,7 +34,6 @@ val readEffects =
     LanguageTools.Permissions.Effect.Random ]
 
 /// Kept aligned with the host's defaultInstance by the CLI integration test.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Profiles.defaultEffects: Unknown function or value 'Profiles.readEffects'"
 val defaultEffects =
   Stdlib.List.append
     Profiles.readEffects

@@ -7,42 +7,42 @@ type ParseError =
   | OutOfRange
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Modulo for UInt8 requires an explicit replacement contract"
 impl Modulo for UInt8 =
   /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
   /// The modulus <param b> must be greater than 0.
   /// Use <fn UInt8.remainder> if you want the remainder after division, which has
   /// a different behavior for negative numbers.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Modulo for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Modulo for UInt8 requires an explicit replacement contract"
   let modulo (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8Mod a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Add for UInt8 requires an explicit replacement contract"
 impl Add for UInt8 =
   /// Adds two 8-bit unsigned integers together (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Add for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Add for UInt8 requires an explicit replacement contract"
   let add (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8Add a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Subtract for UInt8 requires an explicit replacement contract"
 impl Subtract for UInt8 =
   /// Subtracts two 8-bit unsigned  integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Subtract for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Subtract for UInt8 requires an explicit replacement contract"
   let subtract (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8Subtract a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Multiply for UInt8 requires an explicit replacement contract"
 impl Multiply for UInt8 =
   /// Multiplies two 8-bit unsigned  integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Multiply for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Multiply for UInt8 requires an explicit replacement contract"
   let multiply (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8Multiply a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Power for UInt8 requires an explicit replacement contract"
 impl Power for UInt8 =
   /// Raise <param base> to the power of <param exponent>.
   /// Overflow wraps around.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Power for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Power for UInt8 requires an explicit replacement contract"
   let power (``base``: UInt8) (exponent: UInt8) : UInt8 =
     // The signed types push this into the builtin; here the ladder stays, because an
     // unsigned exponent is never negative, so there is no error case to push.
@@ -52,27 +52,27 @@ impl Power for UInt8 =
     else Builtin.uint8Power ``base`` exponent
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Divide for UInt8 requires an explicit replacement contract"
 impl Divide for UInt8 =
   /// Divides two 8-bit unsigned  integers
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Divide for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Divide for UInt8 requires an explicit replacement contract"
   let divide (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8Divide a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Compare for UInt8 requires an explicit replacement contract"
 impl Compare for UInt8 =
   /// Returns {{true}} if <param a> is less than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Compare for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Compare for UInt8 requires an explicit replacement contract"
   let lessThan (a: UInt8) (b: UInt8) : Bool = Builtin.uint8LessThan a b
   /// Returns {{true}} if <param a> is less than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Compare for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Compare for UInt8 requires an explicit replacement contract"
   let lessThanOrEqualTo (a: UInt8) (b: UInt8) : Bool =
     Builtin.uint8LessThanOrEqualTo a b
   /// Returns {{true}} if <param a> is greater than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Compare for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Compare for UInt8 requires an explicit replacement contract"
   let greaterThan (a: UInt8) (b: UInt8) : Bool = Builtin.uint8GreaterThan a b
   /// Returns {{true}} if <param a> is greater than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Compare for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Compare for UInt8 requires an explicit replacement contract"
   let greaterThanOrEqualTo (a: UInt8) (b: UInt8) : Bool =
     Builtin.uint8GreaterThanOrEqualTo a b
 
@@ -155,59 +155,59 @@ let fromUInt128 (i: UInt128) : Stdlib.Option.Option<UInt8> =
   Builtin.uint8FromUInt128 i
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseAnd for UInt8 requires an explicit replacement contract"
 impl BitwiseAnd for UInt8 =
   /// Bitwise AND on two <type UInt8> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl BitwiseAnd for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseAnd for UInt8 requires an explicit replacement contract"
   let bitwiseAnd (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8BitwiseAnd a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseOr for UInt8 requires an explicit replacement contract"
 impl BitwiseOr for UInt8 =
   /// Bitwise OR on two <type UInt8> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl BitwiseOr for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseOr for UInt8 requires an explicit replacement contract"
   let bitwiseOr (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8BitwiseOr a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseXor for UInt8 requires an explicit replacement contract"
 impl BitwiseXor for UInt8 =
   /// Bitwise XOR on two <type UInt8> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl BitwiseXor for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseXor for UInt8 requires an explicit replacement contract"
   let bitwiseXor (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8BitwiseXor a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseNot for UInt8 requires an explicit replacement contract"
 impl BitwiseNot for UInt8 =
   /// Bitwise NOT on a <type UInt8> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl BitwiseNot for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl BitwiseNot for UInt8 requires an explicit replacement contract"
   let bitwiseNot (a: UInt8) : UInt8 = Builtin.uint8BitwiseNot a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl ShiftLeft for UInt8 requires an explicit replacement contract"
 impl ShiftLeft for UInt8 =
   /// Bitwise left shift of a <type UInt8> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl ShiftLeft for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl ShiftLeft for UInt8 requires an explicit replacement contract"
   let shiftLeft (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8ShiftLeft a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl ShiftRight for UInt8 requires an explicit replacement contract"
 impl ShiftRight for UInt8 =
   /// Bitwise right shift of a <type UInt8> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl ShiftRight for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl ShiftRight for UInt8 requires an explicit replacement contract"
   let shiftRight (a: UInt8) (b: UInt8) : UInt8 = Builtin.uint8ShiftRight a b
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl ToString for UInt8 requires an explicit replacement contract"
 impl ToString for UInt8 =
   /// Stringify <param Uint8>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl ToString for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl ToString for UInt8 requires an explicit replacement contract"
   let toString (uint8: UInt8) : String = Builtin.uint8ToString uint8
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Zero for UInt8 requires an explicit replacement contract"
 impl Zero for UInt8 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl Zero for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl Zero for UInt8 requires an explicit replacement contract"
   let zero () : UInt8 = 0uy
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl One for UInt8 requires an explicit replacement contract"
 impl One for UInt8 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt8.impl One for UInt8: Already selected from packages/darklang/stdlib/uint8.dark; importing another declaration of Darklang.Stdlib.UInt8.impl One for UInt8 requires an explicit replacement contract"
   let one () : UInt8 = 1uy

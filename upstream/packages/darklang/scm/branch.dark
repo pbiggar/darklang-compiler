@@ -22,7 +22,7 @@ module Darklang.SCM.Branch
 /// Well-known rather than minted, because main is the one branch that exists before anything creates it,
 /// and it has no `branches` row to mint an id into. Comes from the same F# constant the runtime compares
 /// against (`ProgramTypes.BranchId.Main`), so the two cannot disagree.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/scm/branch.dark; importing another declaration of Darklang.SCM.Branch.mainBranchId requires an explicit replacement contract"
 val mainBranchId = Builtin.scmMainBranchId
 
 /// Main's branch NAME: what a person types and reads; resolved to an id at the edge.

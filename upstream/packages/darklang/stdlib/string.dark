@@ -107,15 +107,15 @@ let displayWidth (s: String) : Int =
 let append (s1: String) (s2: String) : String = Builtin.stringAppend s1 s2
 
 /// `"a" + "b"` is `"ab"`
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Add for String requires an explicit replacement contract"
 impl Add for String =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl Add for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Add for String requires an explicit replacement contract"
   let add = Stdlib.String.append
 
 /// ...and the empty string is what `+` starts from
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Zero for String requires an explicit replacement contract"
 impl Zero for String =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl Zero for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Zero for String requires an explicit replacement contract"
   let zero () : String = ""
 
 
@@ -647,25 +647,25 @@ let compare (a: String) (b: String) : Int64 = Builtin.stringCompare a b
 
 
 /// `"a" < "b"`, and with it `Stdlib.max`, `min` and `clamp` on Strings.
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Compare for String requires an explicit replacement contract"
 impl Compare for String =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl Compare for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Compare for String requires an explicit replacement contract"
   let lessThan (a: String) (b: String) : Bool = (Stdlib.String.compare a b) < 0L
 
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl Compare for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Compare for String requires an explicit replacement contract"
   let lessThanOrEqualTo (a: String) (b: String) : Bool =
     (Stdlib.String.compare a b) <= 0L
 
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl Compare for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Compare for String requires an explicit replacement contract"
   let greaterThan (a: String) (b: String) : Bool = (Stdlib.String.compare a b) > 0L
 
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl Compare for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl Compare for String requires an explicit replacement contract"
   let greaterThanOrEqualTo (a: String) (b: String) : Bool =
     (Stdlib.String.compare a b) >= 0L
 
 
 /// A String is already text
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl ToString for String requires an explicit replacement contract"
 impl ToString for String =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.String.impl ToString for String: Already selected from packages/darklang/stdlib/string.dark; importing another declaration of Darklang.Stdlib.String.impl ToString for String requires an explicit replacement contract"
   let toString (s: String) : String = s

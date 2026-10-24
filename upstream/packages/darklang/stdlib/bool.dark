@@ -17,8 +17,8 @@ let ``or`` (a: Bool) (b: Bool) : Bool = a || b
 // @compiler replace: packages/darklang/stdlib/bool.dark#Darklang.Stdlib.Bool.xor reason=compiler-implementation
 let xor (a: Bool) (b: Bool) : Bool = if a then Stdlib.Bool.not b else b
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/bool.dark; importing another declaration of Darklang.Stdlib.Bool.impl ToString for Bool requires an explicit replacement contract"
 impl ToString for Bool =
   /// Returns {{"true"}} or {{"false"}}
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Bool.impl ToString for Bool: Already selected from packages/darklang/stdlib/bool.dark; importing another declaration of Darklang.Stdlib.Bool.impl ToString for Bool requires an explicit replacement contract"
   let toString (b: Bool) : String = if b then "true" else "false"

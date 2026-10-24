@@ -33,7 +33,6 @@ type ProcessRule =
 /// `Effects.Effect`. A ceiling row names these (`:{Http, Clock}`); a policy
 /// rule names one whole (`allow clock`). `effectCases` gives each its source
 /// case name and its rule name.
-// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 3921: Darklang.LanguageTools.AtRestTypeChecker.Context.Untrusted, Darklang.LanguageTools.Permissions.Effect.Http"
 type Effect =
   | Http
   | HttpServer
@@ -100,7 +99,6 @@ type TokenMode =
 /// `Effects.all` order. The case name is what a `:{Http, Clock}` ceiling row
 /// writes; the rule name is what `permissions allow` and denial messages use.
 /// An F# test asserts this table agrees with `Effects.all`.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Permissions.effectCases: Unknown type 'Permissions.Effect'"
 val effectCases =
   [ (Permissions.Effect.Http, "Http", "http")
     (Permissions.Effect.HttpServer, "HttpServer", "http-server")
@@ -125,40 +123,34 @@ val effectCases =
 
 /// The `effectCases` row an effect is in. Every effect has one, so the
 /// fallback is unreachable; it keeps the lookups total without an Option.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Effect'"
 let effectRow (effect: Permissions.Effect) : (Permissions.Effect * String * String) =
   Permissions.effectCases
   |> Stdlib.List.findFirst (fun (e, _case, _name) -> e == effect)
   |> Stdlib.Option.withDefault (effect, "Unknown", "unknown")
 
 /// The rule name of an effect: `FileRead` -> `"file-read"`.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Effect'"
 let effectName (effect: Permissions.Effect) : String =
   let (_e, _case, name) = Permissions.effectRow effect
   name
 
 /// The source case name of an effect: `FileRead` -> `"FileRead"`.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Effect'"
 let effectCaseName (effect: Permissions.Effect) : String =
   let (_e, case, _name) = Permissions.effectRow effect
   case
 
 /// `"file-read"` -> `FileRead`; None for an unknown rule name.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Effect'"
 let effectOfName (name: String) : Stdlib.Option.Option<Permissions.Effect> =
   Permissions.effectCases
   |> Stdlib.List.findFirst (fun (_e, _case, n) -> n == name)
   |> Stdlib.Option.map (fun (e, _case, _name) -> e)
 
 /// `"FileRead"` -> `FileRead`; None for an unknown case name.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Effect'"
 let effectOfCase (case: String) : Stdlib.Option.Option<Permissions.Effect> =
   Permissions.effectCases
   |> Stdlib.List.findFirst (fun (_e, c, _name) -> c == case)
   |> Stdlib.Option.map (fun (e, _case, _name) -> e)
 
 /// The source form of a ceiling: `{Http, Clock}`, or `""` when none is declared.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Effect'"
 let ceilingRow (ceiling: Stdlib.Option.Option<List<Permissions.Effect>>) : String =
   match ceiling with
   | None -> ""

@@ -7,47 +7,47 @@ type ParseError =
   | OutOfRange
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Modulo for UInt64 requires an explicit replacement contract"
 impl Modulo for UInt64 =
   /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
   /// The modulus <param b> must be greater than 0
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Modulo for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Modulo for UInt64 requires an explicit replacement contract"
   let modulo (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64Mod a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Add for UInt64 requires an explicit replacement contract"
 impl Add for UInt64 =
   /// Adds 64-bit unsigned integers together (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Add for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Add for UInt64 requires an explicit replacement contract"
   let add (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64Add a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Subtract for UInt64 requires an explicit replacement contract"
 impl Subtract for UInt64 =
   /// Subtracts 64-bit unsigned integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Subtract for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Subtract for UInt64 requires an explicit replacement contract"
   let subtract (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64Subtract a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Multiply for UInt64 requires an explicit replacement contract"
 impl Multiply for UInt64 =
   /// Multiplies 64-bit unsigned integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Multiply for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Multiply for UInt64 requires an explicit replacement contract"
   let multiply (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64Multiply a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Divide for UInt64 requires an explicit replacement contract"
 impl Divide for UInt64 =
   /// Divides 64-bit unsigned integers
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Divide for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Divide for UInt64 requires an explicit replacement contract"
   let divide (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64Divide a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Power for UInt64 requires an explicit replacement contract"
 impl Power for UInt64 =
   /// Raise <param base> to the power of <param exponent>.
   /// Overflow wraps around.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Power for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Power for UInt64 requires an explicit replacement contract"
   let power (``base``: UInt64) (exponent: UInt64) : UInt64 =
     // The signed types push this into the builtin; here the ladder stays, because an
     // unsigned exponent is never negative, so there is no error case to push.
@@ -57,20 +57,20 @@ impl Power for UInt64 =
     else Builtin.uint64Power ``base`` exponent
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Compare for UInt64 requires an explicit replacement contract"
 impl Compare for UInt64 =
   /// Returns {{true}} if <param a> is less than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Compare for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Compare for UInt64 requires an explicit replacement contract"
   let lessThan (a: UInt64) (b: UInt64) : Bool = Builtin.uint64LessThan a b
   /// Returns {{true}} if <param a> is less than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Compare for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Compare for UInt64 requires an explicit replacement contract"
   let lessThanOrEqualTo (a: UInt64) (b: UInt64) : Bool =
     Builtin.uint64LessThanOrEqualTo a b
   /// Returns {{true}} if <param a> is greater than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Compare for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Compare for UInt64 requires an explicit replacement contract"
   let greaterThan (a: UInt64) (b: UInt64) : Bool = Builtin.uint64GreaterThan a b
   /// Returns {{true}} if <param a> is greater than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Compare for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Compare for UInt64 requires an explicit replacement contract"
   let greaterThanOrEqualTo (a: UInt64) (b: UInt64) : Bool =
     Builtin.uint64GreaterThanOrEqualTo a b
 
@@ -174,59 +174,59 @@ let fromUInt128 (i: UInt128) : Stdlib.Option.Option<UInt64> =
   Builtin.uint64FromUInt128 i
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseAnd for UInt64 requires an explicit replacement contract"
 impl BitwiseAnd for UInt64 =
   /// Bitwise AND on two <type UInt64> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl BitwiseAnd for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseAnd for UInt64 requires an explicit replacement contract"
   let bitwiseAnd (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64BitwiseAnd a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseOr for UInt64 requires an explicit replacement contract"
 impl BitwiseOr for UInt64 =
   /// Bitwise OR on two <type UInt64> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl BitwiseOr for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseOr for UInt64 requires an explicit replacement contract"
   let bitwiseOr (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64BitwiseOr a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseXor for UInt64 requires an explicit replacement contract"
 impl BitwiseXor for UInt64 =
   /// Bitwise XOR on two <type UInt64> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl BitwiseXor for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseXor for UInt64 requires an explicit replacement contract"
   let bitwiseXor (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64BitwiseXor a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseNot for UInt64 requires an explicit replacement contract"
 impl BitwiseNot for UInt64 =
   /// Bitwise NOT on a <type UInt64> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl BitwiseNot for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl BitwiseNot for UInt64 requires an explicit replacement contract"
   let bitwiseNot (a: UInt64) : UInt64 = Builtin.uint64BitwiseNot a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl ShiftLeft for UInt64 requires an explicit replacement contract"
 impl ShiftLeft for UInt64 =
   /// Bitwise left shift of a <type UInt64> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl ShiftLeft for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl ShiftLeft for UInt64 requires an explicit replacement contract"
   let shiftLeft (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64ShiftLeft a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl ShiftRight for UInt64 requires an explicit replacement contract"
 impl ShiftRight for UInt64 =
   /// Bitwise right shift of a <type UInt64> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl ShiftRight for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl ShiftRight for UInt64 requires an explicit replacement contract"
   let shiftRight (a: UInt64) (b: UInt64) : UInt64 = Builtin.uint64ShiftRight a b
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl ToString for UInt64 requires an explicit replacement contract"
 impl ToString for UInt64 =
   /// Stringify <param int>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl ToString for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl ToString for UInt64 requires an explicit replacement contract"
   let toString (uint64: UInt64) : String = Builtin.uint64ToString uint64
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Zero for UInt64 requires an explicit replacement contract"
 impl Zero for UInt64 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl Zero for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl Zero for UInt64 requires an explicit replacement contract"
   let zero () : UInt64 = 0UL
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl One for UInt64 requires an explicit replacement contract"
 impl One for UInt64 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.UInt64.impl One for UInt64: Already selected from packages/darklang/stdlib/uint64.dark; importing another declaration of Darklang.Stdlib.UInt64.impl One for UInt64 requires an explicit replacement contract"
   let one () : UInt64 = 1UL

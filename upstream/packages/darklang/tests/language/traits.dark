@@ -7,37 +7,25 @@ module Darklang.Language.Tests.Traits
 module Shapes =
   type Point = { x: Int, y: Int }
 
-  // @compiler blocked: container-adaptation
   trait Show<'a> =
-    // @compiler blocked: container-adaptation
     let show (value: 'a) : String
 
-  // @compiler blocked: container-adaptation
   impl Show for Point =
-    // @compiler blocked: container-adaptation
     let show (p: Point) : String =
       $"({Stdlib.toString p.x}, {Stdlib.toString p.y})"
 
-  // @compiler blocked: container-adaptation
   impl Show for Int =
-    // @compiler blocked: container-adaptation
     let show (n: Int) : String = Stdlib.toString n
 
-  // @compiler blocked: container-adaptation
   impl Show for Bool =
-    // @compiler blocked: container-adaptation
     let show (b: Bool) : String = if b then "yes" else "no"
 
-  // @compiler blocked: container-adaptation
   impl<'a: Show> Show for List<'a> =
-    // @compiler blocked: container-adaptation
     let show (xs: List<'a>) : String =
       "[" + (xs |> Stdlib.List.map (fun x -> Show.show x) |> Stdlib.String.join ", ") + "]"
 
-  // @compiler blocked: upstream-dependency diagnostic="Unknown trait 'Show'"
   let display<'a: Show> (v: 'a) : String = "value: " + Show.show v
 
-  // @compiler blocked: upstream-dependency diagnostic="Unknown trait 'Show'"
   let neverCalls<'a: Show> (v: 'a) : String = if false then Show.show v else "never"
 
   // The impl's method is an ordinary fn under <Type>.<Trait>
@@ -118,9 +106,7 @@ module Multi =
 
   // The operators are the stdlib traits: `+` is `Stdlib.Add.add`. A user impl
   // makes `Vec + Vec` an ordinary expression.
-  // @compiler blocked: container-adaptation
   impl Stdlib.Add for Vec =
-    // @compiler blocked: container-adaptation
     let add (a: Vec) (b: Vec) : Vec = Vec { dx = a.dx + b.dx, dy = a.dy + b.dy }
 
   let sum<'a: Stdlib.Add> (a: 'a) (b: 'a) (c: 'a) : 'a = a + b + c
@@ -166,28 +152,18 @@ module Ambiguity =
   // Two traits with the same method name. Their SHAPES differ (Describe has a
   // second method): a trait is content-addressed, so two identically shaped
   // traits are one trait, however they are named.
-  // @compiler blocked: container-adaptation
   trait Describe<'a> =
-    // @compiler blocked: container-adaptation
     let describe (v: 'a) : String
-    // @compiler blocked: container-adaptation
     let short (v: 'a) : String
 
-  // @compiler blocked: container-adaptation
   trait Label<'a> =
-    // @compiler blocked: container-adaptation
     let describe (v: 'a) : String
 
-  // @compiler blocked: container-adaptation
   impl Describe for Int =
-    // @compiler blocked: container-adaptation
     let describe (n: Int) : String = "described"
-    // @compiler blocked: container-adaptation
     let short (n: Int) : String = "d"
 
-  // @compiler blocked: container-adaptation
   impl Label for Int =
-    // @compiler blocked: container-adaptation
     let describe (n: Int) : String = "labelled"
 
   // Naming the trait disambiguates
@@ -210,14 +186,10 @@ module MethodBounds =
   // has no body of its own to check them in.
   type Box = { n: Int64 }
 
-  // @compiler blocked: container-adaptation
   trait Pair<'a> =
-    // @compiler blocked: container-adaptation
     let pair<'b: Stdlib.Compare> (v: 'a) (w: 'b) (x: 'b) : Bool
 
-  // @compiler blocked: container-adaptation
   impl Pair for Box =
-    // @compiler blocked: container-adaptation
     let pair<'b: Stdlib.Compare> (v: Box) (w: 'b) (x: 'b) : Bool = w < x
 
   // Two values rather than one compared with itself, and both polarities asserted.
@@ -417,9 +389,7 @@ module Rendering =
   // `ToString` is the trait behind every builtin type's `toString`
   type Point = { x: Int64, y: Int64 }
 
-  // @compiler blocked: container-adaptation
   impl Stdlib.ToString for Point =
-    // @compiler blocked: container-adaptation
     let toString (p: Point) : String =
       $"({Stdlib.toString p.x}, {Stdlib.toString p.y})"
 

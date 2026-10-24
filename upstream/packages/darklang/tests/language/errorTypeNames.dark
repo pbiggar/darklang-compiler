@@ -12,7 +12,7 @@ module AmbiguousHash =
   // one survived rather than each of them.
   let takesIntParseError (e: Darklang.Stdlib.Int.ParseError) : Int = 1
   let takesUuidParseError (e: Darklang.Stdlib.Uuid.ParseError) : Int = 2
-  // @compiler blocked: compiler-gap
+  // @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.ErrorTypeNames.AmbiguousHash.returnsIntParseError: Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   let returnsIntParseError (n: Int) : Darklang.Stdlib.Int.ParseError = n
 
   // One hash, three declarations, three names printed.

@@ -10,7 +10,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 
 | Area | Source dispositions |
 | --- | --- |
-| packages | 1,986 blocked, 2 excluded, 35 replace, 1,680 run |
+| packages | 1,942 blocked, 2 excluded, 35 replace, 1,724 run |
 | stdlib | 637 blocked, 3 excluded, 1,142 replace, 216 run |
 | tests | 46 blocked, 1,666 run, 647 xfail |
 
@@ -111,19 +111,17 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 
 | Area | Tag | Items |
 | --- | --- | --- |
-| packages | `aot-type-error` | 4 |
+| packages | `aot-type-error` | 8 |
 | packages | `compiler-contract` | 15 |
 | packages | `compiler-crash` | 14 |
-| packages | `compiler-gap` | 21 |
+| packages | `compiler-gap` | 17 |
 | packages | `compiler-implementation` | 34 |
-| packages | `constructor-identity` | 19 |
-| packages | `container-adaptation` | 28 |
+| packages | `constructor-identity` | 18 |
 | packages | `runtime-reflection` | 2 |
 | packages | `script-entrypoint` | 1 |
 | packages | `test-counter` | 1 |
 | packages | `test-diagnostics` | 1 |
-| packages | `upstream-dependency` | 1,881 |
-| packages | `value-specialization` | 2 |
+| packages | `upstream-dependency` | 1,868 |
 | stdlib | `compiler-contract` | 6 |
 | stdlib | `compiler-crash` | 5 |
 | stdlib | `compiler-gap` | 1 |

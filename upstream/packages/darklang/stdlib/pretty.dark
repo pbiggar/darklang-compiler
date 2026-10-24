@@ -13,7 +13,7 @@
 module Darklang.Stdlib.Pretty
 
 /// A document: text plus the places it may be broken.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/stdlib/pretty.dark; importing another declaration of Darklang.Stdlib.Pretty.Doc requires an explicit replacement contract"
 type Doc =
   /// Renders to nothing.
   | Empty
@@ -201,7 +201,7 @@ let breakLine (acc: List<String>) (pending: List<String>) (indent: Int) : List<S
 /// `acc` is the output so far as a reversed list of chunks; `render` joins it once at the end.
 /// Appending to a string per node would copy the whole output each time, quadratic in its length.
 /// `pending` is the line suffixes waiting for the line to end, in order.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/stdlib/pretty.dark; importing another declaration of Darklang.Stdlib.Pretty.renderLoop requires an explicit replacement contract"
 let renderLoop
   (width: Int)
   (col: Int)

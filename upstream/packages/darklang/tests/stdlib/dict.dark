@@ -20,7 +20,6 @@ type Colour =
 
 type ColourAlias = Colour
 
-// @compiler blocked: value-specialization
 val valDict = Dict { 1L: "a", 2L: "b" }
 
 // @compiler xfail compile: "Unbound local variable 'valDict'" class=missing-support reason=upstream-dependency

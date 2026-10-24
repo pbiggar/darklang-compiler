@@ -15,7 +15,7 @@ let hashToString (hash: Hash) : String =
 
 module FQTypeName =
   type Package = Hash
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/fqTypeName.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName requires an explicit replacement contract"
   type FQTypeName = Package of Package
 
 module FQTraitName =
@@ -27,7 +27,7 @@ module FQValueName =
   type Builtin = { name: String, version: Int32 }
   type Package = Hash
 
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/fqValueName.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.FQValueName.FQValueName requires an explicit replacement contract"
   type FQValueName =
     | Builtin of Builtin
     | Package of Package
@@ -71,7 +71,7 @@ type NameResolution<'a> =
     resolved: Stdlib.Result.Result<'a, NameResolutionError> }
 
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/typeReference.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.TypeReference requires an explicit replacement contract"
 type TypeReference =
   | TUnit
   | TBool
@@ -105,7 +105,7 @@ type TypeReference =
 type TypeSymbolTable = Dict<String, TypeReference>
 
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/valueType.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.KnownType requires an explicit replacement contract"
 type KnownType =
   | KTUnit
   | KTBool
@@ -142,7 +142,7 @@ type ValueType =
   | Known of KnownType
 
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/dval.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.LetPattern requires an explicit replacement contract"
 type LetPattern =
   | LPVariable of reg: Register
   | LPWildcard
@@ -275,7 +275,7 @@ type ApplicableNamedFn =
     typeArgs: List<TypeReference>
     argsSoFar: List<Dval> }
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/dval.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.ApplicableLambda requires an explicit replacement contract"
 type ApplicableLambda =
   { exprId: UInt64
     closedRegisters: List<(Register * Dval)>
@@ -299,7 +299,7 @@ type ImplCandidate =
     /// implementation that never came from an op, and then neither one wins.
     stamp: String }
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/languageTools/runtimeTypes/dval.dark; importing another declaration of Darklang.LanguageTools.RuntimeTypes.Dval requires an explicit replacement contract"
 type Dval =
   | DUnit
   | DBool of Bool

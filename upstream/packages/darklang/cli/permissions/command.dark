@@ -165,7 +165,6 @@ let unapproveVersionFor
 let shortVersion (hash: String) : String =
   Stdlib.String.slice hash 0 8
 
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let requirementSummary (requirements: List<LanguageTools.Permissions.Effect>) : String =
   if Stdlib.List.isEmpty requirements then "effect-free"
   else
@@ -177,7 +176,6 @@ let requirementSummary (requirements: List<LanguageTools.Permissions.Effect>) : 
 /// could not follow everything, the effects it did find are shown and the
 /// remainder is called unknown. It does not say why: a callback, a package
 /// value, and an implementation picked at run time all look the same here.
-// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let describeRequirements
   (requirements: (List<LanguageTools.Permissions.Effect> * Bool))
   : String =
