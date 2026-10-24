@@ -42,6 +42,8 @@ trait ProbeMarker<'a> =
 impl ProbeMarker for Bool =
   // @compiler blocked: compiler-gap
   let mark (value: Bool) : Bool = value
+// @compiler blocked: compiler-gap
+let useMarker (value: Bool) : Bool = ProbeMarker.mark value
 """)
         manifest, report = root / "manifest.json", root / "report.json"
         manifest.write_text(json.dumps(["upstream/packages/recursive.dark"]))
@@ -57,6 +59,7 @@ impl ProbeMarker for Bool =
         all_rows = {row["name"]: row for row in json.loads(report.read_text())}
         assert "Probe.supportedDespiteOldReason" not in rows, rows
         assert all_rows["Probe.supportedDespiteOldReason"]["status"] == "checked", all_rows
+        assert all_rows["Probe.useMarker"]["status"] == "checked", all_rows
         assert all_rows["Probe.NeedsAbsent"]["status"] == "blocked", all_rows
         for kind in ("trait", "implementation"):
             matching = [row for row in all_rows.values() if row["kind"] == kind]
