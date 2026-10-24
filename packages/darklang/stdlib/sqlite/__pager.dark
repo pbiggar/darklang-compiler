@@ -60,7 +60,7 @@ let __free (s: __State) (page: Int) : Stdlib.Result.Result<__State, String> =
 
 let __empty (size: Int) : Blob =
   let b = Stdlib.Sqlite.__Codec.__replace (Stdlib.Sqlite.__Codec.__zeros size) 0 (Stdlib.Blob.fromString "SQLite format 3\u0000")
-  let fields = [(16,2,size), (18,1,1), (19,1,1), (21,1,64), (22,1,32), (23,1,32),
+  let fields = [(16,2,if size == 65536 then 1 else size), (18,1,1), (19,1,1), (21,1,64), (22,1,32), (23,1,32),
     (24,4,1), (28,4,1), (40,4,1), (44,4,4), (56,4,1), (92,4,1), (96,4,3046000),
     (100,1,13), (105,2,size)]
   Stdlib.List.fold fields b (fun b (o,w,v) -> __put b o w v)
@@ -75,7 +75,8 @@ let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
     let size = if rawSize == 1 then 65536 else rawSize
     let count = if size < 512 then 0 else length / size
     if Stdlib.Blob.toHex (Stdlib.Blob.slice header 0 16) != "53514C69746520666F726D6174203300" then Error "SQLite: not a database"
-    else if size < 512 || size > 65536 || (size & (size - 1)) != 0 || length % size != 0 then Error "SQLite: invalid page size"
+    else if size < 512 || size > 65536 || (size & (size - 1)) != 0 then Error "SQLite: invalid page size"
+    else if length % size != 0 then Error "SQLite: invalid page size"
     else if (__get header 18 1 != 1 && __get header 18 1 != 2) || __get header 18 1 != __get header 19 1 then Error "SQLite: unsupported journal format"
     else if __get header 20 1 != 0 || __get header 52 4 != 0 || __get header 64 4 != 0 then Error "SQLite: reserved bytes and auto-vacuum are unsupported"
     else if __get header 56 4 != 1 && __get header 56 4 != 0 && __get header 18 1 != 2 then Error "SQLite: only UTF-8 databases are supported"

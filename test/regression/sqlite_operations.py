@@ -35,6 +35,12 @@ if env "SQLITE_TEST_MODE" == "initialize" then
   match Stdlib.Sqlite.__Connection.__executeTyped db "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; CREATE TABLE t(v INTEGER); INSERT INTO t VALUES (1)" (Dict {}) with
   | Error e -> Stdlib.printLine ("Error " + e)
   | Ok result -> Stdlib.printLine (output result.affected result.rows)
+else if env "SQLITE_TEST_MODE" == "maintenance-size" then
+  let vacuum = Stdlib.Sqlite.__Connection.__executeTyped db "VACUUM" (Dict {})
+  let _ = Stdlib.printLine (match vacuum with | Error e -> "Error " + e | Ok result -> output result.affected result.rows)
+  match Stdlib.Sqlite.__Maintenance.__backup db target with
+  | Error e -> Stdlib.printLine ("Error " + e)
+  | Ok _ -> Stdlib.printLine "Copied"
 else
   match Stdlib.Sqlite.__Connection.__open db with
   | Error e -> Stdlib.printLine ("Error " + e)
@@ -159,6 +165,24 @@ def main():
             if process.poll() is None:
                 process.kill();process.communicate()
             selector.close();connection.close()
+        for size in (512,65536):
+            sized=root/f'pages-{size}.db';copied=root/f'copy-{size}.db'
+            with sqlite3.connect(sized) as prepared:
+                prepared.execute(f'PRAGMA page_size={size}')
+                prepared.execute('CREATE TABLE t(v INTEGER)')
+                prepared.execute('INSERT INTO t VALUES (7)')
+            result=subprocess.run([str(binary)],env=dict(env,SQLITE_TEST_MODE='maintenance-size',SQLITE_TEST_DB=str(sized),SQLITE_TEST_TARGET=str(copied)),capture_output=True,text=True,timeout=60)
+            assert result.returncode==0 and result.stdout=='Ok -1 \nCopied\n',(size,result.stdout,result.stderr)
+            for path in (sized,copied):
+                with sqlite3.connect(path) as checked:
+                    assert checked.execute('PRAGMA page_size').fetchone()==(size,)
+                    assert checked.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
+                    assert checked.execute('SELECT v FROM t').fetchall()==[(7,)]
+        malformed=root/'bad-page-size.db'
+        bad=bytearray(sized.read_bytes());bad[16:18]=b'\x00\x00';malformed.write_bytes(bad)
+        result=subprocess.run([str(binary)],input='',env=dict(env,SQLITE_TEST_MODE='hold',SQLITE_TEST_DB=str(malformed)),capture_output=True,text=True,timeout=30)
+        assert result.returncode==0 and result.stdout=='Error SQLite: invalid page size\n',(result.returncode,result.stdout,result.stderr)
+        assert malformed.read_bytes()==bad
     print('Dark SQLite operations: configuration, held transactions/data_version, WAL checkpoint, backup/restore, foreign keys and VACUUM passed')
 
 
