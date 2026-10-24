@@ -2,10 +2,10 @@
 module Builtin
 
 let sqliteExec (path: String) (sql: String) (params: List<String>) : Stdlib.Result.Result<Int, String> =
-  Stdlib.Sqlite.__Engine.__execute path sql params |> Stdlib.Result.map (fun outcome -> outcome.affected)
+  Stdlib.Sqlite.__Connection.__executeTyped path sql (Stdlib.Sqlite.__Engine.__stringParams params) |> Stdlib.Result.map (fun outcome -> outcome.affected)
 
 let sqliteQuery (path: String) (sql: String) (params: List<String>) : Stdlib.Result.Result<List<Dict<String, Stdlib.Sqlite.Value>>, String> =
-  Stdlib.Sqlite.__Engine.__execute path sql params |> Stdlib.Result.map (fun outcome -> outcome.rows)
+  Stdlib.Sqlite.__Connection.__executeTyped path sql (Stdlib.Sqlite.__Engine.__stringParams params) |> Stdlib.Result.map (fun outcome -> outcome.rows)
 
 let sqliteExecBatch (path: String) (statements: List<(String * List<List<String>>)>) : Stdlib.Result.Result<List<Int>, String> =
   Stdlib.Sqlite.__Engine.__batch path statements

@@ -1,0 +1,43 @@
+// Consistent page snapshots and logical compaction. Ordinary database operations
+// keep the destination inode and use its pager/WAL transaction for replacement.
+module Darklang.Stdlib.Sqlite.__Maintenance
+
+let __backup (sourcePath: String) (targetPath: String) : Stdlib.Result.Result<Unit,String> =
+  if sourcePath == targetPath then Error "SQLite: backup source and destination are identical"
+  else Stdlib.Sqlite.__Io.__open sourcePath false |> Stdlib.Result.andThen (fun probe ->
+    let _ = Stdlib.Sqlite.__Io.__close probe
+    Stdlib.Sqlite.__Pager.__open sourcePath |> Stdlib.Result.andThen (fun source ->
+      let result = Stdlib.Sqlite.__Pager.__open targetPath |> Stdlib.Result.andThen (fun target ->
+        let result = Stdlib.Sqlite.__Pager.__copy source target |> Stdlib.Result.andThen (fun copied ->
+          Stdlib.Sqlite.__Pager.__commit copied |> Stdlib.Result.andThen (fun _ ->
+            match copied.wal with | Some _ -> Ok () | None -> Stdlib.Sqlite.__Io.__truncate copied.fd (copied.count * copied.size)))
+        let closed = Stdlib.Sqlite.__Pager.__close target
+        match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ())
+      let closed = Stdlib.Sqlite.__Pager.__close source
+      match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ()))
+let __table (source: Stdlib.Sqlite.__Pager.__State) (target: Stdlib.Sqlite.__Pager.__State) (table: Stdlib.Sqlite.__Engine.__Table) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  Stdlib.Sqlite.__Engine.__schema target false |> Stdlib.Result.andThen (fun (target,tables) ->
+    Stdlib.Sqlite.__Engine.__createDefinition target tables table.definition |> Stdlib.Result.andThen (fun outcome ->
+      Stdlib.Sqlite.__Engine.__schema outcome.state false |> Stdlib.Result.andThen (fun (target,tables) ->
+        Stdlib.Sqlite.__Engine.__find tables table.name |> Stdlib.Result.andThen (fun created ->
+          Stdlib.Sqlite.__Btree.__scan source table.root |> Stdlib.Result.andThen (fun (_,entries) ->
+            Stdlib.List.fold entries (Ok target) (fun result entry -> result |> Stdlib.Result.andThen (fun target -> Stdlib.Sqlite.__Btree.__insert target created.root entry.key entry.payload)))
+          |> Stdlib.Result.andThen (fun target -> Stdlib.List.fold created.indexes (Ok target) (fun result index -> result |> Stdlib.Result.andThen (fun target -> Stdlib.Sqlite.__Engine.__rebuildIndex target created index)))))))
+let __compact (source: Stdlib.Sqlite.__Pager.__State) (target: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  Stdlib.Sqlite.__Engine.__schema source false |> Stdlib.Result.andThen (fun (source,tables) ->
+    let target = { target with size = source.size, count = 1, originalCount = 0,cache = Dict {}, dirty = Stdlib.Dict.singleton 1L (Stdlib.Sqlite.__Pager.__empty source.size) }
+    Stdlib.List.fold tables (Ok target) (fun result table -> result |> Stdlib.Result.andThen (fun target -> __table source target table))
+    |> Stdlib.Result.andThen (fun target ->
+      let indexes = Stdlib.List.flatten (Stdlib.List.map tables (fun table -> Stdlib.List.filter table.indexes (fun index -> index.definition.sql != "")))
+      Stdlib.List.fold indexes (Ok target) (fun result index -> result |> Stdlib.Result.andThen (fun target ->
+        Stdlib.Sqlite.__Engine.__schema target false |> Stdlib.Result.andThen (fun (target,tables) ->
+          Stdlib.Sqlite.__Engine.__createIndex target tables index.definition |> Stdlib.Result.map (fun outcome -> outcome.state))))))
+let __vacuum (source: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  Stdlib.Cli.Posix.mkstemp "dark-sqlite-vacuum-" |> Stdlib.Sqlite.__Io.__posix |> Stdlib.Result.andThen (fun (fd,path) ->
+    let _ = Stdlib.Sqlite.__Io.__close fd
+    let result = Stdlib.Sqlite.__Pager.__open path |> Stdlib.Result.andThen (fun target ->
+      let result = __compact source target |> Stdlib.Result.andThen (fun compact -> Stdlib.Sqlite.__Pager.__copy compact source)
+      let closed = Stdlib.Sqlite.__Pager.__close target
+      match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok state,Ok _) -> Ok state)
+    let removed = Stdlib.Cli.Posix.unlink path |> Stdlib.Sqlite.__Io.__posix
+    match (result,removed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok state,Ok _) -> Ok state)

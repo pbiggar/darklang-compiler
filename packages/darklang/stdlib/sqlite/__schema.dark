@@ -160,3 +160,23 @@ let __findDeclaredType (tokens: List<Stdlib.Sqlite.__Sql.__Token>) (column: Stri
   | [] -> ""
 let __declaredType (definition: __Definition) (column: String) : String =
   match Stdlib.Sqlite.__Sql.__lex definition.sql 0 [] with | Error _ -> "" | Ok tokens -> __findDeclaredType tokens column
+
+// The current package schema has inline REFERENCES constraints. Preserve their
+// declaration order: foreign_key_check numbers them in reverse, as SQLite does.
+type __ForeignKey = { column: String, parent: String, target: String }
+let __reference (column: String) (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<List<__ForeignKey>,String> =
+  match tokens with
+  | [] -> Ok []
+  | Word word :: rest when __lower word == "references" ->
+    Stdlib.Sqlite.__Sql.__name rest |> Stdlib.Result.andThen (fun (parent,rest) -> Stdlib.Sqlite.__Sql.__eat rest "(" |> Stdlib.Result.andThen Stdlib.Sqlite.__Sql.__names
+      |> Stdlib.Result.andThen (fun (names,_) -> match names with
+        | [target] -> Ok [__ForeignKey { column = column,parent = parent,target = target }]
+        | _ -> Error "SQLite: unsupported foreign key width"))
+  | _ :: rest -> __reference column rest
+let __foreignKeys (definition: __Definition) : Stdlib.Result.Result<List<__ForeignKey>,String> =
+  Stdlib.Sqlite.__Sql.__lex definition.sql 0 [] |> Stdlib.Result.andThen (fun tokens ->
+    Stdlib.Sqlite.__Sql.__eat tokens "create" |> Stdlib.Result.andThen (fun tokens -> Stdlib.Sqlite.__Sql.__eat tokens "table")
+    |> Stdlib.Result.andThen __optional |> Stdlib.Result.andThen (fun (_,tokens) -> Stdlib.Sqlite.__Sql.__name tokens)
+    |> Stdlib.Result.andThen (fun (_,tokens) -> Stdlib.Sqlite.__Sql.__eat tokens "(" |> Stdlib.Result.andThen (fun tokens -> Stdlib.Sqlite.__Sql.__catalogParts tokens 0 [] []))
+    |> Stdlib.Result.andThen (fun (parts,_) -> Stdlib.List.fold parts (Ok []) (fun result part -> result |> Stdlib.Result.andThen (fun refs ->
+      Stdlib.Sqlite.__Sql.__name part |> Stdlib.Result.andThen (fun (name,rest) -> __reference name rest |> Stdlib.Result.map (fun more -> more @ refs))))))

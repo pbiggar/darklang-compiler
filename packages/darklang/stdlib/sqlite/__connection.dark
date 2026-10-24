@@ -1,0 +1,167 @@
+// Explicit connection ownership, transaction boundaries and connection-local
+// configuration. A handle must be threaded linearly and closed exactly once.
+module Darklang.Stdlib.Sqlite.__Connection
+
+type __State = { pager: Stdlib.Sqlite.__Pager.__State, active: Bool, busy: Int,
+  synchronous: Int, foreignKeys: Bool, stamp: Int, version: Int }
+type __Outcome = { connection: __State, affected: Int, rows: List<Dict<String,Stdlib.Sqlite.Value>> }
+let __row (name: String) (value: Stdlib.Sqlite.Value) : List<Dict<String,Stdlib.Sqlite.Value>> = [Stdlib.Dict.singleton name value]
+let __outcome (state: __State) (rows: List<Dict<String,Stdlib.Sqlite.Value>>) : __Outcome = __Outcome { connection = state, affected = -1,rows = rows }
+let __open (path: String) : Stdlib.Result.Result<__State,String> =
+  Stdlib.Sqlite.__Pager.__open path |> Stdlib.Result.andThen (fun pager ->
+    let opened = Stdlib.Sqlite.__Pager.__commit pager |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Pager.__release pager)
+      |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Pager.__stamp pager)
+    match opened with
+    | Error e -> let _ = Stdlib.Sqlite.__Pager.__close pager in Error e
+    | Ok stamp -> Ok (__State { pager = pager,active = false,busy = 5000,synchronous = 1,foreignKeys = false,stamp = stamp,version = 1 }))
+let __close (state: __State) : Stdlib.Result.Result<Unit,String> = Stdlib.Sqlite.__Pager.__close state.pager
+let __observe (state: __State) : Stdlib.Result.Result<__State,String> =
+  Stdlib.Sqlite.__Pager.__stamp state.pager |> Stdlib.Result.map (fun stamp ->
+    { state with stamp = stamp,version = state.version + (if stamp == state.stamp then 0 else 1) })
+let __begin (state: __State) (immediate: Bool) : Stdlib.Result.Result<__State,String> =
+  if state.active then Error "SQLite: transaction already active"
+  else __observe state |> Stdlib.Result.andThen (fun state ->
+    Stdlib.Sqlite.__Pager.__refresh state.pager state.busy |> Stdlib.Result.andThen (fun pager ->
+      let pager = { pager with timeout = state.busy }
+      let locked =
+        if Stdlib.Bool.not immediate then Ok ()
+        else match pager.wal with
+        | Some wal -> Stdlib.Sqlite.__Locks.__wait wal.shm 120 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive state.busy
+        | None -> Stdlib.Sqlite.__Locks.__try pager.fd 1073741825 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired -> if acquired then Ok () else Error "SQLite: database is locked")
+      match locked with
+      | Ok _ -> Ok { state with pager = pager,active = true }
+      | Error e -> let _ = Stdlib.Sqlite.__Pager.__release pager in Error e))
+let __rollback (state: __State) : Stdlib.Result.Result<__State,String> =
+  if Stdlib.Bool.not state.active then Error "SQLite: no active transaction"
+  else Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ -> { state with active = false })
+let __commit (state: __State) : Stdlib.Result.Result<__State,String> =
+  if Stdlib.Bool.not state.active then Error "SQLite: no active transaction"
+  else Stdlib.Sqlite.__Pager.__commit state.pager |> Stdlib.Result.andThen (fun _ ->
+    // Observe our own committed stamp before unlocking, so it cannot be mistaken
+    // for another connection's commit when data_version is next polled.
+    Stdlib.Sqlite.__Pager.__stamp state.pager |> Stdlib.Result.andThen (fun stamp ->
+      Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ -> { state with active = false,stamp = stamp })))
+let __dataVersion (state: __State) : Stdlib.Result.Result<(__State * Int),String> =
+  __observe state |> Stdlib.Result.map (fun state -> (state,state.version))
+let __checkpoint (state: __State) : Stdlib.Result.Result<__Outcome,String> =
+  if state.active then Error "SQLite: checkpoint inside a transaction"
+  else
+    (match state.pager.wal with
+    | None -> Ok ((0,-1,-1))
+    | Some wal -> Stdlib.Sqlite.__Wal.__checkpoint state.pager.fd wal state.busy |> Stdlib.Result.andThen (fun completed ->
+      if completed then Ok ((0,0,0))
+      else Stdlib.Sqlite.__Wal.__readIndex wal.shm wal.size |> Stdlib.Result.andThen (fun index ->
+        Stdlib.Sqlite.__Io.__readAt wal.shm 96 4 |> Stdlib.Result.map (fun bytes -> (1,Stdlib.Sqlite.__Wal.__le index 16 4,Stdlib.Sqlite.__Wal.__le bytes 0 4)))))
+    |> Stdlib.Result.map (fun (busy,log,done_) -> __outcome state [Dict { "busy": Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 busy),"log": Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 log),"checkpointed": Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 done_) }])
+let __pragmaArgument (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<Stdlib.Option.Option<String>,String> =
+  let value = match tokens with
+    | [] -> Some None
+    | [Symbol "=",Word value] -> Some (Some value)
+    | [Symbol "(",Word value,Symbol ")"] -> Some (Some value)
+    | [Symbol "=",Atom (Text value)] -> Some (Some value)
+    | [Symbol "=",Atom (Int value)] -> Some (Some (Stdlib.Int64.toString value))
+    | [Symbol "(",Atom (Int value),Symbol ")"] -> Some (Some (Stdlib.Int64.toString value))
+    | _ -> None
+  match value with | None -> Error "SQLite: unsupported PRAGMA argument" | Some value -> Ok value
+let __pragma (state: __State) (name: String) (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<__Outcome,String> =
+  __pragmaArgument tokens |> Stdlib.Result.andThen (fun argument ->
+    let name = Stdlib.String.toLowercase name
+    let argument = Stdlib.Option.map argument Stdlib.String.toLowercase
+    if name == "data_version" && argument == None then __dataVersion state |> Stdlib.Result.map (fun (state,version) -> __outcome state (__row name (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 version))))
+    else if name == "journal_mode" then
+      let mode = match state.pager.wal with | None -> "delete" | Some _ -> "wal"
+      if argument == None || argument == Some mode then Ok (__outcome state (__row name (Stdlib.Sqlite.Value.Text mode))) else Error "SQLite: journal mode changes require opening a configured connection"
+    else if name == "busy_timeout" then
+      (match argument with | None -> Ok state.busy | Some value -> Stdlib.Int.parse value |> Stdlib.Result.mapError (fun _ -> "SQLite: invalid busy timeout"))
+      |> Stdlib.Result.map (fun timeout -> let timeout = Stdlib.Int.max 0 timeout in __outcome { state with busy = timeout } (__row name (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 timeout))))
+    else if name == "synchronous" then
+      let mode = match argument with | None -> Some state.synchronous | Some "normal" -> Some 1 | Some "1" -> Some 1 | Some "off" -> Some 0 | Some "0" -> Some 0 | _ -> None
+      match mode with
+      | None -> Error "SQLite: unsupported synchronous mode"
+      | Some mode -> if state.active then Error "SQLite: synchronous inside a transaction" else Ok (__outcome { state with synchronous = mode } (if argument == None then __row name (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 mode)) else []))
+    else if name == "foreign_keys" then
+      let enabled = match argument with | None -> Some state.foreignKeys | Some "on" -> Some true | Some "1" -> Some true | Some "off" -> Some false | Some "0" -> Some false | _ -> None
+      match enabled with | None -> Error "SQLite: invalid foreign_keys setting" | Some enabled ->
+        let state = if state.active then state else { state with foreignKeys = enabled }
+        Ok (__outcome state (if argument == None then __row name (Stdlib.Sqlite.Value.Int (if state.foreignKeys then 1L else 0L)) else []))
+    else if name == "wal_checkpoint" && (argument == None || argument == Some "truncate") then __checkpoint state
+    else Error ("SQLite: unsupported PRAGMA " + name))
+
+let __sql (state: __State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String,Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome,String> =
+  let running = if state.active then Ok state else __begin state (match statement with | Select _ -> false | _ -> true)
+  running |> Stdlib.Result.andThen (fun opened ->
+    let result = Stdlib.Sqlite.__Engine.__run opened.pager statement params |> Stdlib.Result.andThen (fun outcome ->
+      (if Stdlib.Bool.not opened.foreignKeys then Ok outcome.state else Stdlib.Sqlite.__Engine.__foreignKeyCheck outcome.state |> Stdlib.Result.andThen (fun checked ->
+        if Stdlib.List.isEmpty checked.rows then Ok checked.state else Error "SQLite: FOREIGN KEY constraint failed"))
+      |> Stdlib.Result.map (fun pager -> __Outcome { connection = { opened with pager = pager },affected = outcome.affected,rows = outcome.rows }))
+    if state.active then result
+    else
+      match result with
+      | Error e -> let _ = __rollback opened in Error e
+      | Ok outcome ->
+        match __commit outcome.connection with
+        | Ok connection -> Ok { outcome with connection = connection }
+        | Error e -> let _ = __rollback opened in Error e)
+let __foreignKeyCheck (state: __State) : Stdlib.Result.Result<__Outcome,String> =
+  (if state.active then Ok state else __begin state false) |> Stdlib.Result.andThen (fun opened ->
+    let result = Stdlib.Sqlite.__Engine.__foreignKeyCheck opened.pager |> Stdlib.Result.map (fun outcome ->
+      __Outcome { connection = { opened with pager = outcome.state },affected = -1,rows = outcome.rows })
+    if state.active then result
+    else
+      let _ = __rollback opened
+      result |> Stdlib.Result.map (fun outcome -> { outcome with connection = { outcome.connection with active = false } }))
+let __vacuum (state: __State) : Stdlib.Result.Result<__Outcome,String> =
+  if state.active then Error "SQLite: VACUUM inside a transaction"
+  else __begin state true |> Stdlib.Result.andThen (fun opened ->
+    let result = Stdlib.Sqlite.__Maintenance.__vacuum opened.pager |> Stdlib.Result.andThen (fun pager -> __commit { opened with pager = pager })
+    match result with
+    | Ok state -> Ok (__outcome state [])
+    | Error e -> let _ = __rollback opened in Error e)
+let __statement (state: __State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String,Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome,String> =
+  match statement with
+  | Catalog (Word command :: rest) ->
+    let command = Stdlib.String.toLowercase command
+    if command == "pragma" then
+      match rest with
+      | Word name :: rest when Stdlib.String.toLowercase name == "foreign_key_check" && rest == [] -> __foreignKeyCheck state
+      | Word name :: rest -> __pragma state name rest
+      | _ -> Error "SQLite: invalid PRAGMA"
+    else if command == "vacuum" then if rest == [] then __vacuum state else Error "SQLite: unsupported VACUUM suffix"
+    else if command == "begin" then
+      let immediate = match rest with | Word name :: _ -> Stdlib.String.toLowercase name == "immediate" || Stdlib.String.toLowercase name == "exclusive" | _ -> false
+      let valid = match rest with | [] -> true | [Word name] -> Stdlib.List.contains ["transaction","deferred","immediate","exclusive"] (Stdlib.String.toLowercase name) | [Word mode,Word name] -> Stdlib.String.toLowercase name == "transaction" && Stdlib.List.contains ["deferred","immediate","exclusive"] (Stdlib.String.toLowercase mode) | _ -> false
+      if Stdlib.Bool.not valid then Error "SQLite: invalid BEGIN" else __begin state immediate |> Stdlib.Result.map (fun state -> __outcome state [])
+    else if command == "commit" || command == "end" || command == "rollback" then
+      if rest != [] && rest != [Stdlib.Sqlite.__Sql.__Token.Word "transaction"] && rest != [Stdlib.Sqlite.__Sql.__Token.Word "TRANSACTION"] then Error "SQLite: unsupported transaction suffix"
+      else (if command == "rollback" then __rollback state else __commit state) |> Stdlib.Result.map (fun state -> __outcome state [])
+    else __sql state statement params
+  | _ -> __sql state statement params
+let __executePrepared (state: __State) (program: List<Stdlib.Sqlite.__Sql.__Statement>) (params: Dict<String,Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome,String> =
+  Stdlib.List.fold program (Ok (__outcome state [])) (fun result statement -> result |> Stdlib.Result.andThen (fun previous ->
+    __statement previous.connection statement params |> Stdlib.Result.map (fun outcome ->
+      let affected = if outcome.affected < 0 then previous.affected else (if previous.affected < 0 then 0 else previous.affected) + outcome.affected
+      { outcome with affected = affected })))
+let __execute (state: __State) (sql: String) (params: Dict<String,Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome,String> =
+  Stdlib.Sqlite.__Engine.__prepare sql |> Stdlib.Result.andThen (fun program -> __executePrepared state program params)
+let __with (path: String) (work: __State -> Stdlib.Result.Result<(__State * 'a),String>) : Stdlib.Result.Result<'a,String> =
+  __open path |> Stdlib.Result.andThen (fun opened ->
+    let result = work opened
+    let closed = __close opened
+    match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok pair,Ok _) -> let (_,value) = pair in Ok value)
+let __needsWal (statement: Stdlib.Sqlite.__Sql.__Statement) : Bool =
+  match statement with
+  | Catalog [Word command,Word name,Symbol "=",Word value] -> Stdlib.String.toLowercase command == "pragma" && Stdlib.String.toLowercase name == "journal_mode" && Stdlib.String.toLowercase value == "wal"
+  | _ -> false
+let __operational (statement: Stdlib.Sqlite.__Sql.__Statement) : Bool =
+  match statement with | Catalog (Word command :: _) -> Stdlib.List.contains ["pragma","vacuum","begin","commit","end","rollback"] (Stdlib.String.toLowercase command) | _ -> false
+let __executeTyped (path: String) (sql: String) (params: Dict<String,Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome,String> =
+  Stdlib.Sqlite.__Engine.__prepare sql |> Stdlib.Result.andThen (fun program ->
+    // Journal mode is initialized before scoped attachment ownership.
+    let configured =
+      if Stdlib.List.any program __needsWal then
+        if Stdlib.List.any (Stdlib.List.takeWhile program (fun statement -> Stdlib.Bool.not (__needsWal statement))) (fun statement -> Stdlib.Bool.not (__operational statement)) then Error "SQLite: journal mode must precede SQL writes" else Stdlib.Sqlite.__Pager.__enableWal path
+      else Ok ()
+    configured |> Stdlib.Result.andThen (fun _ -> __with path (fun state ->
+      if Stdlib.List.any program __operational then __executePrepared state program params |> Stdlib.Result.map (fun outcome -> (outcome.connection,outcome))
+      else __begin state true |> Stdlib.Result.andThen (fun state ->
+        __executePrepared state program params |> Stdlib.Result.andThen (fun outcome -> __commit outcome.connection |> Stdlib.Result.map (fun state -> (state,{ outcome with connection = state })))))))

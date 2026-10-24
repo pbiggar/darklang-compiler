@@ -621,3 +621,20 @@ let __transaction (path: String)
       Stdlib.Sqlite.__Pager.__commit state |> Stdlib.Result.map (fun _ -> value))
     let closed = Stdlib.Sqlite.__Pager.__close opened
     match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok value,Ok _) -> Ok value)
+
+let __foreignKeyCheck (s: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<__Outcome,String> =
+  __schema s true |> Stdlib.Result.andThen (fun (s,tables) ->
+    Stdlib.List.fold tables (Ok (__Outcome { state = s,affected = -1,rows = [] })) (fun result table -> result |> Stdlib.Result.andThen (fun outcome ->
+      Stdlib.Sqlite.__Schema.__foreignKeys table.definition |> Stdlib.Result.andThen (fun keys ->
+        __rows outcome.state table |> Stdlib.Result.andThen (fun (s,children) ->
+          Stdlib.List.fold (Stdlib.List.indexedMap keys (fun i key -> (i,key))) (Ok { outcome with state = s }) (fun result (id,key) -> result |> Stdlib.Result.andThen (fun outcome ->
+            let parent = Stdlib.List.findFirst tables (fun table -> __lower table.name == __lower key.parent)
+            (match parent with | None -> Ok ((outcome.state,[])) | Some parent -> __rows outcome.state parent)
+            |> Stdlib.Result.andThen (fun (s,parents) ->
+              let affinity = match parent with | None -> "blob" | Some parent -> match Stdlib.List.findFirst parent.columns (fun column -> __lower column.name == __lower key.target) with | None -> "blob" | Some column -> column.affinity
+              let violations = Stdlib.List.filter children (fun row ->
+                let value = Stdlib.Dict.get row.values (__lower key.column) |> Stdlib.Option.withDefault Stdlib.Sqlite.Value.Null
+                value != Stdlib.Sqlite.Value.Null && Stdlib.Bool.not (Stdlib.List.any parents (fun row ->
+                  let target = Stdlib.Dict.get row.values (__lower key.target) |> Stdlib.Option.withDefault Stdlib.Sqlite.Value.Null
+                  Stdlib.Sqlite.__Eval.__compare target (Stdlib.Sqlite.__Eval.__coerce affinity value) == 0)))
+              Ok { outcome with state = s,rows = outcome.rows @ Stdlib.List.map violations (fun row -> Dict { "table": Stdlib.Sqlite.Value.Text table.name,"rowid": Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 row.key),"parent": Stdlib.Sqlite.Value.Text key.parent,"fkid": Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 id) }) }))))))))

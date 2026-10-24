@@ -1,0 +1,252 @@
+// SQLite WAL and wal-index protocol. All storage access is positional descriptor
+// I/O; SHM byte locks coordinate with native SQLite's mmap-backed wal-index.
+module Darklang.Stdlib.Sqlite.__Wal
+
+type __State = { fd: Int, shm: Int, size: Int, header: Blob, index: Blob,
+  frame: Int, count: Int, slot: Int, pages: Dict<Int64,Int> }
+type __Scan = { frame: Int, count: Int, checksum: (Int * Int), entries: List<(Int * Int)> }
+
+let __be (b: Blob) (o: Int) (w: Int) : Int = Stdlib.Sqlite.__Codec.__beRead b o w
+let __le (b: Blob) (o: Int) (w: Int) : Int =
+  if w == 0 then 0 else Stdlib.Sqlite.__Codec.__byte b o + 256 * __le b (o + 1) (w - 1)
+let __little (n: Int) (w: Int) : Blob =
+  Stdlib.List.range 0 (w - 1) |> Stdlib.List.map (fun i -> Stdlib.Sqlite.__Codec.__i64 ((n / Stdlib.Int.power 256 i) % 256)) |> Stdlib.Blob.__fromInt64List
+let __put (b: Blob) (o: Int) (w: Int) (n: Int) : Blob = Stdlib.Sqlite.__Codec.__replace b o (__little n w)
+let __checksumAt (b: Blob) (big: Bool) (o: Int) (a: Int) (c: Int) : (Int * Int) =
+  if o == Stdlib.Blob.length b then (a,c)
+  else
+    let x = if big then __be b o 4 else __le b o 4
+    let y = if big then __be b (o + 4) 4 else __le b (o + 4) 4
+    let a = (a + x + c) % 4294967296
+    let c = (c + y + a) % 4294967296
+    __checksumAt b big (o + 8) a c
+let __checksum (b: Blob) (big: Bool) (seed: (Int * Int)) : (Int * Int) =
+  let (a,c) = seed
+  __checksumAt b big 0 a c
+let __equal (a: Blob) (b: Blob) : Bool = Stdlib.Blob.toHex a == Stdlib.Blob.toHex b
+let __finishIndex (b: Blob) : Blob =
+  let (a,c) = __checksum (Stdlib.Blob.slice b 0 40) false (0,0)
+  __put (__put b 40 4 a) 44 4 c
+let __makeIndex (size: Int) (change: Int) (frame: Int) (count: Int) (header: Blob) (checksum: (Int * Int)) : Blob =
+  let (a,c) = checksum
+  let b = Stdlib.Sqlite.__Codec.__zeros 48
+  let b = __put (__put (__put (__put (__put (__put (__put b 0 4 3007000) 8 4 change) 12 1 1) 14 2 (if size == 65536 then 1 else size)) 16 4 frame) 20 4 count) 24 4 a
+  let b = __put (__put b 28 4 c) 13 1 (if Stdlib.Blob.length header == 32 && __be header 0 4 == 931071619 then 1 else 0)
+  __finishIndex (if Stdlib.Blob.length header == 32 then Stdlib.Sqlite.__Codec.__replace b 32 (Stdlib.Blob.slice header 16 8) else b)
+let __publish (shm: Int) (index: Blob) : Stdlib.Result.Result<Unit,String> =
+  // The second copy is published first, as SQLite does. Readers accept only two
+  // identical checksum-valid copies and verify them after taking their slot.
+  Stdlib.Sqlite.__Io.__writeAt shm 48 index |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__writeAt shm 0 index)
+let __validIndex (b: Blob) (size: Int) : Bool =
+  if Stdlib.Blob.length b != 96 then false
+  else
+    let index = Stdlib.Blob.slice b 0 48
+    let raw = __le index 14 2
+    __equal index (Stdlib.Blob.slice b 48 48) && __equal index (__finishIndex index) && __le index 0 4 == 3007000 && __le index 12 1 == 1 && (if raw == 1 then 65536 else raw) == size
+let __readIndex (shm: Int) (size: Int) : Stdlib.Result.Result<Blob,String> =
+  Stdlib.Sqlite.__Io.__readAt shm 0 96 |> Stdlib.Result.andThen (fun b -> if __validIndex b size then Ok (Stdlib.Blob.slice b 0 48) else Error "SQLite: invalid or changing WAL index")
+let __frameOffset (size: Int) (frame: Int) : Int = 32 + (frame - 1) * (size + 24)
+let __location (frame: Int) : (Int * Int * Int) =
+  if frame <= 4062 then (0,frame,136 + (frame - 1) * 4)
+  else
+    let block = 1 + (frame - 4063) / 4096
+    let key = 1 + (frame - 4063) % 4096
+    (block,key,block * 32768 + (key - 1) * 4)
+let __hashInsert (shm: Int) (base: Int) (slot: Int) (key: Int) (remaining: Int) : Stdlib.Result.Result<Unit,String> =
+  if remaining == 0 then Error "SQLite: full WAL hash table"
+  else Stdlib.Sqlite.__Io.__readAt shm (base + slot * 2) 2 |> Stdlib.Result.andThen (fun b ->
+    if __le b 0 2 == 0 then Stdlib.Sqlite.__Io.__writeAt shm (base + slot * 2) (__little key 2)
+    else __hashInsert shm base ((slot + 1) % 8192) key (remaining - 1))
+let __indexEntry (shm: Int) (page: Int) (frame: Int) : Stdlib.Result.Result<Unit,String> =
+  let (block,key,offset) = __location frame
+  // A new block has no published readers. Existing blocks must be extended in
+  // place: replacing them would transiently erase another reader's hash slots.
+  (if key == 1 then Stdlib.Sqlite.__Io.__writeAt shm (block * 32768 + (if block == 0 then 136 else 0)) (Stdlib.Sqlite.__Codec.__zeros (32768 - (if block == 0 then 136 else 0))) else Ok ())
+  |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__writeAt shm offset (__little page 4))
+  |> Stdlib.Result.andThen (fun _ -> __hashInsert shm (block * 32768 + 16384) ((page * 383) % 8192) key 8192)
+let __indexEntries (shm: Int) (entries: List<(Int * Int)>) : Stdlib.Result.Result<Unit,String> =
+  Stdlib.List.fold entries (Ok ()) (fun result (page,frame) -> result |> Stdlib.Result.andThen (fun _ -> __indexEntry shm page frame))
+let __validHeader (header: Blob) (size: Int) : Bool =
+  if Stdlib.Blob.length header != 32 then false
+  else
+    let magic = __be header 0 4
+    let checksum = __checksum (Stdlib.Blob.slice header 0 24) (magic == 931071619) (0,0)
+    (magic == 931071618 || magic == 931071619) && __be header 4 4 == 3007000 && __be header 8 4 == size && checksum == (__be header 24 4,__be header 28 4)
+let __scan (fd: Int) (size: Int) (header: Blob) (limit: Int) (frame: Int) (seed: (Int * Int)) (entries: List<(Int * Int)>) (committed: __Scan) : Stdlib.Result.Result<__Scan,String> =
+  if frame > limit then Ok committed
+  else Stdlib.Sqlite.__Io.__readAt fd (__frameOffset size frame) (size + 24) |> Stdlib.Result.andThen (fun bytes ->
+    let page = __be bytes 0 4
+    let count = __be bytes 4 4
+    let checksum = __checksum (Stdlib.Blob.concat [Stdlib.Blob.slice bytes 0 8,Stdlib.Blob.slice bytes 24 size]) (__be header 0 4 == 931071619) seed
+    if page == 0 || Stdlib.Bool.not (__equal (Stdlib.Blob.slice bytes 8 8) (Stdlib.Blob.slice header 16 8)) || checksum != (__be bytes 16 4,__be bytes 20 4) then Ok committed
+    else
+      let entries = [(page,frame)] @ entries
+      let committed = if count == 0 then committed else __Scan { frame = frame, count = count, checksum = checksum, entries = entries }
+      __scan fd size header limit (frame + 1) checksum entries committed)
+let __recover (fd: Int) (shm: Int) (size: Int) (dbCount: Int) : Stdlib.Result.Result<Unit,String> =
+  Stdlib.Sqlite.__Io.__size fd |> Stdlib.Result.andThen (fun length ->
+    let recovered =
+      if length < 32 then Ok ((Stdlib.Sqlite.__Codec.__zeros 0,__Scan { frame = 0,count = dbCount,checksum = (0,0),entries = [] }))
+      else Stdlib.Sqlite.__Io.__readAt fd 0 32 |> Stdlib.Result.andThen (fun header ->
+        if Stdlib.Bool.not (__validHeader header size) then Error "SQLite: invalid WAL header"
+        else __scan fd size header ((length - 32) / (size + 24)) 1 (__be header 24 4,__be header 28 4) [] (__Scan { frame = 0,count = dbCount,checksum = (__be header 24 4,__be header 28 4),entries = [] }) |> Stdlib.Result.map (fun scan -> (header,scan)))
+    recovered |> Stdlib.Result.andThen (fun (header,scan) ->
+      Stdlib.Sqlite.__Io.__truncate shm 32768 |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__writeAt shm 96 (Stdlib.Sqlite.__Codec.__zeros (32768 - 96)))
+      |> Stdlib.Result.andThen (fun _ -> __indexEntries shm (Stdlib.List.reverse scan.entries))
+      |> Stdlib.Result.andThen (fun _ ->
+        let marks = Stdlib.Blob.concat [__little 0 4,__little scan.frame 4,__little 4294967295 4,__little 4294967295 4,__little 4294967295 4]
+        Stdlib.Sqlite.__Io.__writeAt shm 100 marks)
+      |> Stdlib.Result.andThen (fun _ -> __publish shm (__makeIndex size 0 scan.frame scan.count header scan.checksum))))
+let __map (shm: Int) (frame: Int) (last: Int) (pages: Dict<Int64,Int>) : Stdlib.Result.Result<Dict<Int64,Int>,String> =
+  if frame > last then Ok pages
+  else
+    let (_,_,offset) = __location frame
+    Stdlib.Sqlite.__Io.__readAt shm offset 4 |> Stdlib.Result.andThen (fun bytes ->
+      let page = __le bytes 0 4
+      if page == 0 then Error "SQLite: invalid WAL page map"
+      else __map shm (frame + 1) last (Stdlib.Dict.setOverridingDuplicates pages (Stdlib.Sqlite.__Codec.__i64 page) frame))
+let __chooseSlot (shm: Int) (frame: Int) (slot: Int) : Stdlib.Result.Result<Int,String> =
+  if slot == 5 then Error "SQLite: WAL reader slots are busy"
+  else Stdlib.Sqlite.__Locks.__try shm (123 + slot) 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired ->
+    if Stdlib.Bool.not acquired then
+      Stdlib.Sqlite.__Io.__readAt shm (100 + slot * 4) 4 |> Stdlib.Result.andThen (fun mark ->
+        if __le mark 0 4 != frame then __chooseSlot shm frame (slot + 1)
+        else Stdlib.Sqlite.__Locks.__try shm (123 + slot) 1 Stdlib.Sqlite.__Locks.__Kind.Shared |> Stdlib.Result.andThen (fun shared -> if shared then Ok slot else __chooseSlot shm frame (slot + 1)))
+    else
+      let result = Stdlib.Sqlite.__Io.__writeAt shm (100 + slot * 4) (__little frame 4)
+        |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Locks.__try shm (123 + slot) 1 Stdlib.Sqlite.__Locks.__Kind.Shared)
+      match result with
+      | Ok true -> Ok slot
+      | _ -> let _ = Stdlib.Sqlite.__Locks.__unlock shm (123 + slot) 1 in Error "SQLite: cannot acquire WAL reader slot")
+let __snapshot (fd: Int) (shm: Int) (size: Int) (attempts: Int) : Stdlib.Result.Result<__State,String> =
+  if attempts == 0 then Error "SQLite: WAL snapshot is busy"
+  else __readIndex shm size |> Stdlib.Result.andThen (fun index ->
+    let frame = __le index 16 4
+    Stdlib.Sqlite.__Io.__readAt shm 96 4 |> Stdlib.Result.andThen (fun backfill ->
+      let chosen =
+        if __le backfill 0 4 == frame then Stdlib.Sqlite.__Locks.__try shm 123 1 Stdlib.Sqlite.__Locks.__Kind.Shared |> Stdlib.Result.andThen (fun acquired -> if acquired then Ok 0 else __chooseSlot shm frame 1)
+        else __chooseSlot shm frame 1
+      chosen |> Stdlib.Result.andThen (fun slot ->
+        let ready = __readIndex shm size |> Stdlib.Result.andThen (fun after ->
+          Stdlib.Sqlite.__Io.__readAt shm (if slot == 0 then 96 else 100 + slot * 4) 4 |> Stdlib.Result.map (fun mark -> __equal index after && __le mark 0 4 == frame))
+        match ready with
+        | Ok true ->
+          let loaded = (if slot == 0 then Ok (Dict {}) else __map shm 1 frame (Dict {})) |> Stdlib.Result.andThen (fun pages ->
+            (if slot == 0 then Ok (Stdlib.Sqlite.__Codec.__zeros 0) else Stdlib.Sqlite.__Io.__readAt fd 0 32)
+            |> Stdlib.Result.andThen (fun header ->
+              if slot != 0 && (Stdlib.Bool.not (__validHeader header size) || Stdlib.Bool.not (__equal (Stdlib.Blob.slice header 16 8) (Stdlib.Blob.slice index 32 8))) then Error "SQLite: WAL snapshot salt mismatch"
+              else Ok (__State { fd = fd,shm = shm,size = size,header = header,index = index,frame = frame,count = __le index 20 4,slot = slot,pages = pages })))
+          match loaded with | Ok state -> Ok state | Error e -> let _ = Stdlib.Sqlite.__Locks.__unlock shm (123 + slot) 1 in Error e
+        | _ -> let _ = Stdlib.Sqlite.__Locks.__unlock shm (123 + slot) 1 in __snapshot fd shm size (attempts - 1))))
+let __open (path: String) (size: Int) (count: Int) : Stdlib.Result.Result<__State,String> =
+  Stdlib.Sqlite.__Io.__open (path + "-wal") true |> Stdlib.Result.andThen (fun fd ->
+    match Stdlib.Sqlite.__Io.__open (path + "-shm") true with
+    | Error e -> let _ = Stdlib.Sqlite.__Io.__close fd in Error e
+    | Ok shm ->
+      let initialized = Stdlib.Sqlite.__Locks.__try shm 128 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun first ->
+        (if first then __recover fd shm size count else Ok ()) |> Stdlib.Result.andThen (fun _ ->
+          Stdlib.Sqlite.__Locks.__wait shm 128 1 Stdlib.Sqlite.__Locks.__Kind.Shared 5000))
+        |> Stdlib.Result.andThen (fun _ -> __snapshot fd shm size 20)
+      match initialized with
+      | Ok state -> Ok state
+      | Error e -> let _ = Stdlib.Sqlite.__Io.__close shm in let _ = Stdlib.Sqlite.__Io.__close fd in Error e)
+let __read (state: __State) (page: Int) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>,String> =
+  match Stdlib.Dict.get state.pages (Stdlib.Sqlite.__Codec.__i64 page) with
+  | None -> Ok None
+  | Some frame ->
+    Stdlib.Sqlite.__Io.__readAt state.fd (__frameOffset state.size frame) (state.size + 24) |> Stdlib.Result.andThen (fun bytes ->
+      (if frame == 1 then Ok (Stdlib.Blob.slice state.header 24 8) else Stdlib.Sqlite.__Io.__readAt state.fd (__frameOffset state.size (frame - 1) + 16) 8)
+      |> Stdlib.Result.andThen (fun previous ->
+        let checksum = __checksum (Stdlib.Blob.concat [Stdlib.Blob.slice bytes 0 8,Stdlib.Blob.slice bytes 24 state.size]) (__be state.header 0 4 == 931071619) (__be previous 0 4,__be previous 4 4)
+        if __be bytes 0 4 != page || Stdlib.Bool.not (__equal (Stdlib.Blob.slice bytes 8 8) (Stdlib.Blob.slice state.header 16 8)) || checksum != (__be bytes 16 4,__be bytes 20 4) then Error "SQLite: invalid WAL frame"
+        else Ok (Some (Stdlib.Blob.slice bytes 24 state.size))))
+let __newHeader (size: Int) : Stdlib.Result.Result<Blob,String> =
+  Builtin.syscallGetentropy 8 |> Stdlib.Result.mapError (fun errno -> "SQLite WAL salt: errno " + Stdlib.Int.toString errno)
+  |> Stdlib.Result.map (fun salt ->
+    let header = Stdlib.List.fold [(0,931071618),(4,3007000),(8,size),(12,0)] (Stdlib.Sqlite.__Codec.__zeros 32) (fun b (o,n) -> Stdlib.Sqlite.__Codec.__put b o 4 n)
+    let header = Stdlib.Sqlite.__Codec.__replace header 16 salt
+    let (a,c) = __checksum (Stdlib.Blob.slice header 0 24) false (0,0)
+    Stdlib.Sqlite.__Codec.__put (Stdlib.Sqlite.__Codec.__put header 24 4 a) 28 4 c)
+let __append (state: __State) (header: Blob) (frame: Int) (seed: (Int * Int)) (count: Int) (pages: List<(Int * Blob)>) : Stdlib.Result.Result<(Int * (Int * Int)),String> =
+  match pages with
+  | [] -> Ok ((frame - 1,seed))
+  | (page,data) :: rest ->
+    let prefix = Stdlib.Blob.concat [Stdlib.Sqlite.__Codec.__be page 4,Stdlib.Sqlite.__Codec.__be (if Stdlib.List.isEmpty rest then count else 0) 4]
+    let checksum = __checksum (Stdlib.Blob.concat [prefix,data]) (__be header 0 4 == 931071619) seed
+    let (a,c) = checksum
+    let bytes = Stdlib.Blob.concat [prefix,Stdlib.Blob.slice header 16 8,Stdlib.Sqlite.__Codec.__be a 4,Stdlib.Sqlite.__Codec.__be c 4,data]
+    Stdlib.Sqlite.__Io.__writeAt state.fd (__frameOffset state.size frame) bytes
+    |> Stdlib.Result.andThen (fun _ -> __indexEntry state.shm page frame)
+    |> Stdlib.Result.andThen (fun _ -> __append state header (frame + 1) checksum count rest)
+let __cleanHashBytes (shm: Int) (block: Int) (limit: Int) (slot: Int) (bytes: Blob) : Stdlib.Result.Result<Unit,String> =
+  if slot == 8192 then Ok ()
+  else
+    (if __le bytes (slot * 2) 2 > limit then Stdlib.Sqlite.__Io.__writeAt shm (block * 32768 + 16384 + slot * 2) (__little 0 2) else Ok ())
+    |> Stdlib.Result.andThen (fun _ -> __cleanHashBytes shm block limit (slot + 1) bytes)
+let __cleanHash (shm: Int) (block: Int) (limit: Int) : Stdlib.Result.Result<Unit,String> =
+  Stdlib.Sqlite.__Io.__readAt shm (block * 32768 + 16384) 16384 |> Stdlib.Result.andThen (fun bytes -> __cleanHashBytes shm block limit 0 bytes)
+let __commit (state: __State) (count: Int) (pages: List<(Int * Blob)>) : Stdlib.Result.Result<Unit,String> =
+  Stdlib.Sqlite.__Locks.__try state.shm 120 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired ->
+    if Stdlib.Bool.not acquired then Error "SQLite: database is locked"
+    else __readIndex state.shm state.size |> Stdlib.Result.andThen (fun current ->
+      if Stdlib.Bool.not (__equal current state.index) then Error "SQLite: database snapshot is stale"
+      else
+        let prepared =
+          if state.frame == 0 then
+            __newHeader state.size |> Stdlib.Result.andThen (fun header -> Stdlib.Sqlite.__Io.__writeAt state.fd 0 header |> Stdlib.Result.map (fun _ -> header))
+          else Stdlib.Sqlite.__Io.__readAt state.fd 0 32
+        prepared |> Stdlib.Result.andThen (fun header ->
+          let seed = if state.frame == 0 then (__be header 24 4,__be header 28 4) else (__le current 24 4,__le current 28 4)
+          let (block,key,_) = __location (state.frame + 1)
+          (if key == 1 then Ok () else __cleanHash state.shm block (key - 1))
+          |> Stdlib.Result.andThen (fun _ -> __append state header (state.frame + 1) seed count pages)
+          |> Stdlib.Result.andThen (fun (frame,checksum) -> __publish state.shm (__makeIndex state.size ((__le current 8 4 + 1) % 4294967296) frame count header checksum)))))
+let __close (state: __State) : Stdlib.Result.Result<Unit,String> =
+  let a = Stdlib.Sqlite.__Io.__close state.shm
+  let b = Stdlib.Sqlite.__Io.__close state.fd
+  match (a,b) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ()
+
+// Release the transaction locks while retaining the WAL attachment's DMS lock.
+let __release (state: __State) : Stdlib.Result.Result<Unit,String> =
+  let a = Stdlib.Sqlite.__Locks.__unlock state.shm (123 + state.slot) 1
+  let b = Stdlib.Sqlite.__Locks.__unlock state.shm 120 1
+  match (a,b) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ()
+let __checkpointPages (db: Int) (state: __State) (pages: List<(Int64 * Int)>) : Stdlib.Result.Result<Unit,String> =
+  match pages with
+  | [] -> Ok ()
+  | (page,_) :: rest ->
+    let page = Stdlib.Int.fromInt64 page
+    (if page > state.count then Ok () else __read state page |> Stdlib.Result.andThen (fun value ->
+      match value with | None -> Error "SQLite: missing checkpoint frame" | Some bytes -> Stdlib.Sqlite.__Io.__writeAt db ((page - 1) * state.size) bytes))
+    |> Stdlib.Result.andThen (fun _ -> __checkpointPages db state rest)
+let __checkpointLocked (db: Int) (state: __State) : Stdlib.Result.Result<Unit,String> =
+  __readIndex state.shm state.size |> Stdlib.Result.andThen (fun index ->
+    let frame = __le index 16 4
+    let count = __le index 20 4
+    (if frame == 0 then Ok () else Stdlib.Sqlite.__Io.__readAt state.fd 0 32 |> Stdlib.Result.andThen (fun header ->
+      __map state.shm 1 frame (Dict {}) |> Stdlib.Result.andThen (fun pages ->
+        let snapshot = { state with frame = frame,count = count,header = header,pages = pages,index = index }
+        let others = Stdlib.Dict.toList (Stdlib.Dict.remove pages 1L)
+        let first = match Stdlib.Dict.get pages 1L with | None -> [] | Some n -> [(1L,n)]
+        __checkpointPages db snapshot (others @ first))))
+    |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__truncate db (count * state.size))
+    |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__writeAt state.shm 96 (Stdlib.Blob.concat [__little 0 4,__little 0 4,__little 4294967295 4,__little 4294967295 4,__little 4294967295 4,__little 4294967295 4]))
+    |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__writeAt state.shm 128 (__little 0 4))
+    |> Stdlib.Result.andThen (fun _ -> __publish state.shm (__makeIndex state.size (__le index 8 4) 0 count (Stdlib.Sqlite.__Codec.__zeros 0) (0,0)))
+    |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__truncate state.fd 0))
+let __checkpoint (db: Int) (state: __State) (timeout: Int) : Stdlib.Result.Result<Bool,String> =
+  // Call only between transactions. A busy reader returns BUSY without touching
+  // storage. TRUNCATE waits for every read slot, not just readers of newer frames.
+  Stdlib.Sqlite.__Locks.__try state.shm 120 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun writer ->
+    if Stdlib.Bool.not writer then Ok false
+    else
+      let result = Stdlib.Sqlite.__Locks.__try state.shm 121 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun checkpointer ->
+        if Stdlib.Bool.not checkpointer then Ok false
+        else
+          let result = Stdlib.Sqlite.__Locks.__wait state.shm 123 5 Stdlib.Sqlite.__Locks.__Kind.Exclusive timeout
+          let checked = match result with | Error _ -> Ok false | Ok _ -> __checkpointLocked db state |> Stdlib.Result.map (fun _ -> true)
+          let _ = Stdlib.Sqlite.__Locks.__unlock state.shm 123 5
+          let _ = Stdlib.Sqlite.__Locks.__unlock state.shm 121 1
+          checked)
+      let _ = Stdlib.Sqlite.__Locks.__unlock state.shm 120 1
+      result)

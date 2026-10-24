@@ -380,6 +380,7 @@ let __statement (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * Li
   | Word command :: rest ->
     let command = __lower command
     if command == "select" || command == "with" then __query ([Word command] @ rest) |> Stdlib.Result.map (fun (query,rest) -> (Select query,rest))
+    else if Stdlib.List.contains ["pragma","vacuum","begin","commit","end","rollback"] command then __catalogStatement ([Word command] @ rest) []
     else if command == "create" || command == "alter" then __catalogStatement ([Word command] @ rest) []
     else if command == "drop" && (match rest with | Word word :: _ -> __lower word == "index" | _ -> false) then __catalogStatement ([Word command] @ rest) []
     else if command == "drop" then __eat rest "table" |> Stdlib.Result.andThen (fun rest ->

@@ -1,9 +1,9 @@
 // Demand-loaded SQLite pages with transaction-local dirty pages and before images.
-// No SQLite/libSQL native calls, whole-file replacement, WAL or durable crash recovery.
+// No SQLite/libSQL native calls, whole-file replacement or durable crash recovery.
 module Darklang.Stdlib.Sqlite.__Pager
 
-type __State = { fd: Int, size: Int, count: Int, originalCount: Int,
-  cache: Dict<Int64, Blob>, dirty: Dict<Int64, Blob> }
+type __State = { fd: Int, timeout: Int, size: Int, count: Int, originalCount: Int,
+  cache: Dict<Int64, Blob>, dirty: Dict<Int64, Blob>, wal: Stdlib.Option.Option<Stdlib.Sqlite.__Wal.__State> }
 
 let __get (b: Blob) (o: Int) (w: Int) : Int = Stdlib.Sqlite.__Codec.__beRead b o w
 let __put (b: Blob) (o: Int) (w: Int) (v: Int) : Blob = Stdlib.Sqlite.__Codec.__put b o w v
@@ -15,7 +15,8 @@ let __read (s: __State) (page: Int) : Stdlib.Result.Result<(__State * Blob), Str
   | None ->
     match Stdlib.Dict.get s.cache (Stdlib.Sqlite.__Codec.__i64 page) with
     | Some b -> Ok ((s, b))
-    | None -> Stdlib.Sqlite.__Io.__readAt s.fd ((page - 1) * s.size) s.size |> Stdlib.Result.map (fun b ->
+    | None -> (match s.wal with | None -> Ok None | Some wal -> Stdlib.Sqlite.__Wal.__read wal page)
+      |> Stdlib.Result.andThen (fun value -> match value with | Some b -> Ok b | None -> Stdlib.Sqlite.__Io.__readAt s.fd ((page - 1) * s.size) s.size) |> Stdlib.Result.map (fun b ->
       ({ s with cache = Stdlib.Dict.set s.cache (Stdlib.Sqlite.__Codec.__i64 page) b }, b))
 
 let __write (s: __State) (page: Int) (b: Blob) : Stdlib.Result.Result<__State, String> =
@@ -66,8 +67,8 @@ let __empty (size: Int) : Blob =
 
 let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
   if length == 0 then
-    Ok (__State { fd = fd, size = 4096, count = 1, originalCount = 0,
-      cache = Dict {}, dirty = Stdlib.Dict.singleton 1L (__empty 4096) })
+    Ok (__State { fd = fd, timeout = 5000, size = 4096, count = 1, originalCount = 0,
+      cache = Dict {}, dirty = Stdlib.Dict.singleton 1L (__empty 4096), wal = None })
   else if length < 100 then Error "SQLite: invalid database header"
   else Stdlib.Sqlite.__Io.__readAt fd 0 100 |> Stdlib.Result.andThen (fun header ->
     let rawSize = __get header 16 2
@@ -75,23 +76,28 @@ let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
     let count = if size < 512 then 0 else length / size
     if Stdlib.Blob.toHex (Stdlib.Blob.slice header 0 16) != "53514C69746520666F726D6174203300" then Error "SQLite: not a database"
     else if size < 512 || size > 65536 || (size & (size - 1)) != 0 || length % size != 0 then Error "SQLite: invalid page size"
-    else if __get header 18 1 != 1 || __get header 19 1 != 1 then Error "SQLite: WAL and newer file formats are unsupported"
+    else if (__get header 18 1 != 1 && __get header 18 1 != 2) || __get header 18 1 != __get header 19 1 then Error "SQLite: unsupported journal format"
     else if __get header 20 1 != 0 || __get header 52 4 != 0 || __get header 64 4 != 0 then Error "SQLite: reserved bytes and auto-vacuum are unsupported"
-    else if __get header 56 4 != 1 then Error "SQLite: only UTF-8 databases are supported"
-    else if __get header 44 4 < 1 || __get header 44 4 > 4 then Error "SQLite: unsupported schema format"
+    else if __get header 56 4 != 1 && __get header 18 1 != 2 then Error "SQLite: only UTF-8 databases are supported"
+    else if (__get header 44 4 < 1 || __get header 44 4 > 4) && __get header 18 1 != 2 then Error "SQLite: unsupported schema format"
     else
       let declared = __get header 28 4
       let valid = __get header 24 4 == __get header 92 4 && declared != 0
       if valid && declared > count then Error "SQLite: truncated database"
-      else Ok (__State { fd = fd, size = size, count = if valid then declared else count,
-        originalCount = count, cache = Dict {}, dirty = Dict {} }))
+      else Ok (__State { fd = fd, timeout = 5000, size = size, count = if valid then declared else count,
+        originalCount = count, cache = Dict {}, dirty = Dict {}, wal = None }))
 
 let __open (path: String) : Stdlib.Result.Result<__State, String> =
   if path == ":memory:" || path == "" then Error "SQLite: a filesystem database path is required"
   else Stdlib.Sqlite.__Io.__open path true
   |> Stdlib.Result.andThen (fun fd ->
     let loaded = Stdlib.Sqlite.__Locks.__shared fd 5000 |> Stdlib.Result.andThen (fun _ ->
-      Stdlib.Sqlite.__Io.__size fd |> Stdlib.Result.andThen (fun size -> __load fd size))
+      Stdlib.Sqlite.__Io.__size fd |> Stdlib.Result.andThen (fun size -> __load fd size)
+      |> Stdlib.Result.andThen (fun s ->
+        if s.originalCount == 0 then Ok s
+        else Stdlib.Sqlite.__Io.__readAt fd 18 1 |> Stdlib.Result.andThen (fun mode ->
+          if __get mode 0 1 != 2 then Ok s
+          else Stdlib.Sqlite.__Wal.__open path s.size s.count |> Stdlib.Result.map (fun wal -> { s with count = wal.count, wal = Some wal }))))
     match loaded with
     | Ok s -> Ok s
     | Error e -> let _ = Stdlib.Sqlite.__Io.__close fd in Error e)
@@ -104,18 +110,67 @@ let __flush (s: __State) (pages: List<(Int * Blob)>) : Stdlib.Result.Result<Unit
 
 let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
   if Stdlib.Dict.isEmpty s.dirty then Ok ()
-  else Stdlib.Sqlite.__Locks.__exclusive s.fd 5000 |> Stdlib.Result.andThen (fun _ -> __read s 1)
+  else (match s.wal with | Some _ -> Ok () | None -> Stdlib.Sqlite.__Locks.__exclusive s.fd s.timeout) |> Stdlib.Result.andThen (fun _ -> __read s 1)
   |> Stdlib.Result.andThen (fun (s, header) ->
     let counter = (__get header 24 4 + 1) % 4294967296
     let header = __put (__put (__put header 24 4 counter) 92 4 counter) 28 4 s.count
     let pages = Stdlib.List.map (Stdlib.Dict.toList (Stdlib.Dict.remove s.dirty 1L)) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b)) @ [(1,header)]
-    match __flush s pages with
-    | Ok () -> Ok ()
-    | Error e ->
-      // Before images cover ordinary write errors. They are not power-loss recovery.
-      let originals = Stdlib.List.map (Stdlib.Dict.toList s.cache) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b))
-      match __flush s originals with
-      | Ok () -> Error e
-      | Error rollback -> Error (e + "; rollback also failed: " + rollback))
+    match s.wal with
+    | Some wal -> Stdlib.Sqlite.__Wal.__commit wal s.count pages
+    | None -> match (__flush s pages |> Stdlib.Result.andThen (fun _ -> if s.count < s.originalCount then Stdlib.Sqlite.__Io.__truncate s.fd (s.count * s.size) else Ok ())) with
+      | Ok () -> Ok ()
+      | Error e ->
+        // Before images cover ordinary write errors. They are not power-loss recovery.
+        let originals = Stdlib.List.map (Stdlib.Dict.toList s.cache) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b))
+        match __flush s originals with
+        | Ok () -> Error e
+        | Error rollback -> Error (e + "; rollback also failed: " + rollback))
 
-let __close (s: __State) : Stdlib.Result.Result<Unit, String> = Stdlib.Sqlite.__Io.__close s.fd
+let __close (s: __State) : Stdlib.Result.Result<Unit, String> =
+  let wal = match s.wal with | None -> Ok () | Some wal -> Stdlib.Sqlite.__Wal.__close wal
+  let db = Stdlib.Sqlite.__Io.__close s.fd
+  match (wal,db) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ()
+
+// Connections retain descriptors between commands, but only WAL attachments keep
+// a database SHARED lock while idle. Each new transaction reloads its snapshot.
+let __release (s: __State) : Stdlib.Result.Result<Unit,String> =
+  match s.wal with
+  | Some wal -> Stdlib.Sqlite.__Wal.__release wal
+  | None -> Stdlib.Sqlite.__Locks.__unlock s.fd 1073741824 512
+let __refresh (s: __State) (timeout: Int) : Stdlib.Result.Result<__State,String> =
+  match s.wal with
+  | Some wal -> Stdlib.Sqlite.__Wal.__snapshot wal.fd wal.shm s.size 20 |> Stdlib.Result.map (fun wal ->
+    { s with count = wal.count, originalCount = wal.count, cache = Dict {}, dirty = Dict {}, wal = Some wal })
+  | None -> Stdlib.Sqlite.__Locks.__shared s.fd timeout |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__size s.fd |> Stdlib.Result.andThen (fun length -> __load s.fd length))
+let __stamp (s: __State) : Stdlib.Result.Result<Int,String> =
+  match s.wal with
+  | Some wal -> Stdlib.Sqlite.__Wal.__readIndex wal.shm s.size |> Stdlib.Result.map (fun index -> Stdlib.Sqlite.__Wal.__le index 8 4)
+  | None -> Stdlib.Sqlite.__Io.__readAt s.fd 24 4 |> Stdlib.Result.map (fun bytes -> __get bytes 0 4)
+let __enableWal (path: String) : Stdlib.Result.Result<Unit,String> =
+  __open path |> Stdlib.Result.andThen (fun s ->
+    let result = match s.wal with
+      | Some _ -> Ok ()
+      | None -> __commit s |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Locks.__exclusive s.fd s.timeout)
+        |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__readAt s.fd 0 s.size)
+        |> Stdlib.Result.andThen (fun header ->
+          let counter = (__get header 24 4 + 1) % 4294967296
+          Stdlib.Sqlite.__Io.__writeAt s.fd 0 (__put (__put (__put (__put header 18 1 2) 19 1 2) 24 4 counter) 92 4 counter))
+    let closed = __close s
+    match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ())
+let __copyPages (source: __State) (target: __State) (page: Int) (targetHeader: Blob) : Stdlib.Result.Result<__State,String> =
+  if page > source.count then Ok target
+  else __read source page |> Stdlib.Result.andThen (fun (source,bytes) ->
+    let bytes =
+      if page != 1 then bytes
+      else
+        let mode = match target.wal with | None -> 1 | Some _ -> 2
+        let counter = __get targetHeader 24 4
+        let cookie = (Stdlib.Int.max (__get targetHeader 40 4) (__get bytes 40 4) + 1) % 4294967296
+        __put (__put (__put (__put (__put bytes 18 1 mode) 19 1 mode) 24 4 counter) 92 4 counter) 40 4 cookie
+    (if page > target.originalCount then Ok target else __read target page |> Stdlib.Result.map (fun (state,_) -> state))
+    |> Stdlib.Result.andThen (fun target -> __copyPages source { target with dirty = Stdlib.Dict.setOverridingDuplicates target.dirty (Stdlib.Sqlite.__Codec.__i64 page) bytes } (page + 1) targetHeader))
+let __copy (source: __State) (target: __State) : Stdlib.Result.Result<__State,String> =
+  if target.originalCount != 0 && target.size != source.size then Error "SQLite: backup page size mismatch"
+  else __read target 1 |> Stdlib.Result.andThen (fun (_,header) ->
+    let target = { target with count = Stdlib.Int.max source.count target.count, size = source.size }
+    __copyPages source target 1 header |> Stdlib.Result.map (fun target -> { target with count = source.count }))

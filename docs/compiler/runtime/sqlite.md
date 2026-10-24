@@ -29,8 +29,13 @@ retained for attempting rollback after an ordinary commit write error; if that
 rollback also fails, the returned error reports both failures. Newly appended
 pages may remain beyond the restored logical database size.
 
-There is no fsync protocol, persistent rollback journal, WAL or recovery after
-process termination or power loss. Rollback-mode transactions use SQLite's native
+There is no fsync protocol or persistent rollback journal for power-loss safety.
+WAL snapshots read and append checksum-validated SQLite frames and maintain the
+shared-memory index under SQLite's reader, writer and attachment locks. Native
+interoperability covers committed-frame recovery after an unclean process exit,
+reader snapshots, writer exclusion and WAL restarts. Connection configuration,
+checkpointing and backup/compaction are implemented but their operational regression
+coverage is still in progress. Rollback-mode transactions use SQLite's native
 SHARED, RESERVED and PENDING byte ranges. OFD locks coordinate independent Dark
 connections and native SQLite connections, including connections in one process.
 Readers may coexist; writers wait for readers before committing. Native locking
@@ -40,7 +45,7 @@ Linux is exercised here; the Darwin OFD ABI is implemented but not host-tested.
 ## Supported subset
 
 - UTF-8 SQLite 3 databases with power-of-two page sizes from 512 to 65536 bytes,
-  no reserved page bytes, no auto-vacuum, and rollback-mode file headers.
+  no reserved page bytes, no auto-vacuum, and rollback or WAL file headers.
 - Ordinary rowid tables, text/composite primary and unique keys, or an `INTEGER PRIMARY KEY` alias.
 - SQLite type affinities, `NOT NULL`, literal/function defaults and catalog references.
 - Ordinary, unique, composite, partial and expression indexes with BINARY ordering.
@@ -121,7 +126,7 @@ chains. Their roots remain stable; rebuilding an affected index reclaims and
 reuses its other pages in the statement transaction. Package-store write and
 schema creation and typed mutation tests pass against native SQLite. Reading a
 view or firing triggers is not implemented. Existing records shorter than an
-added column use its declared default. WAL files remain unsupported.
+added column use its declared default. WAL snapshots are supported; operational workflow validation is in progress.
 
 The scalar extension includes searched/simple CASE, COALESCE/IFNULL/NULLIF,
 concatenation, arithmetic, LIKE, length, substr, char, ASCII case conversion,
