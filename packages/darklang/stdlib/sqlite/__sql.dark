@@ -7,10 +7,11 @@ type __Expr = Literal of Stdlib.Sqlite.Value | Column of String | Parameter of S
   | Call of String * List<__Expr> | Unary of String * __Expr | Case of List<(__Expr * __Expr)> * __Expr
 type __Column = { name: String, affinity: String, primary: Bool, notNull: Bool, fallback: Stdlib.Option.Option<__Expr> }
 type __Select = { fields: List<(__Expr * String)>, table: Stdlib.Option.Option<String>,
-  alias: Stdlib.Option.Option<String>, distinct: Bool,
+  alias: Stdlib.Option.Option<String>, arguments: Stdlib.Option.Option<List<__Expr>>, distinct: Bool,
   predicate: Stdlib.Option.Option<__Expr>, order: List<(__Expr * Bool)>, limit: Stdlib.Option.Option<__Expr> }
+type __Conflict = Abort | Ignore | Replace | Upsert of List<String> * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
 type __Statement = Drop of String * Bool
-  | Insert of String * List<String> * List<List<__Expr>> * Bool
+  | Insert of String * List<String> * List<List<__Expr>> * __Conflict
   | Update of String * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
   | Delete of String * Stdlib.Option.Option<__Expr> | Select of __Select | Catalog of List<__Token>
 
@@ -122,6 +123,7 @@ let __atom (tokens: List<__Token>) : Stdlib.Result.Result<(__Expr * List<__Token
   | Symbol "+" :: rest -> __expression rest 7 |> Stdlib.Result.map (fun (expr,rest) -> (Unary ("+",expr),rest))
   | Word word :: rest ->
     if __lower word == "null" then Ok ((Literal Stdlib.Sqlite.Value.Null,rest))
+    else if __lower word == "current_timestamp" then Ok ((Call ("datetime",[Literal (Stdlib.Sqlite.Value.Text "now")]),rest))
     else if __lower word == "true" then Ok ((Literal (Stdlib.Sqlite.Value.Int 1L),rest))
     else if __lower word == "false" then Ok ((Literal (Stdlib.Sqlite.Value.Int 0L),rest))
     else if __lower word == "not" then __expression rest 3 |> Stdlib.Result.map (fun (expr,rest) -> (Unary ("not",expr),rest))
@@ -242,14 +244,17 @@ let __select (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * List<
   __fields tokens |> Stdlib.Result.andThen (fun (fields,rest) ->
     (match rest with
     | Word word :: tail when __lower word == "from" -> __name tail |> Stdlib.Result.andThen (fun (table,rest) ->
-      __alias rest |> Stdlib.Result.map (fun (alias,rest) -> (Some table,alias,rest)))
-    | _ -> Ok ((None,None,rest))) |> Stdlib.Result.andThen (fun (table,alias,rest) ->
+      (match rest with
+       | Symbol "(" :: tail -> __expressions tail |> Stdlib.Result.andThen (fun (args,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (Some args,rest)))
+       | _ -> Ok ((None,rest))) |> Stdlib.Result.andThen (fun (args,rest) ->
+        __alias rest |> Stdlib.Result.map (fun (alias,rest) -> (Some table,alias,args,rest))))
+    | _ -> Ok ((None,None,None,rest))) |> Stdlib.Result.andThen (fun (table,alias,arguments,rest) ->
       __predicate rest |> Stdlib.Result.andThen (fun (predicate,rest) ->
         (match rest with
         | Word word :: tail -> if __lower word == "order" then __eat tail "by" |> Stdlib.Result.andThen __order else Ok (([],rest))
         | _ -> Ok (([],rest))) |> Stdlib.Result.andThen (fun (order,rest) ->
           __limit rest |> Stdlib.Result.map (fun (limit,rest) ->
-            (Select (__Select { fields = fields, table = table, alias = alias, distinct = distinct, predicate = predicate, order = order, limit = limit }),rest))))))
+            (Select (__Select { fields = fields, table = table, alias = alias, arguments = arguments, distinct = distinct, predicate = predicate, order = order, limit = limit }),rest))))))
 
 let __assignments (tokens: List<__Token>) : Stdlib.Result.Result<(List<(String * __Expr)> * List<__Token>), String> =
   __name tokens |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "=" |> Stdlib.Result.andThen (fun rest -> __expression rest 1)
@@ -269,26 +274,46 @@ let __valueRows (tokens: List<__Token>) : Stdlib.Result.Result<(List<List<__Expr
       | Symbol "," :: tail -> __valueRows tail |> Stdlib.Result.map (fun (rows,rest) -> ([values] @ rows,rest))
       | _ -> Ok (([values],rest))))
 
+let __upsert (tokens: List<__Token>) (initial: __Conflict) : Stdlib.Result.Result<(__Conflict * List<__Token>),String> =
+  match tokens with
+  | Word word :: rest when __lower word == "on" ->
+    __eat rest "conflict" |> Stdlib.Result.andThen (fun rest ->
+      (match rest with
+       | Symbol "(" :: tail -> __names tail |> Stdlib.Result.andThen (fun (names,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (names,rest)))
+       | _ -> Ok (([],rest)))
+      |> Stdlib.Result.andThen (fun (target,rest) -> __eat rest "do" |> Stdlib.Result.andThen (fun rest ->
+        match rest with
+        | Word word :: rest when __lower word == "nothing" -> Ok ((Upsert (target,[],None),rest))
+        | _ -> __eat rest "update" |> Stdlib.Result.andThen (fun rest -> __eat rest "set") |> Stdlib.Result.andThen __assignments
+          |> Stdlib.Result.andThen (fun (assignments,rest) -> __predicate rest |> Stdlib.Result.map (fun (predicate,rest) -> (Upsert (target,assignments,predicate),rest))))))
+  | _ -> Ok ((initial,tokens))
+
 let __statement (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * List<__Token>), String> =
   match tokens with
   | Word command :: rest ->
     let command = __lower command
     if command == "select" then __select rest
-    else if command == "create" then __catalogStatement ([Word command] @ rest) []
+    else if command == "create" || command == "alter" then __catalogStatement ([Word command] @ rest) []
+    else if command == "drop" && (match rest with | Word word :: _ -> __lower word == "index" | _ -> false) then __catalogStatement ([Word command] @ rest) []
     else if command == "drop" then __eat rest "table" |> Stdlib.Result.andThen (fun rest ->
       (match rest with
       | Word word :: tail -> if __lower word == "if" then __eat tail "exists" |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok ((false,rest))
       | _ -> Ok ((false,rest))) |> Stdlib.Result.andThen (fun (ignore,rest) -> __name rest |> Stdlib.Result.map (fun (name,rest) -> (Drop (name,ignore),rest))))
-    else if command == "insert" then
+    else if command == "insert" || command == "replace" then
       (match rest with
-      | Word word :: tail -> if __lower word == "or" then __eat tail "ignore" |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok ((false,rest))
-      | _ -> Ok ((false,rest))) |> Stdlib.Result.andThen (fun (ignore,rest) ->
+      | Word word :: tail when __lower word == "or" ->
+        (match tail with
+         | Word mode :: rest when __lower mode == "ignore" -> Ok ((Ignore,rest))
+         | Word mode :: rest when __lower mode == "replace" -> Ok ((Replace,rest))
+         | _ -> Error "SQLite: unsupported conflict mode")
+      | _ -> Ok (((if command == "replace" then Replace else Abort),rest)))
+      |> Stdlib.Result.andThen (fun (conflict,rest) ->
         __eat rest "into" |> Stdlib.Result.andThen __name |> Stdlib.Result.andThen (fun (name,rest) ->
           (match rest with
           | Symbol "(" :: tail -> __names tail |> Stdlib.Result.andThen (fun (names,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (names,rest)))
           | _ -> Ok (([],rest))) |> Stdlib.Result.andThen (fun (names,rest) ->
-            __eat rest "values" |> Stdlib.Result.andThen __valueRows
-            |> Stdlib.Result.map (fun (rows,rest) -> (Insert (name,names,rows,ignore),rest)))))
+            __eat rest "values" |> Stdlib.Result.andThen __valueRows |> Stdlib.Result.andThen (fun (rows,rest) ->
+              __upsert rest conflict |> Stdlib.Result.map (fun (conflict,rest) -> (Insert (name,names,rows,conflict),rest))))))
     else if command == "update" then __name rest |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "set" |> Stdlib.Result.andThen __assignments
       |> Stdlib.Result.andThen (fun (assignments,rest) -> __predicate rest |> Stdlib.Result.map (fun (predicate,rest) -> (Update (name,assignments,predicate),rest))))
     else if command == "delete" then __eat rest "from" |> Stdlib.Result.andThen __name |> Stdlib.Result.andThen (fun (name,rest) ->

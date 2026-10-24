@@ -42,8 +42,10 @@ with another SQLite implementation.
 - Ordinary rowid tables, text/composite primary and unique keys, or an `INTEGER PRIMARY KEY` alias.
 - SQLite type affinities, `NOT NULL`, literal/function defaults and catalog references.
 - Ordinary, unique, composite, partial and expression indexes with BINARY ordering.
-- `CREATE TABLE [IF NOT EXISTS]` and `DROP TABLE [IF EXISTS]`.
-- `INSERT [OR IGNORE] INTO`, optional target columns, one or more `VALUES` tuples.
+- `CREATE TABLE [IF NOT EXISTS]`, `DROP TABLE [IF EXISTS]`, index creation/deletion,
+  `ALTER TABLE ... ADD COLUMN` and `pragma_table_info(table)` column discovery.
+- `INSERT [OR IGNORE|REPLACE] INTO`, optional target columns, one or more `VALUES`
+  tuples, and targeted `ON CONFLICT ... DO NOTHING|UPDATE` with `excluded` and WHERE.
 - `UPDATE ... SET` and `DELETE FROM`, optionally filtered by `WHERE`.
 - Single-table `SELECT` with aliases and `DISTINCT`, or scalar `SELECT` without a table; columns, `*`,
   literals, `AS` aliases, comparisons, `IS [NOT]`, `AND`, `OR`, and parentheses.
@@ -56,8 +58,7 @@ Records are limited to 64 MiB. The engine scans tables rather than using a query
 optimizer. Query results are fully materialized, matching the public API.
 
 Unsupported execution features return errors: views/triggers, joins, subqueries,
-recursive queries, general aggregates/grouping, UPSERT, INSERT SELECT, REPLACE,
-migrations/metadata pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
+recursive queries, general aggregates/grouping, INSERT SELECT, operational pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
 rowid alias through `UPDATE`. Reference clauses are preserved in the catalog;
 foreign-key enforcement/checking is pending. Writes to stores containing views
 or triggers are rejected. This subset does not implement all SQLite numeric-string
@@ -109,7 +110,7 @@ added column use its declared default. WAL files remain unsupported.
 
 The scalar extension includes searched/simple CASE, COALESCE/IFNULL/NULLIF,
 concatenation, arithmetic, LIKE, length, substr, char, ASCII case conversion,
-typeof, JSON extraction of `$`, `$[index]` and `$.field`, datetime and the package
+typeof, JSON extraction of `$`, `$[index]` and `$.field`, json_each key/value rows, datetime and the package
 schema's strftime format. UTF-8 processing preserves SQLite text bytes and counts
 codepoints. General JSON paths, date modifiers and strftime formats remain
 unsupported. Native differential tests cover typed cells and the unchanged
@@ -118,11 +119,14 @@ package-store schema in addition to the original page interoperability suite.
 Remaining milestones, in dependency order:
 
 1. Complete dynamic SQL workload captures and assertions for each call site.
-2. Implement migrations, metadata queries and foreign-key checks. Index maintenance currently rebuilds affected trees;
+2. Implement remaining metadata/operational pragmas and foreign-key checks.
+   Column additions, column discovery and index recreation are covered.
+   Index maintenance currently rebuilds affected trees;
    incremental index deletion/rebalancing remains a performance improvement.
 3. Aliases, joins, DISTINCT, subqueries/tuple IN, grouping/aggregates and recursive
    CTE execution needed by dependency and branch queries.
-4. Bulk INSERT, INSERT SELECT, REPLACE and UPSERT/excluded semantics.
+4. INSERT SELECT and expression/subquery writes. Multirow VALUES, REPLACE and
+   targeted UPSERT/excluded semantics are covered.
 5. Long-lived connections with SQLite locking, WAL, checkpointing, data_version,
    required pragmas, consistent backup/restore and VACUUM.
 6. Interpreter package authoring, branch/merge, projection rebuild, migration and

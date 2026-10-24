@@ -133,7 +133,42 @@ def main():
         before = db.read_bytes()
         assert run("INSERT INTO package_dependencies VALUES ('fn-a','type-a','type','','','')",mode='exec').startswith('Error ')
         assert db.read_bytes()==before,'unique expression index failure changed the file'
+        # Run the interpreter's literal UPSERTs, retaining their $/@ bindings,
+        # qualified predicates and excluded-column references.
+        def source_sql(path, line):
+            return next(entry['sql'] for entry in corpus['entries'] if entry['source'].endswith('/'+path) and entry['line']==line)
+        config_sql = source_sql('Config.fs',39)
+        execute(config_sql,{'@key':'setting','@value':'old'})
+        execute(config_sql,{'@key':'setting','@value':'new'})
+        assert connection.execute("SELECT value FROM config_v0 WHERE key='setting'").fetchone()==('new',)
+        op_sql = source_sql('Inserts.fs',221)
+        op_params = {'@id':'op-a','@op_blob':b'received','@applied':1,'@origin_ts':'2026-10-24T00:00:00.000Z','@commit_hash':None}
+        execute(op_sql,op_params,count=0)
+        execute("UPDATE package_ops SET effective=0 WHERE id='op-a'")
+        execute(op_sql,op_params)
+        assert connection.execute("SELECT effective,applied,op_blob,origin_ts,commit_hash FROM package_ops WHERE id='op-a'").fetchone()==(1,0,b'\x00\xff',op_params['@origin_ts'],None)
+        docs_sql = source_sql('Docs.fs',613)
+        doc_params = {'$owner':'Darklang','$modules':'Example','$name':'a','$kind':'item','$within':'','$text':'first','$ts':'1'}
+        execute(docs_sql,doc_params)
+        doc_params.update({'$text':'second','$ts':'2'})
+        execute(docs_sql,doc_params)
+        assert connection.execute('SELECT text,origin_ts FROM location_docs').fetchall()==[('second','2')]
+        next_rowid = connection.execute('SELECT max(rowid)+1 FROM config_v0').fetchone()[0]
+        execute("INSERT OR REPLACE INTO config_v0(key,value) VALUES ('setting','replaced')")
+        assert connection.execute("SELECT rowid,value FROM config_v0 WHERE key='setting'").fetchone()==(next_rowid,'replaced')
         execute("DELETE FROM package_types WHERE hash='type-b'")
+        # The migration SQL discovers columns through the eponymous pragma table.
+        check("SELECT cid,name,type,\"notnull\",dflt_value,pk FROM pragma_table_info('config_v0') ORDER BY cid")
+        execute("ALTER TABLE config_v0 ADD COLUMN engine_probe INTEGER NOT NULL DEFAULT '3'",count=-1)
+        check('SELECT engine_probe,typeof(engine_probe) AS storage FROM config_v0 ORDER BY key')
+        check("SELECT 1 AS n FROM pragma_table_info('config_v0') WHERE name=@c",{'@c':'engine_probe'})
+        before=db.read_bytes()
+        assert run('ALTER TABLE config_v0 ADD COLUMN bad TEXT NOT NULL',mode='exec').startswith('Error ')
+        assert db.read_bytes()==before,'failed migration changed pages'
+        execute('DROP INDEX idx_package_values_type',count=-1)
+        execute('CREATE INDEX idx_package_values_type ON package_values(value_type)',count=-1)
+        check('SELECT key,value FROM json_each(@list) ORDER BY key',{'@list':'[9007199254740993,null,true,"snow 雪"]'})
+        check("SELECT key,json_extract(value,'$[0]') AS a FROM json_each(@list) ORDER BY key",{'@list':'[["hash-a"],["hash-b"]]'})
         created = root/'dark-created.db'
         output = run((fixtures/'schema.sql').read_text(),mode='exec',path=created)
         assert output=='Ok 4',output  # Four account seed rows; DDL contributes no count.

@@ -82,8 +82,12 @@ let __partKeys (columns: List<Stdlib.Sqlite.__Sql.__Column>) (tokens: List<Stdli
         | _ -> rest
       __columnKeys column rest)
 
+let __keyFields (key: __Key) : List<Stdlib.Sqlite.__Sql.__Expr> =
+  Stdlib.List.map key.fields (fun expr -> match expr with | Column name -> Stdlib.Sqlite.__Sql.__Expr.Column (__lower name) | _ -> expr)
 let __appendKey (keys: List<__Key>) (key: __Key) : List<__Key> =
-  if Stdlib.List.any keys (fun old -> old.fields == key.fields) then keys else keys @ [key]
+  if Stdlib.List.any keys (fun old -> __keyFields old == __keyFields key) then
+    Stdlib.List.map keys (fun old -> if __keyFields old == __keyFields key then { old with primary = old.primary || key.primary } else old)
+  else keys @ [key]
 
 let __table (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<__Definition,String> =
   Stdlib.Sqlite.__Sql.__eat tokens "create" |> Stdlib.Result.andThen (fun tokens -> Stdlib.Sqlite.__Sql.__eat tokens "table")
@@ -93,7 +97,8 @@ let __table (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<_
       |> Stdlib.Result.andThen (fun (parts,rest) -> __end rest |> Stdlib.Result.andThen (fun _ ->
         let sql = __render tokens
         Stdlib.Sqlite.__Sql.__catalogColumns sql |> Stdlib.Result.andThen (fun columns ->
-          Stdlib.List.fold parts (Ok []) (fun result part -> result |> Stdlib.Result.andThen (fun keys ->
+          if Stdlib.List.length (Stdlib.List.filter parts (fun part -> Stdlib.Sqlite.__Sql.__catalogHas part "primary" "key")) > 1 then Error "SQLite: multiple primary keys"
+          else Stdlib.List.fold parts (Ok []) (fun result part -> result |> Stdlib.Result.andThen (fun keys ->
             __partKeys columns part |> Stdlib.Result.map (fun more -> keys @ more)))
           |> Stdlib.Result.map (fun keys ->
             let keys = Stdlib.List.fold keys [] __appendKey
@@ -114,3 +119,37 @@ let __auto (table: __Definition) (index: Int) : Stdlib.Option.Option<__Index> =
   Stdlib.List.getAt table.keys (index - 1) |> Stdlib.Option.map (fun key ->
     __Index { name = "sqlite_autoindex_" + table.name + "_" + Stdlib.Int.toString index, table = table.name, ignore = false,
       unique = true, fields = key.fields, predicate = None, sql = "" })
+
+let __addColumn (definition: __Definition) (addition: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<__Definition,String> =
+  Stdlib.Sqlite.__Sql.__lex definition.sql 0 [] |> Stdlib.Result.andThen (fun tokens ->
+    let tokens = Stdlib.List.take tokens (Stdlib.List.length tokens - 1) @ [Stdlib.Sqlite.__Sql.__Token.Symbol ","] @ addition @ [Stdlib.Sqlite.__Sql.__Token.Symbol ")"]
+    __table tokens)
+
+let __expressionText (expr: Stdlib.Sqlite.__Sql.__Expr) : String =
+  match expr with
+  | Literal value -> __render [Stdlib.Sqlite.__Sql.__Token.Atom value]
+  | Column name -> __quote name 34L
+  | Parameter name -> name
+  | Call (name,args) -> name + "(" + Stdlib.String.join (Stdlib.List.map args __expressionText) "," + ")"
+  | Unary (op,inner) -> op + __expressionText inner
+  | Binary (left,op,right) -> "(" + __expressionText left + " " + op + " " + __expressionText right + ")"
+  | Cast (inner,kind) -> "CAST(" + __expressionText inner + " AS " + kind + ")"
+  | Count -> "count(*)"
+  | Star -> "*"
+  | Case (arms,fallback) -> "CASE " + Stdlib.String.join (Stdlib.List.map arms (fun (condition,value) -> "WHEN " + __expressionText condition + " THEN " + __expressionText value)) " " + " ELSE " + __expressionText fallback + " END"
+
+let __constantDefault (fallback: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) : Bool =
+  match fallback with
+  | None -> true
+  | Some (Literal _) -> true
+  | Some (Unary (op,Literal _)) -> op == "+" || op == "-"
+  | _ -> false
+
+let __findDeclaredType (tokens: List<Stdlib.Sqlite.__Sql.__Token>) (column: String) : String =
+  match tokens with
+  | Word name :: Word kind :: rest -> if __lower name == __lower column then Stdlib.String.toUppercase kind else __findDeclaredType ([Stdlib.Sqlite.__Sql.__Token.Word kind] @ rest) column
+  | Quoted name :: Word kind :: rest -> if __lower name == __lower column then Stdlib.String.toUppercase kind else __findDeclaredType ([Stdlib.Sqlite.__Sql.__Token.Word kind] @ rest) column
+  | _ :: rest -> __findDeclaredType rest column
+  | [] -> ""
+let __declaredType (definition: __Definition) (column: String) : String =
+  match Stdlib.Sqlite.__Sql.__lex definition.sql 0 [] with | Error _ -> "" | Ok tokens -> __findDeclaredType tokens column
