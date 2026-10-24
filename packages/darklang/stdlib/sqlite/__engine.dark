@@ -22,26 +22,29 @@ let __columnsValid (columns: List<Stdlib.Sqlite.__Sql.__Column>) : Stdlib.Result
   else if Stdlib.List.length (Stdlib.List.filter columns (fun c -> c.primary)) > 1 then Error "SQLite: multiple primary keys"
   else Ok ()
 
-let __schemaEntry (entry: Stdlib.Sqlite.__Btree.__Entry) : Stdlib.Result.Result<__Table, String> =
+let __schemaEntry (entry: Stdlib.Sqlite.__Btree.__Entry) (readOnly: Bool) : Stdlib.Result.Result<Stdlib.Option.Option<__Table>, String> =
   Stdlib.Sqlite.__Codec.__decodeRecord entry.payload |> Stdlib.Result.andThen (fun values ->
     match values with
-    | [kind, name, tableName, root, definition] ->
-      (match (kind,name,tableName,root,definition) with
-      | (Text kind,Text name,Text tableName,Int root,Text sql) ->
-        if kind != "table" || name != tableName || root <= 1L then Error "SQLite: indexes, views and triggers are unsupported"
-        else Stdlib.Sqlite.__Sql.__parse sql |> Stdlib.Result.andThen (fun statement ->
-          match statement with
-          | Create (parsedName,_,columns) ->
-            if __lower parsedName != __lower name then Error "SQLite: inconsistent schema name"
-            else __columnsValid columns |> Stdlib.Result.map (fun _ -> __Table { name = name, root = Stdlib.Int.fromInt64 root, columns = columns, schemaKey = entry.key })
-          | _ -> Error "SQLite: unsupported schema declaration")
-      | _ -> Error "SQLite: malformed schema record")
+    | [Text kind,Text name,Text tableName,Int root,definition] ->
+      if kind == "index" || kind == "view" || kind == "trigger" then
+        if readOnly then Ok None else Error "SQLite: writing indexed tables, views and triggers is unsupported"
+      else if kind != "table" || name != tableName || root <= 1L then Error "SQLite: malformed schema record"
+      else match definition with
+        | Text sql ->
+          (if readOnly then Stdlib.Sqlite.__Sql.__catalogColumns sql
+           else Stdlib.Sqlite.__Sql.__parse sql |> Stdlib.Result.andThen (fun statement ->
+             match statement with
+             | Create (_,_,columns) -> Ok columns
+             | _ -> Error "SQLite: unsupported schema declaration"))
+          |> Stdlib.Result.andThen (fun columns -> __columnsValid columns |> Stdlib.Result.map (fun _ ->
+            Some (__Table { name = name, root = Stdlib.Int.fromInt64 root, columns = columns, schemaKey = entry.key })))
+        | _ -> Error "SQLite: malformed table definition"
     | _ -> Error "SQLite: malformed schema record")
 
-let __schema (s: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<__Table>), String> =
+let __schema (s: Stdlib.Sqlite.__Pager.__State) (readOnly: Bool) : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<__Table>), String> =
   Stdlib.Sqlite.__Btree.__scan s 1 |> Stdlib.Result.andThen (fun (s,entries) ->
     Stdlib.List.fold entries (Ok []) (fun result entry -> result |> Stdlib.Result.andThen (fun tables ->
-      __schemaEntry entry |> Stdlib.Result.map (fun table -> tables @ [table])))
+      __schemaEntry entry readOnly |> Stdlib.Result.map (fun table -> match table with | None -> tables | Some table -> tables @ [table])))
     |> Stdlib.Result.map (fun tables -> (s,tables)))
 
 let __find (tables: List<__Table>) (name: String) : Stdlib.Result.Result<__Table, String> =
@@ -57,6 +60,9 @@ let __rowFields (columns: List<Stdlib.Sqlite.__Sql.__Column>) (fields: List<Stdl
     let value = if c.primary then Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 key) else field
     let value = if c.affinity == "real" then Stdlib.Sqlite.__Eval.__coerce "real" value else value
     __rowFields columns fields key (Stdlib.Dict.setOverridingDuplicates row (__lower c.name) value)
+  | (c :: columns,[]) ->
+    (match c.fallback with | None -> Ok Stdlib.Sqlite.Value.Null | Some expr -> Stdlib.Sqlite.__Eval.__eval [] (Dict {}) (Dict {}) expr)
+    |> Stdlib.Result.andThen (fun value -> __rowFields columns [] key (Stdlib.Dict.setOverridingDuplicates row (__lower c.name) value))
   | _ -> Error "SQLite: record width does not match schema"
 
 let __row (table: __Table) (entry: Stdlib.Sqlite.__Btree.__Entry) : Stdlib.Result.Result<__Row, String> =
@@ -214,7 +220,7 @@ let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List
 
 let __run (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String, Stdlib.Sqlite.Value>)
   : Stdlib.Result.Result<__Outcome, String> =
-  __schema s |> Stdlib.Result.andThen (fun (s,tables) ->
+  __schema s (match statement with | Select _ -> true | _ -> false) |> Stdlib.Result.andThen (fun (s,tables) ->
     match statement with
     | Create (name,ignore,columns) -> __create s tables name ignore columns
     | Drop (name,ignore) ->

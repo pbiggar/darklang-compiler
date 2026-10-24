@@ -106,3 +106,15 @@
  (alias runtest)
  (deps sqlite_interop.py)
  (action (run python3 %{dep:sqlite_interop.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps sqlite_package_store.py (source_tree ../fixtures/sqlite-package))
+ (action (run python3 %{dep:sqlite_package_store.py} %{exe:../../bin/dark.exe} ../fixtures/sqlite-package)))
+
+(rule
+ (alias runtest)
+ (deps sqlite_package_corpus.py ../../scripts/update-sqlite-package-corpus.py
+  (source_tree ../fixtures/sqlite-package))
+ (action (run python3 %{dep:sqlite_package_corpus.py} ../fixtures/sqlite-package
+  %{dep:../../scripts/update-sqlite-package-corpus.py})))

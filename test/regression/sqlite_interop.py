@@ -35,6 +35,19 @@ let mode = env "SQLITE_TEST_MODE"
 if mode == "bulk" then
   let rows = Stdlib.List.map (Stdlib.List.range 1 500) (fun i -> [Stdlib.Int.toString i, "row " + Stdlib.Int.toString i + paramsText])
   Stdlib.printLine (reportBatch (Stdlib.Sqlite.execBatch db [(sql,rows)]))
+else if mode == "transaction" || mode == "abort" || mode == "rebind" then
+  let result = Stdlib.Sqlite.__Engine.__transaction db (fun state ->
+    Stdlib.Sqlite.__Engine.__prepare "INSERT INTO t VALUES ($id,$name)" |> Stdlib.Result.andThen (fun prepared ->
+      Stdlib.Sqlite.__Engine.__executePrepared state prepared (Dict { "$id": Stdlib.Sqlite.Value.Int 601L, "$name": Stdlib.Sqlite.Value.Text "pending" })
+      |> Stdlib.Result.andThen (fun first ->
+        let bindings = if mode == "rebind" then Dict { "$id": Stdlib.Sqlite.Value.Int 602L } else Dict { "$id": Stdlib.Sqlite.Value.Int 602L, "$name": Stdlib.Sqlite.Value.Text "second" }
+        Stdlib.Sqlite.__Engine.__executePrepared first.state prepared bindings |> Stdlib.Result.andThen (fun second ->
+          Stdlib.Sqlite.__Engine.__prepare "SELECT name FROM t WHERE id=$id" |> Stdlib.Result.andThen (fun query ->
+            Stdlib.Sqlite.__Engine.__executePrepared second.state query (Dict { "$id": Stdlib.Sqlite.Value.Int 601L })
+            |> Stdlib.Result.andThen (fun queried ->
+              if mode == "abort" then Error "deliberate abort"
+              else Ok ((queried.state,queried.rows))))))))
+  Stdlib.printLine (reportQuery result)
 else if mode == "query" then
   Stdlib.printLine (reportQuery (Stdlib.Sqlite.queryP db sql params))
 else if mode == "rollback" then
@@ -49,7 +62,7 @@ def main():
         root = Path(temporary)
         source, binary, db = (root / n for n in ("sqlite.dark", "sqlite", "test.db"))
         source.write_text(PROGRAM)
-        built = subprocess.run([compiler, "-q", str(source), "-o", str(binary)],
+        built = subprocess.run([compiler, "--allow-internal", "-q", str(source), "-o", str(binary)],
                                capture_output=True, text=True, timeout=180)
         assert built.returncode == 0, built.stdout + built.stderr
 
@@ -82,6 +95,15 @@ def main():
         page_size = int.from_bytes(after[16:18], "big")
         changed = [i for i in range(0,len(before),page_size) if before[i:i+page_size] != after[i:i+page_size]]
         assert len(changed) <= 2, changed  # Header and the modified leaf; unrelated pages stay intact.
+        before = db.read_bytes()
+        assert run("", mode="abort") == "Error deliberate abort"
+        assert db.read_bytes() == before, "a failed transaction changed database pages"
+        assert "missing bound parameter: $name" in run("", mode="rebind")
+        assert db.read_bytes() == before, "a reused prepared command retained an old binding"
+        assert run("", mode="transaction") == "Ok name=pending"
+        with sqlite3.connect(db) as connection:
+            assert connection.execute("SELECT name FROM t WHERE id IN (601,602) ORDER BY id").fetchall() == [("pending",),("second",)]
+            assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
         ok("DELETE FROM t WHERE id > 400")
         with sqlite3.connect(db) as connection:
             assert connection.execute("SELECT name FROM t WHERE id=250").fetchone() == ("changed",)
@@ -121,9 +143,13 @@ def main():
             connection.execute("INSERT INTO v VALUES (2,9223372036854775807,?,?,?)", (5e-324, "雪", b"big"*2000))
         assert "9223372036854775807" in ok("SELECT n FROM v WHERE id=2", mode="query", path=types)
         before = types.read_bytes()
-        for sql in ["SELECT missing FROM v WHERE id=999", "SELECT n FROM v JOIN v x", "CREATE INDEX nope ON v(n)", "INSERT INTO v VALUES (3,4,5,6,7); DELETE FROM v"]:
+        for sql in ["SELECT missing FROM v WHERE id=999", "SELECT n FROM v JOIN v x", "CREATE INDEX nope ON v(n)"]:
             assert run(sql, path=types).startswith("Error"), sql
             assert types.read_bytes() == before, sql
+        before = types.read_bytes()
+        assert run("INSERT INTO v VALUES (3,4,5,6,7); INSERT INTO v VALUES (3,8,9,10,11)", path=types).startswith("Error")
+        assert types.read_bytes() == before, "a failing multi-statement command committed its prefix"
+        ok("INSERT INTO v VALUES (3,4,5,6,7); DELETE FROM v WHERE id=3;", path=types)
         invalid = root / "invalid.db"
         invalid.write_bytes(b"not sqlite")
         assert run("SELECT 1", path=invalid).startswith("Error")

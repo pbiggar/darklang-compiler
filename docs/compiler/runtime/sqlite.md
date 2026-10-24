@@ -73,3 +73,52 @@ Dark executable and exchanges files with Python's SQLite engine. It checks nativ
 freelist reuse, batch rollback, and unchanged bytes in unrelated pages after an
 update. Python SQLite is a test oracle only, never a runtime dependency of the
 generated program.
+
+## Interpreter package-store compatibility work
+
+The extension targets interpreter revision
+`9ca42515810126f9cdf8ab9704ae44cc7e2e7241`. The unchanged initial schema is in
+`test/fixtures/sqlite-package/schema.sql`. `corpus.json` inventories 263 source
+SQL entries from LibDB and SCM, including 54 dynamic templates. The extraction
+excludes tracing and test-process queries, while retaining their shared tables.
+Regenerate with `python3 scripts/update-sqlite-package-corpus.py INTERPRETER`;
+`--check` verifies the pin and source hashes without writing files.
+
+The static corpus regression prepares 237 concrete statements against native
+SQLite. This verifies the reference inputs, **not Dark engine coverage**.
+Dynamic templates still require complete workload captures, including the
+variable table/column lists and shared CTE prefixes assembled at runtime.
+
+The engine now has a private typed binding interface (`__executeTyped`) with
+case-sensitive `@name`, `$name` and `:name` keys. Public string arguments still
+bind as `@p0`, `@p1`, etc. Prepared programs hold syntax without old bindings;
+`__transaction` supplies one scoped pager across reads and writes and commits
+only after the callback succeeds. Multiple statements are parsed together and
+share that transaction. These internal operations do not add public Stdlib API.
+
+The catalog reader accepts rowid tables with text/composite keys, defaults,
+references and associated indexes for table-scan SELECTs. Writes to such stores
+are still rejected until index/constraint maintenance is implemented. Reading a
+view or firing triggers is not implemented. Existing records shorter than an
+added column use its declared default. WAL files remain unsupported.
+
+The scalar extension includes searched/simple CASE, COALESCE/IFNULL/NULLIF,
+concatenation, arithmetic, LIKE, length, substr, char, ASCII case conversion,
+typeof, JSON extraction of `$`, `$[index]` and `$.field`, datetime and the package
+schema's strftime format. UTF-8 processing preserves SQLite text bytes and counts
+codepoints. General JSON paths, date modifiers and strftime formats remain
+unsupported. Native differential tests cover typed cells and the unchanged
+package-store schema in addition to the original page interoperability suite.
+
+Remaining milestones, in dependency order:
+
+1. Complete dynamic SQL workload captures and assertions for each call site.
+2. Schema creation/migrations and ordinary, unique, composite, partial and
+   expression index maintenance; defaults, affinities and foreign keys on writes.
+3. Aliases, joins, DISTINCT, subqueries/tuple IN, grouping/aggregates and recursive
+   CTE execution needed by dependency and branch queries.
+4. Bulk INSERT, INSERT SELECT, REPLACE and UPSERT/excluded semantics.
+5. Long-lived connections with SQLite locking, WAL, checkpointing, data_version,
+   required pragmas, consistent backup/restore and VACUUM.
+6. Interpreter package authoring, branch/merge, projection rebuild, migration and
+   export/restore workflow parity. The interpreter store is not switched over.

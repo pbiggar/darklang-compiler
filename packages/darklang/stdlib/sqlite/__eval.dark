@@ -99,6 +99,135 @@ let __affinity (columns: List<Stdlib.Sqlite.__Sql.__Column>) (expr: Stdlib.Sqlit
   | Cast (_,affinity) -> affinity
   | _ -> "blob"
 
+// SQL text operations count Unicode codepoints, unlike Dark grapheme operations.
+let __codepoints (value: Stdlib.Sqlite.Value) : List<Int64> =
+  Stdlib.String.__toCodepoints (__text value)
+let __fromCodepoints (points: List<Int64>) : String =
+  Stdlib.String.__fromCodepointsRaw (Stdlib.List.map points (fun point ->
+    if Stdlib.String.__Unicode.isScalar point then point else 65533L))
+let __untilZero (points: List<Int64>) : List<Int64> =
+  match points with | [] -> [] | 0L :: _ -> [] | p :: rest -> [p] @ __untilZero rest
+let __asciiLower (point: Int64) : Int64 = if point >= 65L && point <= 90L then point + 32L else point
+let __like (pattern: List<Int64>) (text: List<Int64>) : Bool =
+  match pattern with
+  | [] -> Stdlib.List.isEmpty text
+  | 37L :: rest -> __like rest text || (match text with | [] -> false | _ :: tail -> __like pattern tail)
+  | point :: rest ->
+    match text with
+    | [] -> false
+    | c :: tail -> (point == 95L || __asciiLower point == __asciiLower c) && __like rest tail
+let __integer (value: Stdlib.Sqlite.Value) : Int =
+  match __numeric value with
+  | Int i -> Stdlib.Int.fromInt64 i
+  | Real f -> Stdlib.Int.fromFloat f
+  | _ -> 0
+let __arithmetic (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
+  let a = __numeric a
+  let b = __numeric b
+  let ai = __integer a
+  let bi = __integer b
+  let af = match a with | Real f -> f | _ -> Stdlib.Int.toFloat ai
+  let bf = match b with | Real f -> f | _ -> Stdlib.Int.toFloat bi
+  let bothInt = (match a with | Real _ -> false | _ -> true) && (match b with | Real _ -> false | _ -> true)
+  if (operator == "/" || operator == "%") && bf == 0.0 then Stdlib.Sqlite.Value.Null
+  else if operator == "%" then
+    if bi == 0 then Stdlib.Sqlite.Value.Null
+    else let result = ai - (ai / bi) * bi in
+      if bothInt then Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 result) else Stdlib.Sqlite.Value.Real (Stdlib.Int.toFloat result)
+  else
+    let n = if Stdlib.Bool.not bothInt then 0 else if operator == "+" then ai + bi else if operator == "-" then ai - bi else if operator == "*" then ai * bi else ai / bi
+    if bothInt && n >= -9223372036854775808 && n <= 9223372036854775807 then Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 n)
+    else Stdlib.Sqlite.Value.Real (if operator == "+" then af + bf else if operator == "-" then af - bf else if operator == "*" then af * bf else af / bf)
+
+let __jsonCell (json: Stdlib.AltJson.__InternalRawJson) : Stdlib.Sqlite.Value =
+  match json with
+  | RawNull _ -> Stdlib.Sqlite.Value.Null
+  | RawBool (b,_) -> __bool b
+  | RawNumber (lexeme,_) ->
+    match Stdlib.Int64.parse lexeme with
+    | Ok n -> Stdlib.Sqlite.Value.Int n
+    | Error _ -> (match Stdlib.Float.parse lexeme with | Ok f -> Stdlib.Sqlite.Value.Real f | Error _ -> Stdlib.Sqlite.Value.Null)
+  | RawString (value,_) -> Stdlib.Sqlite.Value.Text value
+  | _ -> Stdlib.Sqlite.Value.Text (Stdlib.AltJson.__rawSource json)
+let __jsonPath (json: Stdlib.AltJson.__InternalRawJson) (path: String) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
+  if path == "$" then Ok (__jsonCell json)
+  else if Stdlib.String.startsWith path "$[" && Stdlib.String.endsWith path "]" then
+    let index = Stdlib.Sqlite.__Sql.__slice path 2 (Stdlib.Int.fromInt64 (Stdlib.String.__byteLength path) - 1)
+    Stdlib.Int.parse index |> Stdlib.Result.mapError (fun _ -> "SQLite: invalid JSON array path") |> Stdlib.Result.andThen (fun n ->
+      if n < 0 then Error "SQLite: invalid JSON array path"
+      else match json with
+        | RawArray (values,_) -> Ok (Stdlib.List.getAt values n |> Stdlib.Option.map __jsonCell |> Stdlib.Option.withDefault Stdlib.Sqlite.Value.Null)
+        | _ -> Ok Stdlib.Sqlite.Value.Null)
+  else if Stdlib.String.startsWith path "$." then
+    let key = Stdlib.Sqlite.__Sql.__slice path 2 (Stdlib.Int.fromInt64 (Stdlib.String.__byteLength path))
+    match json with
+    | RawObject (fields,_) -> Ok (Stdlib.List.findFirst fields (fun (name,_) -> name == key) |> Stdlib.Option.map (fun (_,v) -> __jsonCell v) |> Stdlib.Option.withDefault Stdlib.Sqlite.Value.Null)
+    | _ -> Ok Stdlib.Sqlite.Value.Null
+  else Error "SQLite: unsupported JSON path"
+
+let __functionValid (name: String) (count: Int) : Bool =
+  if name == "coalesce" then count >= 2
+  else if name == "ifnull" || name == "nullif" || name == "json_extract" then count == 2
+  else if name == "length" || name == "lower" || name == "upper" || name == "typeof" then count == 1
+  else if name == "substr" || name == "substring" then count == 2 || count == 3
+  else if name == "char" then true
+  else if name == "datetime" then count == 1
+  else if name == "strftime" then count == 2 else false
+
+let __call (name: String) (args: List<Stdlib.Sqlite.Value>) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
+  if Stdlib.Bool.not (__functionValid name (Stdlib.List.length args)) then Error ("SQLite: unsupported function or wrong argument count: " + name)
+  else if name == "coalesce" || name == "ifnull" then Ok (Stdlib.List.findFirst args (fun value -> __rank value != 0) |> Stdlib.Option.withDefault Stdlib.Sqlite.Value.Null)
+  else if name == "char" then Ok (Stdlib.Sqlite.Value.Text (__fromCodepoints (Stdlib.List.map args (fun v -> Stdlib.Sqlite.__Codec.__i64 (__integer v)))))
+  else if name == "typeof" then
+    match args with
+    | [value] -> Ok (Stdlib.Sqlite.Value.Text (match value with | Null -> "null" | Int _ -> "integer" | Real _ -> "real" | Text _ -> "text" | Bytes _ -> "blob"))
+    | _ -> Error "SQLite: invalid typeof arguments"
+  else if Stdlib.List.any args (fun value -> __rank value == 0) && name != "nullif" then Ok Stdlib.Sqlite.Value.Null
+  else if name == "nullif" then
+    match args with
+    | [a,b] -> Ok (if __rank a == 0 || (__rank b != 0 && __compare a b == 0) then Stdlib.Sqlite.Value.Null else a)
+    | _ -> Error "SQLite: invalid nullif arguments"
+  else if name == "length" then
+    match args with
+    | [Bytes b] -> Ok (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 (Stdlib.Blob.length b)))
+    | [value] -> Ok (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 (Stdlib.List.length (__untilZero (__codepoints value)))))
+    | _ -> Error "SQLite: invalid length arguments"
+  else if name == "lower" || name == "upper" then
+    match args with
+    | [value] -> Ok (Stdlib.Sqlite.Value.Text (__fromCodepoints (Stdlib.List.map (__codepoints value) (fun c -> if name == "lower" then __asciiLower c else if c >= 97L && c <= 122L then c - 32L else c))))
+    | _ -> Error "SQLite: invalid case conversion arguments"
+  else if name == "substr" || name == "substring" then
+    match args with
+    | value :: start :: rest ->
+      let isBlob = match value with | Bytes _ -> true | _ -> false
+      let points = match value with | Bytes b -> Stdlib.List.map (Stdlib.List.range 0 (Stdlib.Blob.length b - 1)) (fun i -> Stdlib.Sqlite.__Codec.__i64 (Stdlib.Sqlite.__Codec.__byte b i)) | _ -> __untilZero (__codepoints value)
+      let total = Stdlib.List.length points
+      let position = __integer start
+      let length = match rest with | [] -> total | n :: _ -> __integer n
+      let offset = if position > 0 then position - 1 else if position < 0 then total + position else 0
+      let (offset,length) = if length < 0 then (offset + length,0 - length) else (offset,if position == 0 then Stdlib.Int.max 0 (length - 1) else length)
+      let length = if offset < 0 then Stdlib.Int.max 0 (length + offset) else length
+      let selected = Stdlib.List.take (Stdlib.List.drop points (Stdlib.Int.max 0 offset)) length
+      Ok (if isBlob then Stdlib.Sqlite.Value.Bytes (Stdlib.Blob.__fromInt64List selected) else Stdlib.Sqlite.Value.Text (__fromCodepoints selected))
+    | _ -> Error "SQLite: invalid substr arguments"
+  else if name == "json_extract" then
+    match args with
+    | [source,path] -> Stdlib.AltJson.__parseRaw (__text source) |> Stdlib.Result.mapError (fun _ -> "SQLite: malformed JSON")
+      |> Stdlib.Result.andThen (fun json -> __jsonPath json (__text path))
+    | _ -> Error "SQLite: invalid JSON arguments"
+  else
+    let source = match args with | [value] -> __text value | [_,value] -> __text value | _ -> ""
+    let date = if source == "now" then Ok (Stdlib.DateTime.now ()) else Stdlib.DateTime.parse source |> Stdlib.Result.mapError (fun _ -> "SQLite: invalid date")
+    match date with
+    | Error _ -> Ok Stdlib.Sqlite.Value.Null
+    | Ok date ->
+      let iso = Stdlib.DateTime.toString date
+      if name == "datetime" then Ok (Stdlib.Sqlite.Value.Text (Stdlib.String.replaceAll (Stdlib.Sqlite.__Sql.__slice iso 0 19) "T" " "))
+      else
+        let format = match args with | [value,_] -> __text value | _ -> ""
+        if format != "%Y-%m-%dT%H:%M:%fZ" then Error "SQLite: unsupported strftime format"
+        else Ok (Stdlib.Sqlite.Value.Text (if Stdlib.Int.fromInt64 (Stdlib.String.__byteLength iso) == 20 then Stdlib.Sqlite.__Sql.__slice iso 0 19 + ".000Z" else iso))
+
 let __binaryValue (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
   if operator == "and" then
     match (__truth a,__truth b) with
@@ -126,7 +255,10 @@ let __binaryValue (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.
         else if operator == "!=" || operator == "<>" || operator == "is not" then cmp != 0
         else if operator == "<" then cmp < 0 else if operator == ">" then cmp > 0
         else if operator == "<=" then cmp <= 0 else cmp >= 0
-      __bool answer
+      if operator == "||" then Stdlib.Sqlite.Value.Text (Stdlib.Blob.__copyToString (Stdlib.Blob.concat [Stdlib.Blob.fromString (__text a),Stdlib.Blob.fromString (__text b)]))
+      else if operator == "like" then __bool (__like (__untilZero (__codepoints b)) (__untilZero (__codepoints a)))
+      else if Stdlib.List.contains ["+","-","*","/","%"] operator then __arithmetic operator a b
+      else __bool answer
 
 let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: Dict<String, Stdlib.Sqlite.Value>)
   (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
@@ -137,6 +269,18 @@ let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdl
     match Stdlib.Dict.get params n with | Some value -> Ok value | None -> Error ("SQLite: missing bound parameter: " + n)
   | Count -> Error "SQLite: aggregate is not valid here"
   | Star -> Error "SQLite: wildcard is not valid here"
+  | Unary (operator,inner) -> __eval columns row params inner |> Stdlib.Result.map (fun value ->
+    if __rank value == 0 then value
+    else if operator == "not" then __bool (__truth value != Some true)
+    else if operator == "+" then value
+    else __arithmetic "-" (Stdlib.Sqlite.Value.Int 0L) value)
+  | Case (arms,fallback) -> __caseValue columns row params arms fallback
+  | Call (name,args) ->
+    if Stdlib.Bool.not (__functionValid name (Stdlib.List.length args)) then Error ("SQLite: unsupported function or wrong argument count: " + name)
+    else if name == "coalesce" || name == "ifnull" then __coalesceValue columns row params args
+    else Stdlib.List.fold args (Ok []) (fun result expr -> result |> Stdlib.Result.andThen (fun values ->
+      __eval columns row params expr |> Stdlib.Result.map (fun value -> values @ [value])))
+      |> Stdlib.Result.andThen (fun values -> __call name values)
   | Cast (inner,kind) -> __eval columns row params inner |> Stdlib.Result.andThen (fun v ->
     if __rank v == 0 then Ok v
     else if kind == "blob" then
@@ -166,6 +310,20 @@ let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdl
           else (a,b)
         __binaryValue operator a b))
 
+let __caseValue (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: Dict<String, Stdlib.Sqlite.Value>)
+  (arms: List<(Stdlib.Sqlite.__Sql.__Expr * Stdlib.Sqlite.__Sql.__Expr)>) (fallback: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  match arms with
+  | [] -> __eval columns row params fallback
+  | (condition,value) :: rest -> __eval columns row params condition |> Stdlib.Result.andThen (fun condition ->
+    if __truth condition == Some true then __eval columns row params value else __caseValue columns row params rest fallback)
+
+let __coalesceValue (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: Dict<String, Stdlib.Sqlite.Value>)
+  (args: List<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  match args with
+  | [] -> Ok Stdlib.Sqlite.Value.Null
+  | expr :: rest -> __eval columns row params expr |> Stdlib.Result.andThen (fun value ->
+    if __rank value == 0 then __coalesceValue columns row params rest else Ok value)
+
 let __validate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<String, Stdlib.Sqlite.Value>) (aggregate: Bool)
   (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Unit, String> =
   match expr with
@@ -176,6 +334,14 @@ let __validate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<Strin
     else Error ("SQLite: no such column: " + name)
   | Count -> if aggregate then Ok () else Error "SQLite: aggregate is not valid here"
   | Star -> Error "SQLite: wildcard is not valid here"
+  | Unary (_,inner) -> __validate columns params false inner
+  | Case (arms,fallback) ->
+    Stdlib.List.fold arms (__validate columns params false fallback) (fun result (condition,value) ->
+      result |> Stdlib.Result.andThen (fun _ -> __validate columns params false condition)
+      |> Stdlib.Result.andThen (fun _ -> __validate columns params false value))
+  | Call (name,args) ->
+    if Stdlib.Bool.not (__functionValid name (Stdlib.List.length args)) then Error ("SQLite: unsupported function or wrong argument count: " + name)
+    else Stdlib.List.fold args (Ok ()) (fun result expr -> result |> Stdlib.Result.andThen (fun _ -> __validate columns params false expr))
   | Cast (inner,kind) ->
     if Stdlib.List.contains ["blob","text","integer","int","real"] kind then __validate columns params false inner else Error "SQLite: unsupported CAST type"
   | Binary (left,_,right) -> __validate columns params false left |> Stdlib.Result.andThen (fun _ -> __validate columns params false right)

@@ -1,0 +1,1644 @@
+{
+  "interpreter_revision": "9ca42515810126f9cdf8ab9704ae44cc7e2e7241",
+  "scope": "LibDB and Darklang.SCM source literals; dynamic templates require concrete runtime cases",
+  "source_sha256": {
+    "backend/src/LibDB/AstTransformer.fs": "23783195630004c808d2d47ab808722beaf65c759ca716516108215e372c6230",
+    "backend/src/LibDB/BranchSelection.fs": "76c3ee93bfef3aa482c5151e60e5b8fea5b505d095aa97c4d7b8cb6cde6e4509",
+    "backend/src/LibDB/Branches.fs": "624debb55d0dcfbd9a561c593acbbc89788d5ba638bb94cb9dbf87eee356e27b",
+    "backend/src/LibDB/Caching.fs": "ed8be316e6fc6e4f78cfb7b54cbde054dc744077234eaa8229f41cc24470eca5",
+    "backend/src/LibDB/Config.fs": "27caee735e31f306dd3331acf3622be17c3b516614728070222ef0375b742cb0",
+    "backend/src/LibDB/DeferredResolver.fs": "5a6c50fee0f7b81ecc02f68c367a45d5ddfbc927ade98433a4dce6bf976f58db",
+    "backend/src/LibDB/DependencyExtractor.fs": "9ef8a7a247a86d9dc7392471c44d3e558c484a3f29b559a148c281131fecb270",
+    "backend/src/LibDB/Deprecations.fs": "4ff284d8c88e21410b32d7b11a1b066ce7c2afc80f1d92d010375f157cc7f80f",
+    "backend/src/LibDB/Docs.fs": "90b63e3147b0605cdb911595c4c7c17a31fd21815172a4d7b853d59edcc4533f",
+    "backend/src/LibDB/Draft.fs": "11f8b1c469f74a62d5cdd4f082ed72c379b2d414ef4a4bea92f853016b33f419",
+    "backend/src/LibDB/EphemeralPackages.fs": "e1416d6cc29fa005808fcd140b97a56b4e5718fdd7fc43765fa5e5e8da4bcb6d",
+    "backend/src/LibDB/HashStabilization.fs": "c0fa52be784f329a772ae1aef3ebb258aa91412965ffb99da438b8cf4a51ca21",
+    "backend/src/LibDB/Impls.fs": "b8b928135844bcf77b2b7b4b6fdadc2504fd7577d54ae7ed34a84f70f45657da",
+    "backend/src/LibDB/Inserts.fs": "1893b18c289ec034e64216f77284a61f1b3f8071cb282786826e1039a8630634",
+    "backend/src/LibDB/LocalFile.fs": "6a1b1b2cfc93c7ad75c5c2c7523da3145f6ee463bfdcf08fe18ca95311294e43",
+    "backend/src/LibDB/NameLookup.fs": "f7546910d5d33758ccca545fea80ee2cd299698e4d802e693ca9a54c47919691",
+    "backend/src/LibDB/OpValidation.fs": "d3e1dc187e7d311f96166857429202061db3291a4a25c4b819b5e1a3d77deec9",
+    "backend/src/LibDB/OriginTs.fs": "5ca58ba960c57ff7220ccfbeaa913318b3d8a8bff449219c99cfa7b6d7ffd7d3",
+    "backend/src/LibDB/PackageItem.fs": "bd91180b1f19b75df46d81d7ccdd1fa6f6352cc06b9f321476c61e6bbac57b2f",
+    "backend/src/LibDB/PackageLocation.fs": "3c979d4ec33a2d8e079a2b46ef63750ce31cfba43c25fd02d073fd321588617b",
+    "backend/src/LibDB/PackageManager.fs": "8f24c325dd2c4064c994d34aec4fbffc285b797eb5cde1459ae00839565abcb3",
+    "backend/src/LibDB/PackageOpPlayback.fs": "9b60b5315e00ff95d7631c8b92dcb3fb5ac81588f3b71fcba5fb2cbc06f386b4",
+    "backend/src/LibDB/PackagePermissions.fs": "1c2acc17136c3abe61922d99ee3931964e6138ccc8447c9800e91a6ef20e3822",
+    "backend/src/LibDB/PackageRefsGenerator.fs": "48312c0395434358462b95def8c070889ac13d045671d9b3d7241a2a8e84347a",
+    "backend/src/LibDB/PolicyStore.fs": "927d251aef1600fe145138a5a5cd69ef5f2a4367525c11b283eeb28cafe55dc0",
+    "backend/src/LibDB/PreparedBatch.fs": "f8b5e51349955dd59e9e1fc8be5910b31ae392568cecad60f8c84649f8d9f8dd",
+    "backend/src/LibDB/ProgramTypes.fs": "0613d42cb8e4bd8108c8facdbc83733b8b0b4d658a61db9305dd21e65a321517",
+    "backend/src/LibDB/Propagation.fs": "1a95e2d6eca142a6e0ac067406cc6430d56caee0f13d14353d5e2f0c5c449547",
+    "backend/src/LibDB/Purge.fs": "593f754b177275ee93e4cd005d138d9c4bcfdc794e1d0f2aefbd59938292d05a",
+    "backend/src/LibDB/Queries.fs": "4837bb2373134245d37f8908834b57c8c874b85e9ee4249e9184beb6ca8a6059",
+    "backend/src/LibDB/Releases.fs": "de707376b9d1540e9edf603315bdb411e72cedbcedb834ff5edb07cb91545a72",
+    "backend/src/LibDB/RuntimeTypes.fs": "0f8a2a585a0dd7211476bb6bb62503ae3eebf3fba607b09fdea2d122e6644e42",
+    "backend/src/LibDB/Seed.fs": "69d9b5ac98c9ad42245f62d4ba75615e068c1e96b17060668a4155432ece2523",
+    "backend/src/LibDB/Sqlite.fs": "8b4517a94f500f675315f0d328edffbbd844e22638e4afdef85416841d1e9c4c",
+    "backend/src/LibDB/UnresolvedCheck.fs": "baaab1490b67f8063ac213f06528942a2799f52f47562fb9213938807998e53a",
+    "backend/src/LibDB/UpgradeKeep.fs": "515013825bf5f43a1542556662b841571d4a0332ed70cff407caff9ab19b8fe8",
+    "backend/src/LibDB/WipRefresh.fs": "26c4bc4c19d831b7641066c6b091c070c561a2dabf8438efa661271ea083170d",
+    "packages/darklang/scm/branch.dark": "6d66accb7b6fb0b1d53d7b1f69388007805cbf1d4614e4a3703ef875633f3ce0",
+    "packages/darklang/scm/branches.dark": "4fa3c22902e29a7ea2b8a4fe83a279b5ed104f06cc242eed1e5703ebf13f9eb3",
+    "packages/darklang/scm/commits.dark": "f3509102e09eecc390784fcc6e0cc27aa45326c567d51017c3772c37f1eb06dd",
+    "packages/darklang/scm/conflicts.dark": "454a5eefe03e9d4a13b54918bb3710a0b1d23ba8e18d1205ffa386f74247a9de",
+    "packages/darklang/scm/constraints.dark": "f69e1aa863caa17eedf8643151f18e41e6963c357c227d106a76ffee1a738e35",
+    "packages/darklang/scm/deps.dark": "3c073739887b8c6fac7adc6bfb7d29eba2c49a6bb8199e6510df509a348cce7c",
+    "packages/darklang/scm/docs.dark": "a60f6a764726dafab70ae269be6abf69b10bdb1b23f4dd551ad798136a0796f3",
+    "packages/darklang/scm/draft.dark": "655c889dbf2e3640ac628a5b4d5e39cd8e5ad2b56fb90df7dcf8f19bffb87310",
+    "packages/darklang/scm/draftRewrite.dark": "3f0608f6a9a2aa44fb05f4568f562db6df5d1378be09519df37b5e6e1919959e",
+    "packages/darklang/scm/lineage.dark": "6ea1079976a7d4df4c5f48fbce02fc1b483e2127c253e0fcf361f8acd1e569de",
+    "packages/darklang/scm/packageOps.dark": "63b426c33fdf4a5bcc021e3bd42754981168d82301665d6d29a259fb586fb50b",
+    "packages/darklang/scm/packageOpsBindings.dark": "60658dd7e5246f31ce5565a0b95a80e6467dacc5fb151dade4e34ddd878cc5c6",
+    "packages/darklang/scm/packageOpsBranch.dark": "1dcf481b84f60c0f4fba4486a845e6eb3598f2c7b4809cac803d5230bb4bfa3e",
+    "packages/darklang/scm/packageOpsCommits.dark": "4eebbd8c84ec9357e3f42b8fb9d864bbd0a91d8b14cb49cee6ddf2b528503f24",
+    "packages/darklang/scm/packageOpsDraft.dark": "71bff48794423ee1f8fada2805cc26189194cba26aad9b3e2f03c8e15247f23b",
+    "packages/darklang/scm/packageOpsMerge.dark": "3cd3e94f0516f5d1b1f4844439aa31d77119909ff446a891976453eebc8b1cd1",
+    "packages/darklang/scm/packageOpsRepoints.dark": "62d9533453f466cde4871ee57fd97f6a2b42828a06cd8690164046658e334358",
+    "packages/darklang/scm/partialCommit.dark": "9ac6e1176b81a77428fbab2decec8f13d033925930dd795c2c87f57404c4d619",
+    "packages/darklang/scm/propagation.dark": "0dd2d836d546a26b4688483f4124fce256b30a643accbcf726b5e63f2f1e0cf1",
+    "packages/darklang/scm/scm.dark": "decd53e5a6a795c53ff87adac992232bfa6fb5722735adc3c958753969be3d1b",
+    "packages/darklang/scm/storeHealth.dark": "ca0238c5b8a88d8250c2289a235f0e875f2e02a473e01862c460586688f0b7d7"
+  },
+  "entries": [
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 43,
+      "kind": "statement",
+      "sql": "INSERT INTO branches (id, name, parent_id) VALUES (@id, @name, @parent)\n     ON CONFLICT(id) DO UPDATE SET archived_at = NULL, merged_at = NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 60,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO branches (id, name, parent_id) VALUES (@id, @name, @parent)"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 73,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM branches\n         WHERE id = @id AND (archived_at IS NOT NULL OR merged_at IS NOT NULL)"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 91,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM branches WHERE id = @b\n         UNION ALL\n         SELECT 1 AS n FROM op_branches WHERE branch_id = @b\n         LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 102,
+      "kind": "statement",
+      "sql": "SELECT id FROM branches\n     WHERE name = @name AND archived_at IS NULL AND merged_at IS NULL\n     ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 113,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM branches\n         WHERE id = @id AND archived_at IS NULL AND merged_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 161,
+      "kind": "statement",
+      "sql": "SELECT id FROM branches\n                 WHERE id LIKE @prefix AND archived_at IS NULL\n                 LIMIT 2"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 192,
+      "kind": "statement",
+      "sql": "INSERT INTO branches (id, name, parent_id)\n         SELECT @id, @name, @parent\n         WHERE NOT EXISTS (\n           SELECT 1 FROM branches\n           WHERE name = @name AND archived_at IS NULL AND merged_at IS NULL\n         )"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 250,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO package_ops (id, op_blob, applied, effective, origin_ts)\n     VALUES (@id, @op_blob, 0, 0, @origin_ts)"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 257,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO op_branches (op_id, branch_id, source)\n     SELECT @op_id, @branch_id, @source\n     WHERE NOT EXISTS (SELECT 1 FROM package_ops WHERE id = @op_id AND effective = 1)"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 291,
+      "kind": "template",
+      "sql": "SELECT id FROM package_ops WHERE id IN ({clause})"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 315,
+      "kind": "template",
+      "sql": "SELECT op_id FROM op_branches\n            WHERE branch_id = @branch AND op_id IN ({clause})"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 417,
+      "kind": "statement",
+      "sql": "WITH RECURSIVE chain(bid) AS (\n           SELECT @start\n           UNION\n           SELECT b.parent_id FROM branches b JOIN chain c ON b.id = c.bid\n           WHERE b.parent_id <> @mainId\n         )\n         SELECT p.id, p.op_blob, p.origin_ts AS ts\n         FROM package_ops p\n         JOIN op_branches ob ON ob.op_id = p.id\n         WHERE ob.branch_id IN (SELECT bid FROM chain)\n           -- An ancestor's WIP stays its own: only the branch itself contributes uncommitted\n           -- ops to the view; parents contribute what they committed.\n           AND (ob.branch_id = @start OR p.commit_hash IS NOT NULL)\n         -- `p.id`, not `p.rowid`: rowid is ARRIVAL order, which is a fact about this machine, so\n         -- two stores holding the same ops applied them in different orders whenever two stamps\n         -- tied exactly, and showed different code. An op id is a content hash, so this order is\n         -- the same everywhere.\n         --\n         -- The FOLD's tie-break is finer still (`Lww.isStale` compares the bound item's hash), so\n         -- the sort below re-orders what this returns. The stamp is selected only to sort by and\n         -- then dropped, which is why the signature is unchanged.\n         ORDER BY p.origin_ts, p.id"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 481,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET applied = 0 WHERE applied = 2"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 486,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob FROM package_ops\n         WHERE applied = 1 AND effective = 1 AND substr(op_blob, 9, 1) = X'0A'"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 501,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET applied = 0 WHERE id = @id"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 523,
+      "kind": "statement",
+      "sql": "WITH RECURSIVE chain(bid, depth) AS (\n             SELECT @start, 0\n             UNION ALL\n             SELECT b.parent_id, c.depth + 1 FROM branches b JOIN chain c ON b.id = c.bid\n             WHERE b.parent_id <> @mainId AND c.depth < 64\n           )\n           SELECT bid FROM chain ORDER BY depth"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 543,
+      "kind": "statement",
+      "sql": "SELECT parent_id FROM branches WHERE id = @b"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 558,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name, item_hash FROM locations WHERE unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Branches.fs",
+      "line": 764,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO branch_name_bases (branch_id, owner, modules, name, base_hash)\n           VALUES (@b, @owner, @modules, @name, @base)"
+    },
+    {
+      "source": "backend/src/LibDB/Config.fs",
+      "line": 18,
+      "kind": "statement",
+      "sql": "SELECT value FROM config_v0 WHERE key = @key"
+    },
+    {
+      "source": "backend/src/LibDB/Config.fs",
+      "line": 28,
+      "kind": "template",
+      "sql": "SELECT key, value FROM config_v0 WHERE key IN ({names})"
+    },
+    {
+      "source": "backend/src/LibDB/Config.fs",
+      "line": 39,
+      "kind": "statement",
+      "sql": "INSERT INTO config_v0 (key, value) VALUES (@key, @value)\n        ON CONFLICT(key) DO UPDATE SET value = @value"
+    },
+    {
+      "source": "backend/src/LibDB/Deprecations.fs",
+      "line": 59,
+      "kind": "statement",
+      "sql": "SELECT state, annotation_blob\n        FROM deprecations\n        WHERE item_hash = @item_hash\n          AND item_kind = @item_kind\n          AND unlisted_at IS NULL\n        ORDER BY COALESCE(origin_ts, '') DESC, created_at DESC\n        LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 280,
+      "kind": "statement",
+      "sql": "SELECT kind, within, text FROM location_docs\n         WHERE owner = @owner AND modules = @modules AND name = @name"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 343,
+      "kind": "template",
+      "sql": "SELECT owner, modules, name, kind, within, text\n          FROM location_docs\n          WHERE owner || char(0) || modules || char(0) || name IN ({keyClause})"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 413,
+      "kind": "statement",
+      "sql": "SELECT item_hash, item_type FROM locations\n         WHERE owner = $owner AND modules = $modules AND name = $name\n           AND unlisted_at IS NULL AND source <> 'unbind'\n         LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 446,
+      "kind": "template",
+      "sql": "SELECT pt_def FROM {table} WHERE hash = $hash"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 508,
+      "kind": "statement",
+      "sql": "INSERT INTO conflicts\n           (id, owner, modules, name, item_type, part, kind, candidates, auto_resolved_to, reason,\n            status, origin_ts, branch_id)\n         VALUES ($id, $owner, $modules, $name, '', $part, 'doc-divergence', $candidates,\n                 $winner, $reason, 'pending', $ts, $branch)\n         ON CONFLICT(id) DO UPDATE SET\n           auto_resolved_to = excluded.auto_resolved_to,\n           reason = excluded.reason,\n           origin_ts = excluded.origin_ts"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 566,
+      "kind": "statement",
+      "sql": "SELECT text, origin_ts FROM location_docs\n         WHERE owner = $owner AND modules = $modules AND name = $name\n           AND kind = $kind AND within = $within"
+    },
+    {
+      "source": "backend/src/LibDB/Docs.fs",
+      "line": 613,
+      "kind": "statement",
+      "sql": "INSERT INTO location_docs (owner, modules, name, kind, within, text, origin_ts)\n             VALUES ($owner, $modules, $name, $kind, $within, $text, $ts)\n             ON CONFLICT(owner, modules, name, kind, within) DO UPDATE SET\n               text = excluded.text, origin_ts = excluded.origin_ts"
+    },
+    {
+      "source": "backend/src/LibDB/Impls.fs",
+      "line": 25,
+      "kind": "statement",
+      "sql": "SELECT hash FROM package_trait_impls WHERE trait_hash = @h"
+    },
+    {
+      "source": "backend/src/LibDB/Impls.fs",
+      "line": 39,
+      "kind": "statement",
+      "sql": "SELECT hash FROM package_trait_impls"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 62,
+      "kind": "template",
+      "sql": "SELECT owner, modules, name, item_hash\n          FROM locations\n          WHERE unlisted_at IS NULL\n            AND owner || char(0) || modules || char(0) || name IN ({keyClause})"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 130,
+      "kind": "template",
+      "sql": "SELECT owner, modules, name, kind, within, text\n          FROM location_docs\n          WHERE owner || char(0) || modules || char(0) || name || char(0)\n                || kind || char(0) || within IN ({keyClause})"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 221,
+      "kind": "statement",
+      "sql": "INSERT INTO package_ops\n              (id, op_blob, applied, origin_ts, commit_hash)\n            VALUES (@id, @op_blob, @applied, @origin_ts, @commit_hash)\n            ON CONFLICT(id) DO UPDATE\n              SET effective = 1,\n                  applied = 0,\n                  origin_ts = excluded.origin_ts,\n                  commit_hash = excluded.commit_hash\n              WHERE package_ops.effective = 0"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 243,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE op_id = @id"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 314,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET applied = @applied WHERE id = @id"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 437,
+      "kind": "template",
+      "sql": "DELETE FROM locations WHERE source <> 'resolution'\n      AND op_id IN (SELECT id FROM package_ops WHERE {draftWhere})"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 439,
+      "kind": "template",
+      "sql": "DELETE FROM package_ops WHERE {draftWhere}"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 456,
+      "kind": "statement",
+      "sql": "DELETE FROM locations WHERE source <> 'resolution'"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 457,
+      "kind": "statement",
+      "sql": "DELETE FROM deprecations"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 458,
+      "kind": "template",
+      "sql": "DELETE FROM package_ops WHERE {mainWhere}{keepUnreadable}"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 484,
+      "kind": "statement",
+      "sql": "PRAGMA busy_timeout=5000;"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 497,
+      "kind": "template",
+      "sql": "SELECT id FROM package_ops WHERE {where}\n                ORDER BY created_at ASC, rowid ASC"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 516,
+      "kind": "statement",
+      "sql": "INSERT INTO package_ops (id, op_blob, applied, origin_ts, commit_hash)\n             VALUES ($id, $blob, 1, $ts, $commit)\n             ON CONFLICT(id) DO UPDATE\n               SET effective = 1, applied = 1,\n                   origin_ts = excluded.origin_ts, commit_hash = excluded.commit_hash\n               WHERE package_ops.effective = 0"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 529,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE op_id = $id"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 641,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO package_ops\n            (id, op_blob, applied, effective, origin_ts, commit_hash)\n          VALUES (@id, @op_blob, 0, 1, @origin_ts, @commit_hash)"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 653,
+      "kind": "statement",
+      "sql": "UPDATE package_ops\n             SET effective = 1,\n                 applied = 0,\n                 commit_hash = COALESCE(commit_hash, @commit_hash)\n           WHERE id = @id AND effective = 0"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 687,
+      "kind": "statement",
+      "sql": "SELECT COUNT(*) AS n, COALESCE(MAX(origin_ts), '') AS latest\n        FROM package_ops\n        WHERE commit_hash IS NULL AND id NOT IN (SELECT op_id FROM op_branches)"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 710,
+      "kind": "statement",
+      "sql": "INSERT OR REPLACE INTO commits (hash, message, origin_ts)\n           VALUES (@hash, @message, @origin_ts)"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 720,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET commit_hash = @hash\n           WHERE commit_hash IS NULL AND id NOT IN (SELECT op_id FROM op_branches)"
+    },
+    {
+      "source": "backend/src/LibDB/Inserts.fs",
+      "line": 731,
+      "kind": "statement",
+      "sql": "DELETE FROM commits WHERE hash NOT IN\n             (SELECT DISTINCT commit_hash FROM package_ops WHERE commit_hash IS NOT NULL)"
+    },
+    {
+      "source": "backend/src/LibDB/OpValidation.fs",
+      "line": 140,
+      "kind": "statement",
+      "sql": "SELECT l.item_type FROM locations l\n          WHERE l.owner = @owner AND l.modules = @modules AND l.name = @name\n            AND l.unlisted_at IS NULL\n            AND NOT EXISTS (\n              SELECT 1 FROM deprecations d\n              WHERE d.item_hash = l.item_hash\n                AND d.item_kind = l.item_type\n                AND d.unlisted_at IS NULL\n                AND d.state = 'deprecated'\n                AND d.created_at = (\n                  SELECT MAX(d2.created_at) FROM deprecations d2\n                  WHERE d2.item_hash = d.item_hash\n                    AND d2.item_kind = d.item_kind\n                    AND d2.unlisted_at IS NULL\n                )\n            )\n          LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 60,
+      "kind": "template",
+      "sql": "INSERT OR IGNORE INTO package_dependencies (item_hash, depends_on_hash, depends_on_item_type, depends_on_owner, depends_on_modules, depends_on_name) VALUES"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 105,
+      "kind": "template",
+      "sql": "SELECT pt_def FROM {table} WHERE hash = $hash"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 168,
+      "kind": "template",
+      "sql": "INSERT INTO {table} ({insertColumns})\n        VALUES ({insertValues})\n        ON CONFLICT(hash) DO NOTHING"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 189,
+      "kind": "template",
+      "sql": "UPDATE {table} SET {assignments} WHERE hash = $hash"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 419,
+      "kind": "statement",
+      "sql": "SELECT origin_ts FROM package_ops WHERE id = $id"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 433,
+      "kind": "statement",
+      "sql": "SELECT origin_ts FROM locations WHERE owner = $owner AND modules = $modules AND name = $name AND source = 'unbind' AND origin_ts IS NOT NULL ORDER BY origin_ts DESC LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 480,
+      "kind": "statement",
+      "sql": "SELECT item_hash, origin_ts FROM locations WHERE owner = $owner AND modules = $modules AND name = $name AND unlisted_at IS NULL LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 514,
+      "kind": "statement",
+      "sql": "UPDATE locations\n          SET unlisted_at = datetime('now')\n          WHERE owner = $owner\n            AND modules = $modules\n            AND name = $name\n            AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 529,
+      "kind": "statement",
+      "sql": "INSERT INTO locations\n            (location_id, item_hash, owner, modules, name, item_type, origin_ts, source, op_id,\n             previous)\n          VALUES ($location_id, $item_hash, $owner, $modules, $name, $item_type, $origin_ts, $source,\n                  $op_id, $previous)"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 576,
+      "kind": "statement",
+      "sql": "SELECT COALESCE(origin_ts,'') AS ts FROM deprecations WHERE item_hash = $item_hash AND item_kind = $item_kind AND unlisted_at IS NULL LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 592,
+      "kind": "statement",
+      "sql": "UPDATE deprecations\n          SET unlisted_at = datetime('now')\n          WHERE item_hash = $item_hash\n            AND item_kind = $item_kind\n            AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 603,
+      "kind": "statement",
+      "sql": "INSERT INTO deprecations\n            (deprecation_id, item_hash, item_kind, state, annotation_blob, origin_ts)\n          VALUES\n            ($deprecation_id, $item_hash, $item_kind, $state, $blob, $origin_ts)"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 683,
+      "kind": "statement",
+      "sql": "INSERT INTO conflicts\n             (id, owner, modules, name, item_type, kind, candidates, auto_resolved_to, reason, status, origin_ts)\n           -- item_type left empty, not guessed: the op doesn't carry the usage's\n           -- kind, and nothing reads an ack row's kind (`ackedIds` selects on\n           -- id + status).\n           VALUES ($id, $owner, $modules, $name, '', 'stale-usage', '[]', '', $reason, 'acked', $ts)\n           ON CONFLICT(id) DO UPDATE SET\n             status = 'acked', reason = excluded.reason, origin_ts = excluded.origin_ts"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 738,
+      "kind": "statement",
+      "sql": "SELECT parent_id FROM branches WHERE id = $b"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 753,
+      "kind": "statement",
+      "sql": "SELECT count(*) FROM op_branches WHERE branch_id = $b"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 756,
+      "kind": "statement",
+      "sql": "SELECT count(*) FROM branches WHERE id = $b"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 766,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET applied = 2 WHERE id = $e"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 772,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET effective = 1\n             WHERE effective = 0\n               AND id IN (SELECT value FROM json_each($ids))\n               AND id IN (SELECT op_id FROM op_branches WHERE branch_id = $b)"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 788,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET commit_hash = (SELECT commit_hash FROM package_ops WHERE id = $e)\n             WHERE commit_hash IS NULL\n               AND id IN (SELECT value FROM json_each($ids))\n               AND id IN (SELECT op_id FROM op_branches WHERE branch_id = $b)\n               AND (SELECT commit_hash FROM package_ops WHERE id = $e) IS NOT NULL"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 804,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO op_branches (op_id, branch_id, source)\n             SELECT op_id, $p, source FROM op_branches\n             WHERE branch_id = $b AND op_id IN (SELECT value FROM json_each($ids))"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 811,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO branch_name_bases (branch_id, owner, modules, name, base_hash)\n             SELECT $p, owner, modules, name, base_hash FROM branch_name_bases WHERE branch_id = $b"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 818,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches\n           WHERE branch_id = $b AND op_id IN (SELECT value FROM json_each($ids))"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 827,
+      "kind": "statement",
+      "sql": "UPDATE branches SET merged_at = $at\n           WHERE id = $b AND merged_at IS NULL\n             AND NOT EXISTS (SELECT 1 FROM op_branches WHERE branch_id = $b)"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 837,
+      "kind": "statement",
+      "sql": "UPDATE branches SET archived_at = $at WHERE id = $b AND archived_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 861,
+      "kind": "statement",
+      "sql": "SELECT item_type, origin_ts FROM locations WHERE owner = $owner AND modules = $modules AND name = $name AND unlisted_at IS NULL LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 876,
+      "kind": "statement",
+      "sql": "UPDATE locations\n          SET unlisted_at = datetime('now')\n          WHERE owner = $owner\n            AND modules = $modules\n            AND name = $name\n            AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 894,
+      "kind": "statement",
+      "sql": "INSERT INTO locations\n            (location_id, item_hash, owner, modules, name, item_type, origin_ts, source, op_id,\n             previous, unlisted_at)\n          VALUES ($location_id, $item_hash, $owner, $modules, $name, $item_type, $origin_ts, 'unbind',\n                  $op_id, $previous, datetime('now'))"
+    },
+    {
+      "source": "backend/src/LibDB/PackageOpPlayback.fs",
+      "line": 970,
+      "kind": "statement",
+      "sql": "UPDATE conflicts SET status = 'overridden', resolved_by = $op\n             WHERE owner = $owner AND modules = $modules AND name = $name\n               AND item_type = $kind AND status = 'pending'"
+    },
+    {
+      "source": "backend/src/LibDB/PackageRefsGenerator.fs",
+      "line": 117,
+      "kind": "statement",
+      "sql": "SELECT item_type, modules, name, item_hash\n        FROM locations\n        WHERE owner = 'Darklang'\n          AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 28,
+      "kind": "template",
+      "sql": "SELECT item_hash\n        FROM locations\n        WHERE owner = @owner\n          AND modules = @modules\n          AND name = @name\n          AND item_type = '{itemType}'\n          AND unlisted_at IS NULL\n        -- `rowid DESC` breaks the tie: `created_at` is second-resolution, so same-second rows order\n        -- arbitrarily, and the caller here takes the head.\n        ORDER BY created_at DESC, rowid DESC\n        LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 58,
+      "kind": "template",
+      "sql": "SELECT pt_def\n        FROM {table}\n        WHERE {lookupColumn} = @hash"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 77,
+      "kind": "template",
+      "sql": "SELECT owner, modules, name\n        FROM locations\n        WHERE item_hash = @item_hash\n          AND item_type = '{itemType}'\n          AND unlisted_at IS NULL\n        -- `rowid DESC` breaks the tie: `created_at` is second-resolution, so same-second rows order\n        -- arbitrarily, and the caller here takes the head.\n        ORDER BY created_at DESC, rowid DESC"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 110,
+      "kind": "template",
+      "sql": "SELECT owner, modules, name\n        FROM locations\n        WHERE item_hash = @item_hash\n          AND item_type = '{itemType}'\n        ORDER BY (unlisted_at IS NULL) DESC, created_at DESC"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 146,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT name FROM locations WHERE item_type = 'trait' AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 183,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT item_hash\n          FROM locations\n          WHERE owner = @owner AND item_type = 'fn' AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 258,
+      "kind": "template",
+      "sql": "SELECT DISTINCT owner, modules\n      FROM locations l\n      WHERE l.unlisted_at IS NULL\n        AND {submoduleCondition}\n      ORDER BY owner, modules"
+    },
+    {
+      "source": "backend/src/LibDB/ProgramTypes.fs",
+      "line": 344,
+      "kind": "template",
+      "sql": "SELECT c.{joinColumn} as lookup_id, c.pt_def, l.owner, l.modules, l.name"
+    },
+    {
+      "source": "backend/src/LibDB/Purge.fs",
+      "line": 63,
+      "kind": "statement",
+      "sql": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = @tableName"
+    },
+    {
+      "source": "backend/src/LibDB/Purge.fs",
+      "line": 71,
+      "kind": "template",
+      "sql": "DELETE FROM {table}"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 38,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT pd.depends_on_hash, l.item_type\n        FROM package_dependencies pd\n        INNER JOIN locations l ON pd.depends_on_hash = l.item_hash\n        WHERE pd.item_hash = @item_hash\n          AND pd.depends_on_item_type = l.item_type\n          AND l.unlisted_at IS NULL\n        ORDER BY pd.depends_on_hash"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 73,
+      "kind": "template",
+      "sql": "SELECT DISTINCT owner, modules, name\n          FROM locations\n          WHERE item_hash IN ({hashInClause})\n            AND item_type = @item_type\n            AND unlisted_at IS NOT NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 169,
+      "kind": "template",
+      "sql": "SELECT DISTINCT pd.item_hash\n          FROM package_dependencies pd\n          WHERE (\n              (pd.depends_on_item_type,\n               pd.depends_on_owner,\n               pd.depends_on_modules,\n               pd.depends_on_name)\n                IN ({locTuples})\n              OR (\n                pd.depends_on_owner IS NULL\n                AND {hashFallbackClause}\n              )\n            )\n          -- By hash, not by name: this query deliberately does NOT join `locations` (see above), so there\n          -- are no name columns to order by. Upstream orders the OTHER dependency query by name for\n          -- readability, and that one does join.\n          ORDER BY pd.item_hash"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 224,
+      "kind": "template",
+      "sql": "SELECT item_hash, item_type, owner, modules, name\n          FROM locations\n          WHERE item_hash IN ({inClause}) AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 269,
+      "kind": "template",
+      "sql": "SELECT id, op_blob FROM package_ops WHERE {Inserts.draftWhere}\n          ORDER BY created_at ASC, rowid ASC"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 295,
+      "kind": "statement",
+      "sql": "SELECT l.owner, l.modules, l.name, l.item_type,\n          (SELECT l2.item_hash\n           FROM locations l2 JOIN package_ops p2 ON p2.id = l2.op_id\n           WHERE l2.owner = l.owner AND l2.modules = l.modules AND l2.name = l.name\n             AND l2.source <> 'unbind' AND p2.commit_hash IS NOT NULL\n           ORDER BY l2.origin_ts DESC LIMIT 1) AS committed_hash\n        FROM locations l JOIN package_ops p ON p.id = l.op_id\n        WHERE l.unlisted_at IS NULL AND l.source <> 'unbind'\n          AND p.commit_hash IS NULL\n          AND p.id NOT IN (SELECT op_id FROM op_branches)"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 348,
+      "kind": "template",
+      "sql": "SELECT id, op_blob, origin_ts, commit_hash FROM package_ops\n          WHERE {Inserts.mainWhere}\n          ORDER BY created_at ASC, rowid ASC"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 376,
+      "kind": "statement",
+      "sql": "SELECT id, origin_ts\n        FROM package_ops\n        WHERE id NOT IN (SELECT op_id FROM op_branches)\n          AND origin_ts IS NOT NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 411,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT item_hash\n        FROM deprecations\n        WHERE unlisted_at IS NULL\n          AND state = 'deprecated'"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 432,
+      "kind": "template",
+      "sql": "SELECT depends_on_hash AS target, item_hash AS caller\n          FROM package_dependencies\n          WHERE depends_on_hash IN ({hashInClause})"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 541,
+      "kind": "statement",
+      "sql": "SELECT hash, origin_ts FROM package_trait_impls"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 556,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT d.item_hash\n        FROM deprecations d\n        WHERE d.item_kind = 'impl'\n          AND d.unlisted_at IS NULL\n          AND d.state = 'deprecated'\n          AND NOT EXISTS (\n            SELECT 1 FROM deprecations later\n            WHERE later.item_hash = d.item_hash\n              AND later.item_kind = d.item_kind\n              AND later.unlisted_at IS NULL\n              AND later.state <> 'deprecated'\n              AND COALESCE(later.origin_ts, '') > COALESCE(d.origin_ts, ''))"
+    },
+    {
+      "source": "backend/src/LibDB/Queries.fs",
+      "line": 615,
+      "kind": "statement",
+      "sql": "SELECT item_hash, state, annotation_blob\n      FROM deprecations\n      WHERE item_kind = 'fn'\n        AND unlisted_at IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Releases.fs",
+      "line": 34,
+      "kind": "template",
+      "sql": "SELECT 1 AS n FROM pragma_table_info('{table}') WHERE name = @c"
+    },
+    {
+      "source": "backend/src/LibDB/Releases.fs",
+      "line": 40,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM sqlite_master WHERE type = 'table' AND name = @t"
+    },
+    {
+      "source": "backend/src/LibDB/Releases.fs",
+      "line": 62,
+      "kind": "template",
+      "sql": "ALTER TABLE {table} ADD COLUMN {column} {declaration}"
+    },
+    {
+      "source": "backend/src/LibDB/Releases.fs",
+      "line": 103,
+      "kind": "statement",
+      "sql": "SELECT name FROM system_migrations_v0"
+    },
+    {
+      "source": "backend/src/LibDB/Releases.fs",
+      "line": 200,
+      "kind": "statement",
+      "sql": "INSERT INTO system_migrations_v0 (name, execution_date, sql)\n         VALUES (@name, CURRENT_TIMESTAMP, @sql)\n         ON CONFLICT(name) DO NOTHING"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 67,
+      "kind": "statement",
+      "sql": "SELECT rt_def FROM package_types WHERE hash = @hash"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 83,
+      "kind": "statement",
+      "sql": "SELECT rt_dval FROM package_values WHERE hash = @hash AND rt_dval IS NOT NULL"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 94,
+      "kind": "statement",
+      "sql": "SELECT hash\n          FROM package_values\n          WHERE value_type = @value_type"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 120,
+      "kind": "statement",
+      "sql": "SELECT rt_instrs, debug_symbols FROM package_functions WHERE hash = @hash"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 152,
+      "kind": "statement",
+      "sql": "SELECT bytes\n          FROM package_blobs\n          WHERE hash = @hash"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 163,
+      "kind": "statement",
+      "sql": "SELECT bytes FROM trace_blobs WHERE hash = @hash LIMIT 1"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 175,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO package_blobs (hash, length, bytes)\n          VALUES (@hash, @length, @bytes)"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 253,
+      "kind": "statement",
+      "sql": "SELECT hash, rt_dval\n          FROM package_values\n          WHERE rt_dval IS NOT NULL"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 275,
+      "kind": "statement",
+      "sql": "SELECT hash FROM package_blobs"
+    },
+    {
+      "source": "backend/src/LibDB/RuntimeTypes.fs",
+      "line": 285,
+      "kind": "statement",
+      "sql": "DELETE FROM package_blobs WHERE hash = @hash"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 61,
+      "kind": "statement",
+      "sql": "PRAGMA wal_checkpoint(TRUNCATE);"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 87,
+      "kind": "statement",
+      "sql": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 92,
+      "kind": "statement",
+      "sql": "DELETE FROM locations;\n      DELETE FROM package_types;\n      DELETE FROM package_values;\n      DELETE FROM package_functions;\n      DELETE FROM package_traits;\n      DELETE FROM package_trait_impls;\n      DELETE FROM package_tests;\n      DELETE FROM package_dependencies;\n      DELETE FROM deprecations;\n\n      -- The builder's BRANCHES are not canon. A branch's ops live in `package_ops` at effective = 0 and are\n      -- tagged in `op_branches`, so both halves have to go and the ops have to go FIRST -- dropping the tags\n      -- alone would leave untagged effective = 0 ops that no fold ever applies and nothing accounts for.\n      -- Otherwise every install grown from this seed opens with somebody else's half-finished work in\n      -- `dark branches`.\n      DELETE FROM package_ops WHERE id IN (SELECT op_id FROM op_branches);\n      DELETE FROM op_branches;\n      DELETE FROM branch_name_bases;\n      -- All of them: main is not a row here, so there is nothing to preserve.\n      DELETE FROM branches;\n\n      -- A conflict is a finding about two versions of one name. Inheriting the builder's would be\n      -- inheriting an argument you were not part of.\n      DELETE FROM conflicts;\n\n      -- Execution traces are dev telemetry, never part of a seed. They dominate a dev store by size\n      -- (`trace_fn_calls` alone runs to hundreds of MB), so strip them and the seed is just canon.\n      DELETE FROM trace_fn_calls;\n      DELETE FROM trace_fns;\n      DELETE FROM trace_loops;\n      DELETE FROM trace_blobs;\n      DELETE FROM traces;\n\n      -- ALL of it: `config_v0` is per-install by construction, and nothing in it is needed\n      -- to boot (every key has a default).\n      --\n      -- A deny-list can't work: the keys are not all knowable in advance. Costs if shipped: a\n      -- shared INSTANCE ID means two installs that cannot be told apart, and a CURRENT BRANCH\n      -- dangles.\n      DELETE FROM config_v0;\n\n      -- The builder's DRAFT: a seed is committed history by definition\n      -- (`check-seed-carries-refs` asserts it), and an uncommitted op is instance\n      -- state like the rows above. Stripped HERE rather than left to the guard: the\n      -- F# suite leaves fixtures in main's draft, so a release build would otherwise\n      -- refuse or not depending on what ran last. The bindings need no separate\n      -- delete; every projection went above.\n      DELETE FROM package_ops\n      WHERE commit_hash IS NULL AND id NOT IN (SELECT op_id FROM op_branches);\n\n      UPDATE package_ops SET applied = 0;"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 148,
+      "kind": "statement",
+      "sql": "VACUUM;"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 169,
+      "kind": "statement",
+      "sql": "SELECT COUNT(*) as n FROM package_ops WHERE applied = 0 AND effective = 1"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 180,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob\n        FROM package_ops\n        WHERE applied = 0 AND effective = 1\n        -- effective = 1: only ops main RUNS fold into the live projections. A branch's op, or one a\n        -- client pushed to a relay, sits at applied = 0, effective = 0 -- present in the log, never\n        -- folded, until a merge flips it effective.\n        -- rowid breaks ties: created_at is second-resolution so a batch's ops share it. The fold's final\n        -- state is order-independent, but a deterministic replay order keeps re-folds byte-identical.\n        ORDER BY created_at ASC, rowid ASC"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 258,
+      "kind": "statement",
+      "sql": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=OFF;"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 278,
+      "kind": "template",
+      "sql": "UPDATE package_ops SET applied = 1 WHERE id IN ({quoted})"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 292,
+      "kind": "statement",
+      "sql": "PRAGMA foreign_key_check"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 400,
+      "kind": "template",
+      "sql": "DELETE FROM {t}"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 402,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET applied = 0"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 537,
+      "kind": "statement",
+      "sql": "SELECT pv.hash, pv.pt_def, l.owner, l.modules, l.name\n          FROM package_values pv\n          LEFT JOIN locations l ON l.item_hash = pv.hash AND l.unlisted_at IS NULL\n          WHERE pv.rt_dval IS NULL"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 615,
+      "kind": "statement",
+      "sql": "UPDATE package_values\n                    SET rt_dval = @rt_dval, value_type = @value_type\n                    WHERE hash = @hash"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 672,
+      "kind": "statement",
+      "sql": "SELECT EXISTS(SELECT 1 FROM package_values WHERE rt_dval IS NULL) AS has_null"
+    },
+    {
+      "source": "backend/src/LibDB/Seed.fs",
+      "line": 689,
+      "kind": "statement",
+      "sql": "PRAGMA wal_checkpoint(TRUNCATE);"
+    },
+    {
+      "source": "backend/src/LibDB/Sqlite.fs",
+      "line": 120,
+      "kind": "statement",
+      "sql": "PRAGMA data_version"
+    },
+    {
+      "source": "backend/src/LibDB/Sqlite.fs",
+      "line": 134,
+      "kind": "statement",
+      "sql": "PRAGMA journal_mode=WAL;\n      PRAGMA synchronous=NORMAL;\n      PRAGMA busy_timeout=5000;"
+    },
+    {
+      "source": "backend/src/LibDB/Sqlite.fs",
+      "line": 152,
+      "kind": "statement",
+      "sql": "SELECT 1"
+    },
+    {
+      "source": "backend/src/LibDB/UpgradeKeep.fs",
+      "line": 42,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name, item_hash\n        FROM locations\n        WHERE unlisted_at IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 64,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 80,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM branches\n         WHERE parent_id = @p0 AND merged_at IS NULL AND archived_at IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 100,
+      "kind": "statement",
+      "sql": "SELECT CASE WHEN name = '' THEN id ELSE name END AS name FROM branches\n     WHERE parent_id = @p0 AND merged_at IS NULL AND archived_at IS NULL\n     ORDER BY name"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 116,
+      "kind": "statement",
+      "sql": "INSERT INTO branches (id, name, parent_id) VALUES (@p0, '', @p1)\n       ON CONFLICT(id) DO UPDATE SET archived_at = NULL, merged_at = NULL"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 127,
+      "kind": "statement",
+      "sql": "UPDATE branches SET name = @p1 WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 151,
+      "kind": "statement",
+      "sql": "DELETE FROM package_ops\n          WHERE effective = 0\n            AND id IN (SELECT op_id FROM op_branches WHERE branch_id = @p0)\n            AND id NOT IN (SELECT op_id FROM op_branches WHERE branch_id <> @p0)"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 156,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 157,
+      "kind": "statement",
+      "sql": "DELETE FROM branch_name_bases WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 158,
+      "kind": "statement",
+      "sql": "UPDATE branches SET archived_at = datetime('now') WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 186,
+      "kind": "statement",
+      "sql": "SELECT b.id, b.name, b.parent_id, b.merged_at IS NOT NULL AS merged,\n            (SELECT count(*) FROM op_branches ob WHERE ob.branch_id = b.id) AS ops\n     FROM branches b WHERE b.archived_at IS NULL ORDER BY b.created_at DESC"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 250,
+      "kind": "statement",
+      "sql": "SELECT name FROM branch_name_bases WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 276,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name, base_hash FROM branch_name_bases WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 311,
+      "kind": "statement",
+      "sql": "SELECT l.owner, l.modules, l.name, l.item_hash\n       FROM branch_name_bases b\n       JOIN locations l\n         ON l.owner = b.owner AND l.modules = b.modules AND l.name = b.name\n       JOIN package_ops p ON p.id = l.op_id\n       WHERE b.branch_id = @p0 AND l.unlisted_at IS NULL\n         AND p.commit_hash IS NOT NULL"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 458,
+      "kind": "statement",
+      "sql": "UPDATE branch_name_bases SET base_hash = @p0\n            WHERE branch_id = @p1 AND owner = @p2 AND modules = @p3 AND name = @p4"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 523,
+      "kind": "statement",
+      "sql": "SELECT p.id FROM package_ops p\n     JOIN op_branches ob ON ob.op_id = p.id\n     WHERE ob.branch_id = @p0 AND p.commit_hash IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 533,
+      "kind": "statement",
+      "sql": "SELECT p.id, p.op_blob, p.origin_ts AS ts, ob.source FROM package_ops p\n     JOIN op_branches ob ON ob.op_id = p.id\n     WHERE ob.branch_id = @p0\n     ORDER BY p.origin_ts, p.rowid"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 582,
+      "kind": "statement",
+      "sql": "UPDATE branch_name_bases SET base_hash = @p0\n       WHERE branch_id = @p1 AND owner = @p2 AND modules = @p3 AND name = @p4"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 623,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE op_id = @p0 AND branch_id = @p1"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 638,
+      "kind": "statement",
+      "sql": "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', MAX(origin_ts), '+1 second') AS ts\n     FROM package_ops"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 716,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 730,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO op_branches (op_id, branch_id, source)\n          SELECT op_id, @p0, source FROM op_branches WHERE branch_id = @p1"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 733,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 734,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO branch_name_bases (branch_id, owner, modules, name, base_hash)\n          SELECT @p0, owner, modules, name, base_hash FROM branch_name_bases WHERE branch_id = @p1"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 737,
+      "kind": "statement",
+      "sql": "DELETE FROM branch_name_bases WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 738,
+      "kind": "statement",
+      "sql": "UPDATE branches SET merged_at = datetime('now') WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 749,
+      "kind": "statement",
+      "sql": "SELECT op_id FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 764,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_ops p\n       JOIN op_branches ob ON ob.op_id = p.id\n       WHERE ob.branch_id = @p0 AND p.effective = 0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 775,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET effective = 1\n       WHERE effective = 0\n         AND id IN (SELECT op_id FROM op_branches WHERE branch_id = @p0)"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 796,
+      "kind": "statement",
+      "sql": "UPDATE branches SET merged_at = datetime('now') WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/branches.dark",
+      "line": 797,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 29,
+      "kind": "statement",
+      "sql": "SELECT COALESCE(strftime('%Y-%m-%dT%H:%M:%fZ', MAX(origin_ts), '+1 second'),\n            strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS ts FROM package_ops"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 60,
+      "kind": "statement",
+      "sql": "INSERT OR REPLACE INTO commits (hash, message, origin_ts, parent)\n       VALUES (@p0, @p1, @p2, @p3)"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 80,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM commits"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 87,
+      "kind": "statement",
+      "sql": "SELECT hash, message, origin_ts, created_at, parent FROM commits\n     ORDER BY created_at DESC, rowid DESC LIMIT @p0"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 97,
+      "kind": "statement",
+      "sql": "DELETE FROM commits WHERE hash = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 107,
+      "kind": "statement",
+      "sql": "SELECT hash, message, origin_ts, created_at, parent FROM commits\n       WHERE hash LIKE @p0 || '%' ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 120,
+      "kind": "statement",
+      "sql": "SELECT hash FROM commits WHERE parent = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/commits.dark",
+      "line": 131,
+      "kind": "statement",
+      "sql": "SELECT id FROM package_ops WHERE commit_hash = @p0 ORDER BY origin_ts, rowid"
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 432,
+      "kind": "template",
+      "sql": "SELECT owner, modules, name, item_type, item_hash, COALESCE(origin_ts,'') AS ts,\n                previous\n         FROM locations\n         WHERE unlisted_at IS NULL AND name IN ("
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 465,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name, base_hash FROM branch_name_bases WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 518,
+      "kind": "statement",
+      "sql": "INSERT OR IGNORE INTO conflicts\n              (id, owner, modules, name, item_type, part, kind, candidates, auto_resolved_to, reason, status, origin_ts, branch_id)\n            VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, 'pending',\n                    strftime('%Y-%m-%dT%H:%M:%fZ','now'), @p10)"
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 533,
+      "kind": "statement",
+      "sql": "UPDATE conflicts SET branch_id = @p0 WHERE id = @p1 AND status = 'pending'"
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 604,
+      "kind": "statement",
+      "sql": "SELECT id, owner, modules, name, item_type, COALESCE(part,'') AS part, kind, candidates,\n              auto_resolved_to, reason, status, COALESCE(resolved_by,'') AS resolved_by\n       FROM conflicts WHERE status = 'pending' AND branch_id = @p0 ORDER BY created_at"
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 669,
+      "kind": "statement",
+      "sql": "SELECT id, owner, modules, name, item_type, COALESCE(part,'') AS part, kind, candidates,\n              auto_resolved_to, reason, status, COALESCE(resolved_by,'') AS resolved_by\n       FROM conflicts\n       WHERE (id LIKE @p0 || '%'\n              OR (owner || '.' || modules || '.' || name) = @p0\n              OR name = @p0)\n         AND branch_id = @p1\n       -- PENDING FIRST. A name that has conflicted twice matches both rows, and the listing shows\n       -- only pending ones, so the command acting on the listing has to agree with it. Ordering\n       -- rather than filtering: `show <id>` of a settled conflict should still find it.\n       ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, created_at\n       LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/conflicts.dark",
+      "line": 691,
+      "kind": "statement",
+      "sql": "UPDATE conflicts SET status = @p1, resolved_by = @p2 WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/constraints.dark",
+      "line": 174,
+      "kind": "statement",
+      "sql": "WITH stale AS MATERIALIZED (\n       SELECT t.depends_on_owner AS o, t.depends_on_modules AS m, t.depends_on_name AS n,\n              t.depends_on_hash AS h, cur.item_hash AS ch, cur.item_type AS ct, cur.rowid AS crow\n       FROM (SELECT DISTINCT depends_on_owner, depends_on_modules, depends_on_name, depends_on_hash\n             FROM package_dependencies WHERE depends_on_owner IS NOT NULL) t\n       JOIN locations cur\n         ON cur.owner = t.depends_on_owner\n        AND cur.modules = t.depends_on_modules\n        AND cur.name = t.depends_on_name\n        AND cur.unlisted_at IS NULL\n       WHERE cur.item_hash <> t.depends_on_hash)\n     SELECT l.owner, l.modules, l.name, l.item_type,\n            pd.depends_on_owner AS d_owner, pd.depends_on_modules AS d_modules,\n            pd.depends_on_name AS d_name, pd.depends_on_item_type AS d_type,\n            pd.depends_on_hash AS using_hash, s.ch AS current_hash,\n            s.ct AS current_type\n     FROM stale s\n     CROSS JOIN package_dependencies pd\n     CROSS JOIN locations l\n     WHERE pd.depends_on_owner = s.o AND pd.depends_on_modules = s.m\n       AND pd.depends_on_name = s.n AND pd.depends_on_hash = s.h\n       AND l.item_hash = pd.item_hash AND l.unlisted_at IS NULL\n     ORDER BY l.owner, l.modules, l.name, l.item_type, l.rowid,\n              pd.depends_on_hash, pd.depends_on_item_type,\n              pd.depends_on_owner, pd.depends_on_modules, pd.depends_on_name, s.ct, s.crow"
+    },
+    {
+      "source": "packages/darklang/scm/constraints.dark",
+      "line": 253,
+      "kind": "statement",
+      "sql": "SELECT id FROM conflicts\n     WHERE status = 'acked'\n       AND kind NOT IN ('same-name-different-hash', 'independent-creation')"
+    },
+    {
+      "source": "packages/darklang/scm/constraints.dark",
+      "line": 433,
+      "kind": "statement",
+      "sql": "SELECT item_hash, depends_on_owner AS d_owner, depends_on_modules AS d_modules,\n                depends_on_name AS d_name, depends_on_item_type AS d_type,\n                depends_on_hash AS using_hash\n         FROM package_dependencies\n         WHERE item_hash IN (SELECT value FROM json_each(@p0))\n         ORDER BY rowid"
+    },
+    {
+      "source": "packages/darklang/scm/deps.dark",
+      "line": 40,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT depends_on_hash, depends_on_item_type\n     FROM package_dependencies WHERE item_hash = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/deps.dark",
+      "line": 105,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT depends_on_owner, depends_on_modules, depends_on_name\n       FROM package_dependencies\n       WHERE depends_on_hash = @p0\n         AND depends_on_item_type = @p1\n         AND depends_on_owner IS NOT NULL\n         AND NOT (depends_on_owner = @p2\n                  AND depends_on_modules = @p3\n                  AND depends_on_name = @p4)"
+    },
+    {
+      "source": "packages/darklang/scm/deps.dark",
+      "line": 154,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT l.item_hash, l.item_type, l.owner, l.modules, l.name\n         FROM package_dependencies pd\n         JOIN locations l ON l.item_hash = pd.item_hash AND l.unlisted_at IS NULL\n         WHERE pd.depends_on_item_type = @p0\n           AND pd.depends_on_owner = @p1\n           AND pd.depends_on_modules = @p2\n           AND pd.depends_on_name = @p3\n         ORDER BY l.item_hash"
+    },
+    {
+      "source": "packages/darklang/scm/deps.dark",
+      "line": 205,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT pd.item_hash\n           FROM package_dependencies pd\n           WHERE pd.depends_on_item_type = @p0\n             AND pd.depends_on_owner = @p1\n             AND pd.depends_on_modules = @p2\n             AND pd.depends_on_name = @p3\n           ORDER BY pd.item_hash"
+    },
+    {
+      "source": "packages/darklang/scm/deps.dark",
+      "line": 259,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name FROM locations\n       WHERE item_hash = @p0 AND unlisted_at IS NULL LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/deps.dark",
+      "line": 316,
+      "kind": "statement",
+      "sql": "SELECT DISTINCT depends_on_hash, depends_on_item_type,\n            depends_on_owner, depends_on_modules, depends_on_name\n     FROM package_dependencies WHERE item_hash = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/draftRewrite.dark",
+      "line": 40,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob, origin_ts AS ts\n       FROM package_ops\n       WHERE commit_hash IS NULL\n         AND effective = 1\n         AND id NOT IN (SELECT op_id FROM op_branches)\n       ORDER BY origin_ts, rowid"
+    },
+    {
+      "source": "packages/darklang/scm/draftRewrite.dark",
+      "line": 164,
+      "kind": "statement",
+      "sql": "DELETE FROM locations\n        WHERE owner = @p0 AND modules = @p1 AND name = @p2\n          AND item_hash = @p3 AND origin_ts = @p4"
+    },
+    {
+      "source": "packages/darklang/scm/draftRewrite.dark",
+      "line": 170,
+      "kind": "statement",
+      "sql": "UPDATE locations SET unlisted_at = NULL\n        WHERE location_id = (\n          SELECT location_id FROM locations\n          WHERE owner = @p0 AND modules = @p1 AND name = @p2\n          ORDER BY origin_ts DESC, rowid DESC\n          LIMIT 1\n        )\n        AND source <> 'unbind'\n        AND NOT EXISTS (\n          SELECT 1 FROM locations\n          WHERE owner = @p0 AND modules = @p1 AND name = @p2\n            AND unlisted_at IS NULL\n        )"
+    },
+    {
+      "source": "packages/darklang/scm/draftRewrite.dark",
+      "line": 184,
+      "kind": "statement",
+      "sql": "DELETE FROM package_ops WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/lineage.dark",
+      "line": 48,
+      "kind": "statement",
+      "sql": "SELECT item_hash FROM locations\n       WHERE owner = @p0 AND modules = @p1 AND name = @p2\n         AND item_type = @p3 AND unlisted_at IS NULL\n       LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOps.dark",
+      "line": 141,
+      "kind": "statement",
+      "sql": "SELECT 1 AS ok FROM package_values WHERE hash = @p0 AND rt_dval IS NOT NULL"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBindings.dark",
+      "line": 201,
+      "kind": "template",
+      "sql": "WITH RECURSIVE chain(bid) AS (\n     SELECT @p0\n     UNION\n     SELECT b.parent_id FROM branches b JOIN chain c ON b.id = c.bid\n     WHERE b.parent_id != @p1\n   )"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBindings.dark",
+      "line": 215,
+      "kind": "template",
+      "sql": "SELECT p.id, p.op_blob, p.origin_ts AS ts\n          FROM package_ops p JOIN op_branches ob ON ob.op_id = p.id\n          WHERE ob.branch_id IN (SELECT bid FROM chain)\n          ORDER BY p.origin_ts, p.rowid"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBindings.dark",
+      "line": 271,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name, item_type, item_hash,\n                   COALESCE(origin_ts,'') AS ts, previous\n            FROM locations\n            WHERE owner = @p0 AND modules = @p1 AND name = @p2 AND unlisted_at IS NULL\n            LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBindings.dark",
+      "line": 277,
+      "kind": "statement",
+      "sql": "SELECT l.owner, l.modules, l.name, l.item_type, l.item_hash,\n                   COALESCE(l.origin_ts,'') AS ts, l.previous\n            FROM locations l\n            JOIN package_ops p ON p.id = l.op_id\n            WHERE l.owner = @p0 AND l.modules = @p1 AND l.name = @p2\n              AND l.unlisted_at IS NULL\n              AND p.commit_hash IS NOT NULL\n            LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBindings.dark",
+      "line": 340,
+      "kind": "statement",
+      "sql": "SELECT l.owner, l.modules, l.name, l.item_type, l.item_hash,\n                   COALESCE(l.origin_ts,'') AS ts, l.previous\n            FROM json_each(@p0) j\n            JOIN locations l\n              ON l.owner = json_extract(j.value, '$[0]')\n             AND l.modules = json_extract(j.value, '$[1]')\n             AND l.name = json_extract(j.value, '$[2]')\n            WHERE l.unlisted_at IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBindings.dark",
+      "line": 349,
+      "kind": "statement",
+      "sql": "SELECT l.owner, l.modules, l.name, l.item_type, l.item_hash,\n                   COALESCE(l.origin_ts,'') AS ts, l.previous\n            FROM json_each(@p0) j\n            JOIN locations l\n              ON l.owner = json_extract(j.value, '$[0]')\n             AND l.modules = json_extract(j.value, '$[1]')\n             AND l.name = json_extract(j.value, '$[2]')\n            JOIN package_ops p ON p.id = l.op_id\n            WHERE l.unlisted_at IS NULL\n              AND p.commit_hash IS NOT NULL"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 27,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM branches WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 36,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM op_branches WHERE branch_id = @p0 LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 49,
+      "kind": "statement",
+      "sql": "SELECT parent_id FROM branches WHERE id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 164,
+      "kind": "statement",
+      "sql": "SELECT name FROM branches WHERE id = @p0 LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 224,
+      "kind": "statement",
+      "sql": "SELECT id FROM branches\n       WHERE name = @p0 AND archived_at IS NULL\n       ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 238,
+      "kind": "statement",
+      "sql": "SELECT 1 AS n FROM branches WHERE id = @p0 AND merged_at IS NOT NULL"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 260,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob FROM package_ops WHERE substr(op_blob, 9, 1) = X'0A'"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsBranch.dark",
+      "line": 278,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob FROM package_ops\n         WHERE id IN (SELECT value FROM json_each(@p0))\n         ORDER BY origin_ts, rowid"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 15,
+      "kind": "template",
+      "sql": "SELECT id, op_blob FROM package_ops ORDER BY created_at DESC, rowid DESC LIMIT"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 28,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob FROM package_ops WHERE id LIKE @p0 || '%' ORDER BY rowid DESC LIMIT 20"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 39,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob FROM package_ops WHERE commit_hash = @p0\n       ORDER BY origin_ts, rowid LIMIT @p1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 48,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_ops WHERE commit_hash = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 56,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_ops"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 73,
+      "kind": "template",
+      "sql": "SELECT bid FROM chain)))"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 104,
+      "kind": "template",
+      "sql": "SELECT count(*) AS n FROM package_ops WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 113,
+      "kind": "template",
+      "sql": "SELECT id, origin_ts AS ts, length(op_blob) AS sz, op_blob FROM package_ops WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 180,
+      "kind": "template",
+      "sql": "SELECT id FROM package_ops WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 203,
+      "kind": "template",
+      "sql": "SELECT id, origin_ts AS ts, length(op_blob) AS sz, op_blob FROM package_ops WHERE id IN ({inList})"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 241,
+      "kind": "template",
+      "sql": "SELECT COALESCE(max(created_at), '') AS newest FROM package_ops WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 252,
+      "kind": "template",
+      "sql": "SELECT id FROM package_ops WHERE created_at = @p0 AND"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 260,
+      "kind": "statement",
+      "sql": "SELECT datetime('now') AS now"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 273,
+      "kind": "template",
+      "sql": "SELECT count(*) AS n FROM commits c\n      WHERE c.hash IN (SELECT DISTINCT p.commit_hash FROM package_ops p\n                       WHERE p.commit_hash IS NOT NULL AND"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 297,
+      "kind": "template",
+      "sql": "SELECT c.hash, c.message, c.origin_ts, c.created_at, c.parent\n      FROM commits c\n      WHERE c.hash IN (SELECT DISTINCT p.commit_hash FROM package_ops p\n                       WHERE p.commit_hash IS NOT NULL AND"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 331,
+      "kind": "template",
+      "sql": "SELECT bid FROM chain))\n            OR (p.effective = 1 AND p.id NOT IN (SELECT op_id FROM op_branches)))"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsCommits.dark",
+      "line": 339,
+      "kind": "template",
+      "sql": "SELECT c.hash AS h FROM commits c\n      WHERE c.hash IN (SELECT p.commit_hash FROM package_ops p WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 34,
+      "kind": "template",
+      "sql": "SELECT count(*) AS n FROM package_ops p WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 53,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_ops p\n     JOIN op_branches ob ON ob.op_id = p.id\n     WHERE p.commit_hash IS NULL AND ob.branch_id = @p0 AND ob.source <> 'import'"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 68,
+      "kind": "template",
+      "sql": "SELECT p.id FROM package_ops p WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 88,
+      "kind": "template",
+      "sql": "SELECT p.id, p.op_blob, p.origin_ts AS ts FROM package_ops p WHERE"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 132,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_dependencies WHERE depends_on_hash = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 155,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name FROM locations\n        WHERE source = 'propagation' AND unlisted_at IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 220,
+      "kind": "statement",
+      "sql": "SELECT COUNT(*) AS n FROM conflicts WHERE status = 'overridden'"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 230,
+      "kind": "statement",
+      "sql": "SELECT id, op_blob\n         FROM package_ops\n         WHERE effective = 1 ORDER BY origin_ts, rowid"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 396,
+      "kind": "template",
+      "sql": "UPDATE package_ops SET commit_hash ="
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 449,
+      "kind": "template",
+      "sql": "UPDATE package_ops SET commit_hash ="
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 475,
+      "kind": "statement",
+      "sql": "UPDATE package_ops SET commit_hash = @p0\n          WHERE id = @p1 AND commit_hash IS NULL AND effective = 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 509,
+      "kind": "statement",
+      "sql": "SELECT id FROM package_ops\n       WHERE commit_hash IS NULL AND effective = 0\n         AND id IN (SELECT op_id FROM op_branches WHERE branch_id = @p0)"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 523,
+      "kind": "statement",
+      "sql": "DELETE FROM package_ops\n        WHERE id IN (SELECT value FROM json_each(@p0))\n          AND id NOT IN (SELECT op_id FROM op_branches WHERE branch_id <> @p1)"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 533,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches\n        WHERE branch_id = @p0\n          AND op_id IN (SELECT value FROM json_each(@p1))"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 543,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM op_branches WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 552,
+      "kind": "statement",
+      "sql": "DELETE FROM branch_name_bases WHERE branch_id = @p0"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 643,
+      "kind": "statement",
+      "sql": "DELETE FROM op_branches WHERE branch_id = @p0 AND op_id = @p1\n            AND op_id IN (SELECT id FROM package_ops WHERE commit_hash IS NULL)"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsDraft.dark",
+      "line": 648,
+      "kind": "statement",
+      "sql": "DELETE FROM package_ops WHERE commit_hash IS NULL AND effective = 0 AND id = @p0\n            AND id NOT IN (SELECT op_id FROM op_branches)\n            AND @p1 = @p2"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsMerge.dark",
+      "line": 199,
+      "kind": "statement",
+      "sql": "SELECT id FROM package_ops WHERE commit_hash IS NULL AND effective = 1"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsRepoints.dark",
+      "line": 17,
+      "kind": "statement",
+      "sql": "SELECT owner, modules, name FROM locations\n       WHERE item_hash = @p0 AND item_type = @p1 AND unlisted_at IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsRepoints.dark",
+      "line": 74,
+      "kind": "template",
+      "sql": "SELECT item_hash, owner, modules, name FROM locations\n         WHERE unlisted_at IS NULL AND item_hash IN ("
+    },
+    {
+      "source": "packages/darklang/scm/packageOpsRepoints.dark",
+      "line": 126,
+      "kind": "statement",
+      "sql": "WITH RECURSIVE seeds(seed, owner, modules, name, hash) AS (\n           SELECT j.key, json_extract(j.value, '$[0]'), json_extract(j.value, '$[1]'),\n                  json_extract(j.value, '$[2]'), json_extract(j.value, '$[3]')\n           FROM json_each(@p0) j\n         ),\n         stale(seed, hash) AS (\n           SELECT s.seed, d.item_hash FROM seeds s\n             JOIN package_dependencies d\n               ON d.depends_on_owner = s.owner\n              AND d.depends_on_modules = s.modules\n              AND d.depends_on_name = s.name\n              AND d.depends_on_hash <> s.hash\n           UNION\n           SELECT st.seed, d2.item_hash FROM package_dependencies d2\n             JOIN stale st ON d2.depends_on_hash = st.hash\n         )\n         SELECT DISTINCT CAST(seed AS TEXT) AS seed, hash FROM stale"
+    },
+    {
+      "source": "packages/darklang/scm/partialCommit.dark",
+      "line": 96,
+      "kind": "template",
+      "sql": "SELECT DISTINCT depends_on_hash AS h FROM package_dependencies\n        WHERE item_hash IN ({quoted}) AND depends_on_hash != ''"
+    },
+    {
+      "source": "packages/darklang/scm/partialCommit.dark",
+      "line": 158,
+      "kind": "statement",
+      "sql": "SELECT d.depends_on_owner AS o, d.depends_on_modules AS m, d.depends_on_name AS n\n             FROM package_dependencies d\n             WHERE d.item_hash = @p0 AND d.depends_on_name <> ''"
+    },
+    {
+      "source": "packages/darklang/scm/partialCommit.dark",
+      "line": 168,
+      "kind": "statement",
+      "sql": "SELECT d.depends_on_owner AS o, d.depends_on_modules AS m, d.depends_on_name AS n\n              FROM package_dependencies d\n              JOIN locations l ON l.item_hash = d.item_hash\n              WHERE l.owner || '.' || (CASE WHEN l.modules = '' THEN '' ELSE l.modules || '.' END)\n                    || l.name = @p0\n                AND d.depends_on_name <> ''"
+    },
+    {
+      "source": "packages/darklang/scm/propagation.dark",
+      "line": 118,
+      "kind": "statement",
+      "sql": "SELECT item_hash FROM locations\n       WHERE owner = @p0 AND modules = @p1 AND name = @p2 AND source IN ('op', 'propagation')\n       ORDER BY rowid"
+    },
+    {
+      "source": "packages/darklang/scm/propagation.dark",
+      "line": 231,
+      "kind": "statement",
+      "sql": "SELECT l.owner, l.modules, l.name, l.item_type, l.item_hash\n       FROM json_each(@p0) j\n       JOIN locations l\n         ON l.owner = json_extract(j.value, '$[0]')\n        AND l.modules = json_extract(j.value, '$[1]')\n        AND l.name = json_extract(j.value, '$[2]')\n        AND l.item_type = json_extract(j.value, '$[3]')\n       WHERE l.source <> 'unbind'\n       GROUP BY l.owner, l.modules, l.name, l.item_type, l.item_hash\n       ORDER BY l.owner, l.modules, l.name, l.item_type,\n         MAX(CASE WHEN l.unlisted_at IS NULL THEN '9999-12-31' ELSE l.unlisted_at END) DESC"
+    },
+    {
+      "source": "packages/darklang/scm/storeHealth.dark",
+      "line": 44,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM op_branches ob\n       LEFT JOIN package_ops p ON p.id = ob.op_id\n       WHERE p.id IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/storeHealth.dark",
+      "line": 50,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM op_branches ob\n       LEFT JOIN branches b ON b.id = ob.branch_id\n       WHERE b.id IS NULL"
+    },
+    {
+      "source": "packages/darklang/scm/storeHealth.dark",
+      "line": 55,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_ops WHERE applied = 0 AND effective = 1"
+    },
+    {
+      "source": "packages/darklang/scm/storeHealth.dark",
+      "line": 59,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM locations l\n       WHERE l.unlisted_at IS NULL\n         AND NOT EXISTS (SELECT 1 FROM package_functions f WHERE f.hash = l.item_hash)\n         AND NOT EXISTS (SELECT 1 FROM package_types t WHERE t.hash = l.item_hash)\n         AND NOT EXISTS (SELECT 1 FROM package_values v WHERE v.hash = l.item_hash)\n         AND NOT EXISTS (SELECT 1 FROM package_traits tr WHERE tr.hash = l.item_hash)\n         AND NOT EXISTS (SELECT 1 FROM package_trait_impls i WHERE i.hash = l.item_hash)\n         AND NOT EXISTS (SELECT 1 FROM package_tests test WHERE test.hash = l.item_hash)"
+    },
+    {
+      "source": "packages/darklang/scm/storeHealth.dark",
+      "line": 73,
+      "kind": "statement",
+      "sql": "SELECT count(*) AS n FROM package_ops\n       WHERE origin_ts > strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 day')"
+    }
+  ]
+}
