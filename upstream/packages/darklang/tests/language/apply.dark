@@ -93,7 +93,7 @@ test definedPolyFnInfersTypeArgs =
       |> Stdlib.Test.equal (definedPolyFn (X.B "str")) ]
 
 module InvalidFnCalls =
-  // @compiler xfail compile: "Unknown function or value 'functionWhichDoesntExist'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'functionWhichDoesntExist'" class=aot-rejection reason=aot-name-error
   test missingFunctionRaises =
     (functionWhichDoesntExist 6L)
     => raises "There is no variable named: functionWhichDoesntExist"
@@ -103,54 +103,54 @@ module InvalidFnCalls =
   test zeroTypeArgsAreInferred =
     fnWithTypeArgAndOneParam 1L |> Stdlib.Test.equal 1L
 
-  // @compiler xfail compile: "Function 'fnWithTypeArgAndOneParam' expects 1 type arguments" reason=compiler-gap
+  // @compiler xfail compile: "Function 'fnWithTypeArgAndOneParam' expects 1 type arguments" class=aot-rejection reason=aot-arity-error
   test tooManyTypeArgsRaises =
     fnWithTypeArgAndOneParam<Int64, String> 1L
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
 
   // errors around args
-  // @compiler xfail compile: "Function 'stringFn' expects 1 arguments" reason=compiler-gap
+  // @compiler xfail compile: "Function 'stringFn' expects 1 arguments" class=aot-rejection reason=aot-arity-error
   test tooManyArgsRaises =
     stringFn "str1" "str2"
     => raises
       "Darklang.Language.Tests.Apply.stringFn expects 1 argument, but got 2 arguments"
 
-  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test wrongArgTypeRaises =
     stringFn 5L
     => raises
       "Darklang.Language.Tests.Apply.stringFn's 1st parameter `key` expects String, but got Int64 (5)"
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test argTypeFollowsTypeArgRaises =
     fnWithTypeArgAndOneParam<Int64> "str2"
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypeArgAndOneParam's 1st parameter `arg` expects Int64, but got String (\"str2\")"
 
   // errors around return value
-  // @compiler xfail compile: "Unknown function or value 'shouldReturnStringButDoesNot'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'shouldReturnStringButDoesNot'" class=missing-support reason=upstream-dependency
   test wrongReturnTypeRaises =
     (shouldReturnStringButDoesNot ())
     => raises
       "Darklang.Language.Tests.Apply.shouldReturnStringButDoesNot's return value expects String, but got Int64 (5)"
 
   // A function must return the type chosen by its type argument.
-  // @compiler blocked: compiler-crash
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test wrongTypedReturnRaises =
     fnWithTypedReturn<String> ()
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypedReturn's return value expects String, but got Int64 (5)"
 
   // errors around type args take priority over ones about args
-  // @compiler xfail compile: "Function 'fnWithTypeArgAndOneParam' expects 1 type arguments" reason=compiler-gap
+  // @compiler xfail compile: "Function 'fnWithTypeArgAndOneParam' expects 1 type arguments" class=aot-rejection reason=aot-arity-error
   test typeArgErrorComesFirst =
     fnWithTypeArgAndOneParam<Int64, String> 1L "str"
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
 
   // misc errors
-  // @compiler xfail compile: "Unknown function or value 'derrorFn'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'derrorFn'" class=missing-support reason=upstream-dependency
   test runtimeErrorPropagates =
     derrorFn "msg" => raises "Uncaught exception: msg"
   // test throwsExceptionRaises =

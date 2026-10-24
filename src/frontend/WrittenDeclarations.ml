@@ -353,13 +353,14 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
                   C.allocateBinding "?return" symbols
                 in
                 map
-                  (fun (_, body, symbols) ->
+                  (fun (bodyType, body, symbols) ->
                     ( ({
                          C.id = signature.id;
                          name;
                          typeParams = signature.typeParams;
                          params;
                          returnType = C.checkedType signature.return;
+                         bodyType = C.checkedType bodyType;
                          body;
                          recursion = None;
                        }

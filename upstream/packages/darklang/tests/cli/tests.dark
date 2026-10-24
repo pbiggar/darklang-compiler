@@ -74,7 +74,7 @@ let expectExact (args: List<String>) (expected: String): Stdlib.Test.Result =
 
 // Drive conflicts walk between a throwaway parent and child.
 // Commit both sides before merging and pass -y to avoid an interactive prompt.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test conflictWalkthrough =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let parent = "cli-walk-parent-" + suffix
@@ -120,7 +120,7 @@ test conflictWalkthrough =
     Stdlib.Test.Result.Pass
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test helpCommand =
   let output = runWithCommand ["help"]
 
@@ -140,7 +140,7 @@ test helpCommand =
     Stdlib.Test.fail "Expected help grouped by category, with the nav/ls/version/status rows rendered"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test versionCommand =
   let output = runWithCommand ["version"]
   if Stdlib.String.contains output "Darklang CLI" &&
@@ -150,7 +150,7 @@ test versionCommand =
     Stdlib.Test.fail "Expected version string with 'Darklang CLI alpha-'"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test statusCommand =
   // Two things, because `status` is the one signal you get while editing: WHERE you are, and WHAT you have.
   // The branch line matters most when several branches are in play, which is the normal case now.
@@ -164,23 +164,23 @@ test statusCommand =
       $"Expected `status` to name the branch and summarise the draft; got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'expectExact'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'expectExact'" class=missing-support reason=upstream-dependency
 test evalBoolAnd =
   // `run` is for script files now; calling a package function is `eval`'s job, without the `@`.
   expectExact ["eval", "Stdlib.Bool.and true false"] "false"
 
 
-// @compiler xfail compile: "Unknown function or value 'expectExact'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'expectExact'" class=missing-support reason=upstream-dependency
 test evalInt64Add =
   expectExact ["eval", "(5L + 3L)"] "8"
 
 
-// @compiler xfail compile: "Unknown function or value 'expectExact'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'expectExact'" class=missing-support reason=upstream-dependency
 test evalStringLength =
   expectExact ["eval", "Stdlib.String.length \"hello\""] "5"
 
 
-// @compiler xfail compile: "Unknown function or value 'expectExact'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'expectExact'" class=missing-support reason=upstream-dependency
 test evalListLength =
   expectExact ["eval", "[1, 2, 3] |> Stdlib.List.length"] "3"
 
@@ -191,7 +191,7 @@ test evalListLength =
 /// at author time: a draft may be broken because you write the caller before the callee, a commit may
 /// not, because a commit is what other machines pull. So after an invalid module the item EXISTS, the
 /// message says it is WIP, and the definitions that were already there are untouched.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test moduleCommand =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-module-test-" + suffix
@@ -299,7 +299,7 @@ test moduleCommand =
       $"Expected atomic create, update, and rejection; got {details}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test moduleRejectsDuplicateNames =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-module-duplicate-test-" + suffix
@@ -340,7 +340,7 @@ test moduleRejectsDuplicateNames =
 
 // Merge a child into a throwaway parent so the test leaves no function on main.
 // Commit the changes before merging and pass -y to avoid an interactive prompt.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test mergeRoundTrip =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let parent = "cli-merge-parent-" + suffix
@@ -382,7 +382,7 @@ test mergeRoundTrip =
     Stdlib.Test.Result.Pass
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test fnAcceptsCompleteDeclaration =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-authoring-test-" + suffix
@@ -457,7 +457,7 @@ test fnAcceptsCompleteDeclaration =
        + $"multiple={multipleOutput}")
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test listFunctions =
   let output = runWithCommand ["ls", "Stdlib.List"]
   if Stdlib.String.contains output "Functions" &&
@@ -467,7 +467,7 @@ test listFunctions =
     Stdlib.Test.fail "Expected directory listing with functions"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewFunction =
   let output = runWithCommand ["view", "Stdlib.List.head"]
   if Stdlib.String.contains output "head"
@@ -481,7 +481,7 @@ test viewFunction =
 
 // Exercise the harmful gate through a real CLI process: the gate lives in the CLI host.
 // Each command names main explicitly because deprecation folding only runs on main.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test harmfulGate =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let fnName = $"Tests.HarmGate.g{suffix}"
@@ -507,7 +507,7 @@ test harmfulGate =
     Stdlib.Test.Result.Pass
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test searchMatchesModuleAndCamelCaseName =
   let output = runWithCommand ["search", "string toList", "--fn"]
   if Stdlib.String.contains output "Darklang.Stdlib.String.toList" then
@@ -517,7 +517,7 @@ test searchMatchesModuleAndCamelCaseName =
       $"Expected `string toList` to find Stdlib.String.toList, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test searchMatchesModuleAndOperationName =
   let output = runWithCommand ["search", "json parse", "--fn"]
   if Stdlib.String.contains output "Darklang.Stdlib.Json.parse" then
@@ -527,7 +527,7 @@ test searchMatchesModuleAndOperationName =
       $"Expected `json parse` to find Stdlib.Json.parse, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test searchFindsNestedHelpersFromParentModule =
   let output = runWithCommand ["search", "AltJson.get", "--fn"]
 
@@ -538,7 +538,7 @@ test searchFindsNestedHelpersFromParentModule =
       $"Expected `AltJson.get` to find nested AltJson helpers, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test batchSearchKeepsQueriesIndependent =
   let output =
     runWithCommand
@@ -563,7 +563,7 @@ test batchSearchKeepsQueriesIndependent =
       $"Expected three independent batch search results, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test unresolvedNameGuidance =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-name-guidance-test-" + suffix
@@ -603,7 +603,7 @@ test unresolvedNameGuidance =
        + $"PACKAGE={packageOutput}")
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test listTypes =
   let output = runWithCommand ["ls", "Stdlib.Option"]
   if Stdlib.String.contains output "Types" &&
@@ -613,7 +613,7 @@ test listTypes =
     Stdlib.Test.fail "Expected directory listing with types"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test helpForRun =
   let output = runWithCommand ["help", "run"]
   // `contains output "run"` is satisfied by the unknown-command fallback ("No help available for command:
@@ -625,7 +625,7 @@ test helpForRun =
     Stdlib.Test.fail "Expected `help run` to resolve the alias and print run-script's usage"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test helpForLs =
   let output = runWithCommand ["help", "ls"]
   // Same reasoning as `help run`: assert something only the real topic prints.
@@ -635,12 +635,12 @@ test helpForLs =
     Stdlib.Test.fail "Expected `help ls` to print ls's usage"
 
 
-// @compiler xfail compile: "Unknown function or value 'expectExact'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'expectExact'" class=missing-support reason=upstream-dependency
 test evalSimpleExpression =
   expectExact ["eval", "2L + 3L"] "5"
 
 
-// @compiler xfail compile: "Unknown function or value 'expectExact'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'expectExact'" class=missing-support reason=upstream-dependency
 test evalStringExpression =
   expectExact ["eval", "\"hello\" + \"world\""] "helloworld"
 
@@ -650,7 +650,7 @@ test evalStringExpression =
 // register numbers and instruction counts change whenever the compiler does, and a test that pins them
 // fails on every unrelated codegen improvement.
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewAst =
   let output = runWithCommand ["view", "Stdlib.List.last", "--ast"]
 
@@ -667,7 +667,7 @@ test viewAst =
     Stdlib.Test.fail $"Expected an AST tree with signature rows and node kinds, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewInstructions =
   let output = runWithCommand ["view", "Stdlib.List.push", "--instructions"]
 
@@ -683,7 +683,7 @@ test viewInstructions =
     Stdlib.Test.fail $"Expected an instruction listing for List.push, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewInstructionsShowsLambdas =
   // A listing that stopped at `CreateLambda` would be a dead end, so a lambda gets its own section
   // below the function that creates it.
@@ -712,7 +712,7 @@ test viewInstructionsShowsLambdas =
     Stdlib.Test.fail $"Expected the lambda's own listing under {name}'s, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewCompilerViewsRejectNonFunctions =
   // Both views are function-only, and saying which kind of thing you pointed at beats "not found".
   let typeOutput = runWithCommand ["view", "Stdlib.Option.Option", "--ast"]
@@ -727,7 +727,7 @@ test viewCompilerViewsRejectNonFunctions =
       $"Expected kind-specific refusals, got type: {typeOutput}, module: {moduleOutput}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewFlagBeforePath =
   // Flags are position-independent; this is the ordering people actually type.
   let output = runWithCommand ["view", "--ast", "Stdlib.List.push"]
@@ -738,7 +738,7 @@ test viewFlagBeforePath =
     Stdlib.Test.fail $"Expected --ast to work before the path, got: {output}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewUnknownFlag =
   let output = runWithCommand ["view", "Stdlib.List.push", "--nope"]
 
@@ -753,7 +753,7 @@ test viewUnknownFlag =
 // These five moved from Dark to builtins for speed. The edge cases are the point: an out-of-bounds or
 // negative index, an empty list, and nested empties are exactly where a reimplementation drifts.
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test nativeListEdgeCases =
   let cases =
     [ ("Stdlib.List.getAt [1,2,3] 0", "1")
@@ -798,7 +798,7 @@ test nativeListEdgeCases =
 /// awaited and then retried the synchronous path, which never terminates for a type argument that isn't
 /// in the store, because cache misses aren't cached. A scalar type arg, a container one and a custom one
 /// each resolve differently, so all three are here.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test explicitTypeArgs =
   let scalar = runWithCommand ["eval", "Stdlib.Json.parse<Int64> \"3\""]
   let container = runWithCommand ["eval", "Stdlib.Json.parse<List<Int64>> \"[1,2]\""]
@@ -816,7 +816,7 @@ test explicitTypeArgs =
       $"Expected explicit type args to resolve; got scalar: {scalar}, container: {container}, custom: {custom}"
 
 
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test getAtNoneIsStillNone =
   let eq = runWithCommand ["eval", "(Stdlib.List.getAt [1,2,3] 99) == Stdlib.Option.Option.None"]
   let dflt = runWithCommand ["eval", "Stdlib.Option.withDefault (Stdlib.List.getAt [1,2,3] 99) 0"]
@@ -832,7 +832,7 @@ test getAtNoneIsStillNone =
 /// The point of `--raw` is that another program consumes it, so anything decorative
 /// in there is a bug rather than a cosmetic complaint: a colour code or a badge line
 /// ends up in whatever the output was piped into.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewRawIsUndecorated =
   let esc = "\u001b"
   let raw = runWithCommand [ "view", "Stdlib.List.head", "--raw" ]
@@ -853,7 +853,7 @@ test viewRawIsUndecorated =
 /// This is the property that makes `view --raw` usable as a pipe: if the printer and
 /// the parser disagree anywhere, a round trip authors a second version of the item
 /// and the op log grows every time someone looks at it.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test editRoundTripsThroughRaw =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-edit-test-" + suffix
@@ -911,7 +911,7 @@ test editRoundTripsThroughRaw =
 /// than one candidate that resolution has to prefer the one that was typed;
 /// otherwise `view Zz.alpha` prints a definition headed `Zz.beta`, and `--raw` feeds
 /// that wrong name to whatever writes it back.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test viewHeadsWithTheNameYouAskedFor =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-sharedbody-test-" + suffix
@@ -962,7 +962,7 @@ test viewHeadsWithTheNameYouAskedFor =
 /// layout is where they are likeliest to drift apart. A round trip that changes the
 /// item is worse than one that fails: nothing says so, and the store quietly holds
 /// something you did not write.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test editRoundTripsTypesAndValues =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-edit-kinds-" + suffix
@@ -1029,7 +1029,7 @@ test editRoundTripsTypesAndValues =
 /// `edit` hands the file to the same validation `module` does, so a rejection has to
 /// be a rejection: half-applying it, or reporting a failure while the store moved,
 /// would make an editor round trip something you cannot trust.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test editLeavesTheItemAloneOnABadFile =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let branchName = "cli-edit-bad-" + suffix
@@ -1078,7 +1078,7 @@ test editLeavesTheItemAloneOnABadFile =
 /// A module is the near miss worth naming: `dark edit Stdlib.List` is a reasonable
 /// thing to type, and the answer has to point at the command that does take one
 /// rather than leaving you to guess.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test editRefusesWhatItCannotEdit =
   let bare = runWithCommand [ "edit" ]
   let tooMany = runWithCommand [ "edit", "a", "b", "c" ]
@@ -1114,7 +1114,7 @@ test editRefusesWhatItCannotEdit =
 
 /// Every way of passing a definition authors the same item. The `=` is a separator:
 /// unquoted the shell splits it off, quoted it arrives attached, and both come off.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test authoringAcceptsAQuotedSeparator =
   let branch = "cli-quoted-eq-" + (Stdlib.toString (Stdlib.Int.random 1 999999))
   let run (args: List<String>) : String =
@@ -1149,7 +1149,7 @@ test authoringAcceptsAQuotedSeparator =
 
 /// A lowercase module segment is refused. It would be read as the item's NAME, so
 /// `Tests.lower.f` authors `Tests.lower` and nothing can refer to it afterwards.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test authoringRefusesALowercaseModule =
   let branch = "cli-lowercase-" + (Stdlib.toString (Stdlib.Int.random 1 999999))
   let run (args: List<String>) : String =
@@ -1172,7 +1172,7 @@ test authoringRefusesALowercaseModule =
 
 /// "Not found" names the path, once. Naming it at the traversal covers every caller,
 /// which is why none of them adds it again.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test notFoundNamesThePath =
   // A real prefix, so the traversal gets past it: it reports the FIRST missing segment,
   // and a wholly unknown path would only ever report its first.
@@ -1193,7 +1193,7 @@ test notFoundNamesThePath =
 
 /// `tree` refuses what it cannot show. Both arms used to answer instead: an unknown flag
 /// was dropped with the real ones, and an unresolvable path fell back to where you stood.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test treeRefusesWhatItCannotShow =
   let badFlag = runWithCommand [ "tree", "--zzbogus" ]
   let badPath = runWithCommand [ "tree", "Zz.NoSuchThing" ]
@@ -1219,7 +1219,7 @@ test treeRefusesWhatItCannotShow =
 
 /// `discard` throws the whole draft away, so an unanswerable prompt is not a yes: it
 /// refuses, and the work is still there. `-y` is how a script says yes.
-// @compiler xfail compile: "Unknown function or value 'runWithCommand'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'runWithCommand'" class=missing-support reason=upstream-dependency
 test discardNeedsAnExplicitYes =
   let branch = "cli-discard-" + (Stdlib.toString (Stdlib.Int.random 1 999999))
   let run (args: List<String>) : String =

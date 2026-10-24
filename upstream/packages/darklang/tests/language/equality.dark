@@ -64,7 +64,7 @@ test scalars =
       (5us == 5us) |> Stdlib.Test.equal true
       (5us != 6us) |> Stdlib.Test.equal true
       (5.6 == 5.6) |> Stdlib.Test.equal true
-      (-55555555555555555555555555555.5 == -55555555555555555555555555555.5)
+      (-5.555555555555555e28 == -5.555555555555555e28)
       |> Stdlib.Test.equal true
       (5.6 != 5.7) |> Stdlib.Test.equal true
       ("asd" == "asd") |> Stdlib.Test.equal true
@@ -157,7 +157,7 @@ test bytesDatesAndUuids =
 // |> Stdlib.Test.equal false
 
 // Separately written lambdas are unequal. Comparing them does not execute their bodies.
-// @compiler xfail compile: "Unbound local variable 'y'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'y'" class=aot-rejection reason=aot-name-error
 test lambdas =
   Stdlib.Test.all
     [ ((fun x -> y) == (fun x -> y)) |> Stdlib.Test.equal false
@@ -279,7 +279,7 @@ test records =
       (ERecUInt8 { x = 6uy, y = 7uy } != ERecUInt8 { x = 7uy, y = 6uy })
       |> Stdlib.Test.equal true ]
 
-// @compiler xfail compile: "Unknown type 'EEnumInt128'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown type 'EEnumInt128'" class=missing-support reason=upstream-dependency
 test enums =
   Stdlib.Test.all
     [ (EEnumInt128.E1 == EEnumInt128.E1) |> Stdlib.Test.equal true
@@ -318,7 +318,7 @@ test enums =
       (EEnumInt8.E3 5y != EEnumInt8.E3 6y) |> Stdlib.Test.equal true ]
 
 // aliases
-// @compiler xfail compile: "Unknown type 'EEnum2Int128'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown type 'EEnum2Int128'" class=missing-support reason=upstream-dependency
 test enumAliases =
   Stdlib.Test.all
     [ (EEnum2Int128.E1 == EEnumInt128.E1) |> Stdlib.Test.equal true
@@ -366,27 +366,27 @@ test optionsAndResults =
       (Stdlib.Result.Result.Ok 0L != Stdlib.Result.Result.Error 0L)
       |> Stdlib.Test.equal true ]
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test floatEqualsInt64Raises =
   (5.7 != 6L) => raises "Cannot perform equality check on Float and Int64"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test floatEqualsSameValueInt64Raises =
   (5.7 != 5L) => raises "Cannot perform equality check on Float and Int64"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test uint16EqualsInt16Raises =
   (5us == 5s) => raises "Cannot perform equality check on UInt16 and Int16"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test int8EqualsInt32Raises =
   (5y == 5l) => raises "Cannot perform equality check on Int8 and Int32"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test int64EqualsInt32Raises =
   (5L == 5l) => raises "Cannot perform equality check on Int64 and Int32"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test uint16NotEqualsInt16Raises =
   (5us != 6s) => raises "Cannot perform equality check on UInt16 and Int16"
 
@@ -395,21 +395,21 @@ test leftOperandErrorRaisesFirst =
    != Stdlib.Test.raiseRuntimeError "different msg")
   => raises "Uncaught exception: test"
 
-// @compiler xfail compile: "Expected TUnit, got TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TUnit, got TSum" class=aot-rejection reason=aot-type-error
 test unitEqualsOptionRaises =
   (() != Stdlib.Option.Option.None)
   => raises
     "Cannot perform equality check on Unit and Darklang.Stdlib.Option.Option<_>"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test unitEqualsBoolRaises =
   (() != false) => raises "Cannot perform equality check on Unit and Bool"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test unitEqualsInt32Raises =
   (() != 0l) => raises "Cannot perform equality check on Unit and Int32"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test unitEqualsFloatRaises =
   (() != 0.0) => raises "Cannot perform equality check on Unit and Float"
 // CLEANUP follow up here when DB references are fully resolved at parse-time
@@ -527,12 +527,12 @@ test unwrapErrorRaises =
   Stdlib.Result.Result.Error 5L |> Builtin.unwrap
   => raises "Cannot unwrap Error: 5"
 
-// @compiler xfail compile: "Can only unwrap Options and Results, yet got TBool" reason=compiler-gap
+// @compiler xfail compile: "Can only unwrap Options and Results, yet got TBool" class=aot-rejection reason=aot-type-error
 test unwrapNonOptionRaises =
   true |> Builtin.unwrap
   => raises "Can only unwrap Options and Results, yet got true"
 
-// @compiler xfail compile: "Builtin.unwrap expects 1 argument, got 2" reason=compiler-gap
+// @compiler xfail compile: "Builtin.unwrap expects 1 argument, got 2" class=aot-rejection reason=aot-arity-error
 test unwrapWrongArgCountRaises =
   Builtin.unwrap 1 2
   => raises "Builtin.unwrap expects 1 argument, but got 2 arguments"

@@ -35,7 +35,7 @@ test general =
       |> Stdlib.Test.equal 8L ]
 
 // only lambda might be placed into the variable used in the middle of the pipe
-// @compiler xfail compile: "Expression is not callable" reason=compiler-gap
+// @compiler xfail compile: "Expression is not callable" class=aot-rejection reason=aot-type-error
 test nonFunctionStageRaises =
   (let x = 1L in (5L |> x |> (+) 3L))
   => raises

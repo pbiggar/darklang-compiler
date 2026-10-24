@@ -528,6 +528,11 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
         | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor | AST.Lt | AST.Gt
         | AST.Lte | AST.Gte | AST.And | AST.Or ->
             let* typ = infer expr in
+            (* Generic operator requirements must also hold after specialization. *)
+            let* () =
+              if op = AST.Mod then WrittenCheckingState.validateOperator op typ
+              else Ok ()
+            in
             let id, gen = A.freshVar gen in
             let value =
               match O.integerFunctionForBinOp functionId typ op with

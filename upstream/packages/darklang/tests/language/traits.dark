@@ -41,7 +41,7 @@ module Shapes =
   let neverCalls<'a: Show> (v: 'a) : String = if false then Show.show v else "never"
 
   // The impl's method is an ordinary fn under <Type>.<Trait>
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Point.Show.show'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Point.Show.show'" class=missing-support reason=upstream-dependency
   test implMethodIsFn =
     Shapes.Point.Show.show (Shapes.Point { x = 1, y = 2 })
     |> Stdlib.Test.equal "(1, 2)"
@@ -50,7 +50,7 @@ module Shapes =
   // beneath it
   //
   // Dispatch by the argument's type
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" class=missing-support reason=upstream-dependency
   test dispatchByArgType =
     Stdlib.Test.all
       [ Shapes.Show.show (Shapes.Point { x = 5, y = 6 })
@@ -59,7 +59,7 @@ module Shapes =
         Shapes.Show.show true |> Stdlib.Test.equal "yes" ]
 
   // Inside a bounded generic fn
-  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" class=missing-support reason=upstream-dependency
   test boundedGenericFn =
     Stdlib.Test.all
       [ Shapes.display (Shapes.Point { x = 1, y = 2 })
@@ -67,7 +67,7 @@ module Shapes =
         Shapes.display 5 |> Stdlib.Test.equal "value: 5" ]
 
   // Conditional impls dispatch on the head, then on the elements lazily
-  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" class=missing-support reason=upstream-dependency
   test conditionalImpls =
     Stdlib.Test.all
       [ Shapes.display [ 1, 2, 3 ] |> Stdlib.Test.equal "value: [1, 2, 3]"
@@ -76,7 +76,7 @@ module Shapes =
         |> Stdlib.Test.equal "value: [(1, 2)]" ]
 
   // As a function value, and piped
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" class=missing-support reason=upstream-dependency
   test functionValueAndPipe =
     Stdlib.Test.all
       [ ([ 1, 2 ] |> Stdlib.List.map Shapes.Show.show)
@@ -85,7 +85,7 @@ module Shapes =
         |> Stdlib.Test.equal "(7, 8)" ]
 
   // Receiver calls: `x.method` is the whole call for a one-argument method
-  // @compiler xfail compile: "Unknown field 'show' on Darklang.Language.Tests.Traits.Shapes.Point" reason=compiler-gap
+  // @compiler xfail compile: "Unknown field 'show' on Darklang.Language.Tests.Traits.Shapes.Point" class=missing-support reason=compiler-gap
   test receiverCalls =
     Stdlib.Test.all
       [ (Shapes.Point { x = 1, y = 2 }).show |> Stdlib.Test.equal "(1, 2)"
@@ -96,18 +96,18 @@ module Shapes =
     (Shapes.Point { x = 1, y = 2 }).x |> Stdlib.Test.equal 1
 
   // A direct call reports the missing implementation at the method call.
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" class=missing-support reason=upstream-dependency
   test noImplForDirectCallRaises =
     Shapes.Show.show 3.5
     => raises
       "Float has no implementation of Darklang.Language.Tests.Traits.Shapes.Show. Write `impl Show for Float = ...`, or run `dark impls Show` to see which types do"
 
   // No impl: at the CALL of a bounded fn, before its body runs
-  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" class=missing-support reason=upstream-dependency
   test boundedCallWithImpl =
     Shapes.neverCalls 5 |> Stdlib.Test.equal "never"
 
-  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" class=missing-support reason=upstream-dependency
   test noImplForBoundedCallRaises =
     Shapes.neverCalls 3.5
     => raises
@@ -125,7 +125,7 @@ module Multi =
 
   let sum<'a: Stdlib.Add> (a: 'a) (b: 'a) (c: 'a) : 'a = a + b + c
 
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" reason=compiler-gap
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" class=missing-support reason=compiler-gap
   test operatorTraits =
     Stdlib.Test.all
       [ (Multi.Vec { dx = 1, dy = 2 } + Multi.Vec { dx = 10, dy = 20 })
@@ -143,7 +143,7 @@ module Multi =
         |> Stdlib.Test.equal (Multi.Vec { dx = 6, dy = 6 })
         Multi.sum "a" "b" "c" |> Stdlib.Test.equal "abc" ]
 
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" reason=compiler-gap
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" class=aot-rejection reason=aot-type-error
   test boolHasNoAddRaises =
     Multi.sum true false true
     => raises
@@ -154,7 +154,7 @@ module Multi =
   // would be a second impl for Int and every `1 + 2` an ambiguity.
   //
   // Receiver call on a two-argument method is a partial application
-  // @compiler xfail compile: "Unknown field 'add' on Darklang.Language.Tests.Traits.Multi.Vec" reason=compiler-gap
+  // @compiler xfail compile: "Unknown field 'add' on Darklang.Language.Tests.Traits.Multi.Vec" class=missing-support reason=compiler-gap
   test receiverPartialApplication =
     Stdlib.Test.all
       [ ((Multi.Vec { dx = 1, dy = 2 }).add (Multi.Vec { dx = 1, dy = 1 }))
@@ -191,14 +191,14 @@ module Ambiguity =
     let describe (n: Int) : String = "labelled"
 
   // Naming the trait disambiguates
-  // @compiler xfail compile: "Unknown function or value 'Ambiguity.Describe.describe'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Ambiguity.Describe.describe'" class=missing-support reason=upstream-dependency
   test namedTraitDisambiguates =
     Stdlib.Test.all
       [ Ambiguity.Describe.describe 1 |> Stdlib.Test.equal "described"
         Ambiguity.Label.describe 1 |> Stdlib.Test.equal "labelled" ]
 
   // A receiver call cannot pick between two traits with the same method name
-  // @compiler xfail compile: "Field access requires a record value" reason=compiler-gap
+  // @compiler xfail compile: "Field access requires a record value" class=missing-support reason=compiler-gap
   test ambiguousReceiverRaises =
     (1).describe
     => raises
@@ -225,7 +225,7 @@ module MethodBounds =
   // constant `false`, so a test built on it passes whether or not the bound is
   // discharged against the right trait. These four cannot: a swap turns the first
   // two red, and no constant satisfies both.
-  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" class=missing-support reason=upstream-dependency
   test methodBounds =
     Stdlib.Test.all
       [ MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) 1L 2L
@@ -235,7 +235,7 @@ module MethodBounds =
         MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) "a" "b"
         |> Stdlib.Test.equal true ]
 
-  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" class=missing-support reason=upstream-dependency
   test methodBoundOnBoolRaises =
     MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) true true
     => raises
@@ -252,18 +252,12 @@ module SortOrder =
   // `Compare`.
   type Desc = { descKey: Int64, descTag: String }
 
-  // @compiler blocked: container-adaptation
   impl Compare for Desc =
-    // @compiler blocked: container-adaptation
     let lessThan (a: Desc) (b: Desc) : Bool = a.descKey > b.descKey
-    // @compiler blocked: container-adaptation
     let lessThanOrEqualTo (a: Desc) (b: Desc) : Bool = a.descKey >= b.descKey
-    // @compiler blocked: container-adaptation
     let greaterThan (a: Desc) (b: Desc) : Bool = a.descKey < b.descKey
-    // @compiler blocked: container-adaptation
     let greaterThanOrEqualTo (a: Desc) (b: Desc) : Bool = a.descKey <= b.descKey
 
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" reason=compiler-gap
   test customCompareOrder =
     Stdlib.Test.all
       [ (SortOrder.Desc { descKey = 1L, descTag = "" }
@@ -280,7 +274,6 @@ module SortOrder =
 
   // Stable: values equal under `Compare` keep the order they came in, whatever their
   // structure.
-  // @compiler xfail runtime: "Values differ" reason=compiler-gap
   test stableSort =
     Stdlib.List.sort
       [ SortOrder.Desc { descKey = 1L, descTag = "b" }
@@ -329,7 +322,7 @@ module Equality =
         (Stdlib.Option.Option.Some 1 == Stdlib.Option.Option.Some 1)
         |> Stdlib.Test.equal true ]
 
-  // @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+  // @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
   test intVsStringEqualityRaises =
     (1 == "a")
     => raises "Cannot perform equality check on Int and String"
@@ -395,7 +388,7 @@ module Identities =
       [ Stdlib.Zero.zero<Int64> () |> Stdlib.Test.equal 0L
         Stdlib.One.one<Float> () |> Stdlib.Test.equal 1.0 ]
 
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Zero'" reason=compiler-gap
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Zero'" class=aot-rejection reason=aot-type-error
   test zeroWithoutTypeRaises =
     Stdlib.Zero.zero ()
     => raises
@@ -409,7 +402,7 @@ module Identities =
         Identities.zeroOf 2.5 |> Stdlib.Test.equal 2.5 ]
 
   // `sum` and `product` take a seed, so `[]` never has to ask
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" reason=compiler-gap
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" class=missing-support reason=compiler-gap
   test seededSumAndProduct =
     Stdlib.Test.all
       [ Stdlib.sum 0L [ 1L, 2L, 3L ] |> Stdlib.Test.equal 6L
@@ -430,7 +423,7 @@ module Rendering =
     let toString (p: Point) : String =
       $"({Stdlib.toString p.x}, {Stdlib.toString p.y})"
 
-  // @compiler xfail compile: "Unknown field 'toString' on Darklang.Language.Tests.Traits.Rendering.Point" reason=compiler-gap
+  // @compiler xfail compile: "Unknown field 'toString' on Darklang.Language.Tests.Traits.Rendering.Point" class=missing-support reason=compiler-gap
   test toStringTrait =
     Stdlib.Test.all
       [ (Rendering.Point { x = 1L, y = 2L }).toString |> Stdlib.Test.equal "(1, 2)"
@@ -456,7 +449,7 @@ module Rendering =
         Stdlib.clamp 5 10 20 |> Stdlib.Test.equal 10 ]
 
   // A type with no Compare implementation is what the bound refuses
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" reason=compiler-gap
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" class=aot-rejection reason=aot-type-error
   test minOnBoolRaises =
     Stdlib.min true false
     => raises
@@ -470,7 +463,7 @@ module Rendering =
         Stdlib.abs 0 |> Stdlib.Test.equal 0 ]
 
   // an unsigned type has no Negate implementation, so it has no abs either
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Negate'" reason=compiler-gap
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Negate'" class=aot-rejection reason=aot-type-error
   test absOfUnsignedRaises =
     Stdlib.abs 5uy
     => raises

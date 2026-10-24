@@ -1,0 +1,10 @@
+// Duplicate-key rendering must survive concrete calls compiled in a preamble.
+let duplicateStringKey () : Dict<String, String> = Stdlib.Dict.set (Dict { "key": "before" }) "key" "after"
+let duplicateIntKey () : Dict<Int64, String> = Stdlib.Dict.set (Dict { 7L: "before" }) 7L "after"
+type RenderedKey = { keyText: String }
+let duplicateRecordKey () : Dict<RenderedKey, String> = Stdlib.Dict.set (Dict { RenderedKey { keyText = "x" }: "before" }) (RenderedKey { keyText = "x" }) "after"
+let duplicateDictKey () : Dict<Dict<String, Int64>, String> = let key = Dict { "nested": 7L } in Stdlib.Dict.set (Stdlib.Dict.singleton key "before") key "after"
+duplicateStringKey () = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key \"key\"\n"
+duplicateIntKey () = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key 7\n"
+duplicateRecordKey () = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key RenderedKey { keyText: \"x\" }\n"
+duplicateDictKey () = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key Dict { nested = 7 }\n"

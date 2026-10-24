@@ -353,31 +353,34 @@ let specializeFromSpecs symbols definitions initial =
             })
           functions
       in
-      {
-        S.specializedFuncs = functions;
-        specRegistry = registry;
-        externalSpecs;
-        symbols;
-      }
+      Ok
+        {
+          S.specializedFuncs = functions;
+          specRegistry = registry;
+          externalSpecs;
+          symbols;
+        }
     else
-      let newFunctions, pending, registry, externalSpecs, symbols =
+      let* newFunctions, pending, registry, externalSpecs, symbols =
         SS.elements fresh
         |> List.fold_left
-             (fun (funcs, pending, registry, externalSpecs, symbols)
-                  (name, types) ->
+             (fun result (name, types) ->
+               let* funcs, pending, registry, externalSpecs, symbols = result in
                match M.find_opt name definitions with
                | None ->
-                   ( funcs,
-                     pending,
-                     registry,
-                     SS.add (name, types) externalSpecs,
-                     symbols )
+                   Ok
+                     ( funcs,
+                       pending,
+                       registry,
+                       SS.add (name, types) externalSpecs,
+                       symbols )
                | Some (artifact : S.genericFunctionArtifact) ->
                    let specializedName =
                      S.specName artifact.S.func.C.name types
                    in
                    let id, symbols = C.internFunction specializedName symbols in
                    let func = T.specializeFunction id artifact.S.func types in
+                   let* () = T.validateFunctionReturn func in
                    let func =
                      {
                        func with
@@ -393,17 +396,18 @@ let specializeFromSpecs symbols definitions initial =
                    in
                    let registry = SM.add (name, types) func.C.name registry in
                    let bodySpecs = collectTypeAppsFromFunc symbols func in
-                   ( specialized :: funcs,
-                     SS.union pending bodySpecs,
-                     registry,
-                     externalSpecs,
-                     symbols ))
-             ([], SS.empty, registry, externalSpecs, symbols)
+                   Ok
+                     ( specialized :: funcs,
+                       SS.union pending bodySpecs,
+                       registry,
+                       externalSpecs,
+                       symbols ))
+             (Ok ([], SS.empty, registry, externalSpecs, symbols))
       in
       iterate pending (SS.union processed fresh) (newFunctions @ functions)
         registry externalSpecs symbols
   in
-  Ok (iterate initial SS.empty [] SM.empty SS.empty symbols)
+  iterate initial SS.empty [] SM.empty SS.empty symbols
 
 let isIntrinsicTypeAppName = function
   | "__raw_get" | "__raw_take" | "__raw_slot_init" | "__stream_to_rawptr"

@@ -363,5 +363,5 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/json/parseError/jsonPath.dark` | `Darklang.Stdlib.Json.ParseError.JsonPath`  | `packages/darklang/stdlib/json.dark` |
 | `packages/darklang/stdlib/json/parseError.dark` | `Darklang.Stdlib.Json.ParseError`  | `packages/darklang/stdlib/json.dark` |
 | `packages/darklang/stdlib/json.dark` | `Darklang.Stdlib.Json`  | `packages/darklang/stdlib/json.dark` |
-| `packages/darklang/stdlib/test.dark` | `Darklang.Stdlib.Test` | Native runtime-error and equality assertions; original Result, pass, fail, expect and all come from the imported source |
+| `packages/darklang/stdlib/test.dark` | `Darklang.Stdlib.Test` | Native runtime-error and equality assertions with statically generated value diagnostics; original Result, pass, fail, expect and all come from the imported source |
 | `packages/darklang/stdlib/__testAssertions.dark` | `Darklang.Stdlib.Test.Tests` | Replacement for the upstream assertion-result comparison helper; tagged test-diagnostics |

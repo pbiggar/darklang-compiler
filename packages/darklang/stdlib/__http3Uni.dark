@@ -31,16 +31,16 @@ let create (fromServer: Bool) : Stdlib.__Http3Uni.State =
   | Error _ -> Builtin.crash "Zero QPACK capacity is invalid"
 
 let __claim (state: Stdlib.__Http3Uni.State) (id: Int64) (kind: Int64)
-  : Stdlib.Result.Result<Stdlib.__Http3Uni.State, String> =
-  if kind == 1L then Error "Unpermitted HTTP/3 push stream"
+  : Stdlib.Result.Result<Stdlib.__Http3Uni.State, Stdlib.__Http3Wire.Failure> =
+  if kind == 1L then Error (Stdlib.__Http3Wire.connectionFailure (if state.fromServer then 264L else 259L) "Unpermitted HTTP/3 push stream")
   else if kind == 0L then
-    if Stdlib.Option.isSome state.controlId then Error "Duplicate HTTP/3 control stream"
+    if Stdlib.Option.isSome state.controlId then Error (Stdlib.__Http3Wire.connectionFailure 259L "Duplicate HTTP/3 control stream")
     else Ok { state with controlId = Some id }
   else if kind == 2L then
-    if Stdlib.Option.isSome state.encoderId then Error "Duplicate QPACK encoder stream"
+    if Stdlib.Option.isSome state.encoderId then Error (Stdlib.__Http3Wire.connectionFailure 259L "Duplicate QPACK encoder stream")
     else Ok { state with encoderId = Some id }
   else if kind == 3L then
-    if Stdlib.Option.isSome state.decoderId then Error "Duplicate QPACK decoder stream"
+    if Stdlib.Option.isSome state.decoderId then Error (Stdlib.__Http3Wire.connectionFailure 259L "Duplicate QPACK decoder stream")
     else Ok { state with decoderId = Some id }
   else Ok state
 
@@ -53,40 +53,40 @@ let __replace (state: Stdlib.__Http3Uni.State) (stream: Stdlib.__Http3Uni.Stream
 
 let __payload (state: Stdlib.__Http3Uni.State) (stream: Stdlib.__Http3Uni.Stream)
   (kind: Int64) (data: Blob) (finished: Bool) (reset: Bool)
-  : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, String> =
+  : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, Stdlib.__Http3Wire.Failure> =
   if (kind == 0L || kind == 2L || kind == 3L) && (finished || reset) then
-    Error "Closed critical HTTP/3 stream"
+    Error (Stdlib.__Http3Wire.connectionFailure 260L "Closed critical HTTP/3 stream")
   else
     let next = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, kind = Some kind, finished = finished || reset } in
     if kind == 0L then
       Stdlib.__Http3Control.feed next.control data |> Stdlib.Result.andThen (fun received ->
         let outgoing =
           if Stdlib.Bool.not next.control.settings && received.state.settings then
-            Stdlib.__QpackEncoder.create (Stdlib.__Http3Uni.__setting received.state.parameters 1L) (Stdlib.__Http3Uni.__setting received.state.parameters 7L)
+            Stdlib.__QpackEncoder.create (Stdlib.__Http3Uni.__setting received.state.parameters 1L) (Stdlib.__Http3Uni.__setting received.state.parameters 7L) |> Stdlib.Result.mapError (Stdlib.__Http3Wire.connectionFailure 265L)
           else Ok next.outgoing in
         outgoing |> Stdlib.Result.map (fun outgoing -> Stdlib.__Http3Uni.Received { state = { next with control = received.state, outgoing = outgoing }, events = received.events, feedback = Stdlib.Blob.empty }))
     else if kind == 2L then
-      Stdlib.__QpackDecoder.feed next.table data |> Stdlib.Result.map (fun received ->
+      Stdlib.__QpackDecoder.feed next.table data |> Stdlib.Result.mapError (Stdlib.__Http3Wire.connectionFailure 513L) |> Stdlib.Result.map (fun received ->
         let feedback = if received.increment == 0L then Stdlib.Blob.empty else Stdlib.__Hpack.encodeInteger 6L 0L received.increment in
         Stdlib.__Http3Uni.Received { state = { next with table = received.state }, events = [], feedback = feedback })
     else if kind == 3L then
-      Stdlib.__QpackEncoder.feed next.outgoing data |> Stdlib.Result.map (fun outgoing ->
+      Stdlib.__QpackEncoder.feed next.outgoing data |> Stdlib.Result.mapError (Stdlib.__Http3Wire.connectionFailure 514L) |> Stdlib.Result.map (fun outgoing ->
         Stdlib.__Http3Uni.Received { state = { next with outgoing = outgoing }, events = [], feedback = Stdlib.Blob.empty })
     else Ok (Stdlib.__Http3Uni.Received { state = next, events = [], feedback = Stdlib.Blob.empty })
 
 let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished: Bool) (reset: Bool)
-  : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, String> =
+  : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, Stdlib.__Http3Wire.Failure> =
   if id < 0L || id > 4611686018427387903L || id % 4L != (if state.fromServer then 3L else 2L) then
-    Error "Invalid peer HTTP/3 unidirectional stream"
-  else if Stdlib.Blob.__byteLength data > 65536L then Error "HTTP/3 read exceeds limit"
+    Error (Stdlib.__Http3Wire.connectionFailure 259L "Invalid peer HTTP/3 unidirectional stream")
+  else if Stdlib.Blob.__byteLength data > 65536L then Error (Stdlib.__Http3Wire.connectionFailure 263L "HTTP/3 read exceeds limit")
   else
     let known = Stdlib.List.findFirst state.streams (fun stream -> stream.id == id) in
     let stream = match known with | Some stream -> stream | None ->
       Stdlib.__Http3Uni.Stream { id = id, prefix = Stdlib.Blob.empty, kind = None, finished = false } in
-    if Stdlib.Option.isNone known && Stdlib.List.length state.streams >= 16 then Error "HTTP/3 stream profile exhausted"
+    if Stdlib.Option.isNone known && Stdlib.List.length state.streams >= 16 then Error (Stdlib.__Http3Wire.connectionFailure 263L "HTTP/3 stream profile exhausted")
     else if stream.finished then
       if Stdlib.Blob.__byteLength data == 0L then Ok (Stdlib.__Http3Uni.Received { state = state, events = [], feedback = Stdlib.Blob.empty })
-      else Error "Data after HTTP/3 unidirectional stream end"
+      else Error (Stdlib.__Http3Wire.connectionFailure 257L "Data after HTTP/3 unidirectional stream end")
     else
       match stream.kind with
       | Some kind -> Stdlib.__Http3Uni.__payload state stream kind data finished reset
@@ -97,7 +97,7 @@ let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished:
           if finished || reset then
             Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, finished = true }, events = [], feedback = Stdlib.Blob.empty })
           else Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = bytes }, events = [], feedback = Stdlib.Blob.empty })
-        | Error (Invalid message) -> Error message
+        | Error (Invalid message) -> Error (Stdlib.__Http3Wire.connectionFailure 259L message)
         | Ok kind ->
           Stdlib.__Http3Uni.__claim state id kind.value |> Stdlib.Result.andThen (fun next ->
             Stdlib.__Http3Uni.__payload next stream kind.value

@@ -562,6 +562,7 @@ let rec ensureSerializer (env : env) typ (state : state) =
           params =
             checkedParams (args [ (writerId, writerType); (valueId, typ) ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = Local writerId;
           recursion = None;
         }
@@ -632,6 +633,7 @@ and ensureListSerializer (env : env) elemType (state : state) =
                    (binding "__first", AST.TBool);
                  ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = local "__writer" bindings;
           recursion = None;
         }
@@ -706,6 +708,7 @@ and ensureDictSerializer (env : env) valueType (state : state) =
                    (binding "__first", AST.TBool);
                  ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = local "__writer" bindings;
           recursion = None;
         }
@@ -953,8 +956,30 @@ and serializeBody (env : env) typ value writer (state : state) =
               state []
           in
           Ok (matchExpr (value, cases), nextState))
+  | AST.TDict (keyType, valueType) ->
+      let entries =
+        TypeApp
+          ( resolveFunction env "Darklang.Stdlib.Dict.toList",
+            checkedTypeArgs [ keyType; valueType ],
+            N.singleton value )
+      in
+      let failure =
+        RuntimeError
+          ("Cannot serialize dictionary into JSON: keys must be String, but \
+            this dictionary has "
+          ^ CheckingDiagnostics.typeToString keyType
+          ^ " keys")
+      in
+      Ok
+        ( matchExpr
+            ( entries,
+              [
+                makeCase (PList []) (writerRaw env writer (StringLiteral "{}"));
+                makeCase PWildcard failure;
+              ] ),
+          state )
   | AST.TFunction _ | AST.TBlob | AST.TInternalRawPtr | AST.TNever
-  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ | AST.TDict _ ->
+  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ ->
       Error
         ("Unsupported type in JSON: "
         ^ CheckingDiagnostics.typeToString typ
@@ -1007,6 +1032,7 @@ let rec ensureDecoder (env : env) typ (state : state) =
                    (binding "__path", pathType);
                  ]);
           returnType = checkedType (resultType typ);
+          bodyType = checkedType (resultType typ);
           body = RuntimeError "unfinished JSON decoder";
           recursion = None;
         }
@@ -1096,6 +1122,7 @@ and ensureListDecoder (env : env) elemType (state : state) =
                    (binding "__index", AST.TInt64);
                  ]);
           returnType = checkedType (resultType listType);
+          bodyType = checkedType (resultType listType);
           body = RuntimeError "unfinished JSON list decoder";
           recursion = None;
         }
@@ -1238,6 +1265,7 @@ and ensureDictDecoder (env : env) valueType (state : state) =
                    (binding "__dict", dictType);
                  ]);
           returnType = checkedType (resultType dictType);
+          bodyType = checkedType (resultType dictType);
           body = RuntimeError "unfinished JSON dictionary decoder";
           recursion = None;
         }
@@ -1745,8 +1773,13 @@ and decodeBody (env : env) typ source view path (state : state) =
                 ] )
           in
           Ok (objectBody, nextState))
-  | AST.TFunction _ | AST.TBlob | AST.TInternalRawPtr | AST.TNever
-  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ | AST.TDict _ ->
+  | AST.TFunction _ ->
+      Error
+        ("Cannot parse JSON into function type "
+        ^ CheckingDiagnostics.typeToString typ
+        ^ ": JSON cannot represent executable functions")
+  | AST.TBlob | AST.TInternalRawPtr | AST.TNever | AST.TStream _ | AST.TVar _
+  | AST.TInferenceVar _ | AST.TDict _ ->
       Error
         ("Unsupported type in JSON: "
         ^ CheckingDiagnostics.typeToString typ
@@ -2154,31 +2187,10 @@ let rewriteProgramWithSession (session : planningSession option)
             planCached "parse" ensureDecoder typ state)
           serializersPlanned parserTypes
   in
-  if not hasJsonCalls then programFromCheckedParts (symbols, topLevels)
+  if not hasJsonCalls then Ok (programFromCheckedParts (symbols, topLevels))
   else
     match planned with
-    | Error error ->
-        let rewrite currentSymbols expr =
-          match expr with
-          | TypeApp (id, _, _) when Some id = serializeId || Some id = parseId
-            ->
-              (RuntimeError error, currentSymbols)
-          | _ -> (expr, currentSymbols)
-        in
-        let rewritten, symbols =
-          mapFold
-            (fun currentSymbols topLevel ->
-              match topLevel with
-              | FunctionDef fn ->
-                  let body, next = mapExpr rewrite currentSymbols fn.body in
-                  (FunctionDef { fn with body }, next)
-              | Expression expr ->
-                  let expr, next = mapExpr rewrite currentSymbols expr in
-                  (Expression expr, next)
-              | other -> (other, currentSymbols))
-            symbols topLevels
-        in
-        programFromCheckedParts (symbols, rewritten)
+    | Error error -> Error error
     | Ok state ->
         let finalPlanningEnv = { planningEnv with symbols = state.symbols } in
         let rewrite currentSymbols expr =
@@ -2258,7 +2270,7 @@ let rewriteProgramWithSession (session : planningSession option)
         let generated =
           List.map (fun (_, fn) -> FunctionDef fn) (M.bindings state.functions)
         in
-        programFromCheckedParts (finalSymbols, generated @ rewritten)
+        Ok (programFromCheckedParts (finalSymbols, generated @ rewritten))
 
 let rewriteProgram (env : Types.typeCheckEnv) program =
   rewriteProgramWithSession None env program

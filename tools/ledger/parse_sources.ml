@@ -3,6 +3,18 @@ open Dark_compiler
 
 let disposition = function
   | CompilerAnnotations.Run -> `Assoc [ ("status", `String "run") ]
+  | CompilerAnnotations.ErrorMessage { phase; diagnostic; reason } ->
+      `Assoc
+        [
+          ("status", `String "run");
+          ("error_message", `String diagnostic);
+          ( "error_phase",
+            `String
+              (match phase with
+              | CompilerAnnotations.Compile -> "compile"
+              | CompilerAnnotations.Runtime -> "runtime") );
+          ("reason", `String reason);
+        ]
   | CompilerAnnotations.Blocked reason ->
       `Assoc [ ("status", `String "blocked"); ("reason", `String reason) ]
   | CompilerAnnotations.Excluded reason ->
@@ -14,10 +26,16 @@ let disposition = function
           ("target", `String target);
           ("reason", `String reason);
         ]
-  | CompilerAnnotations.Xfail { phase; diagnostic; reason } ->
+  | CompilerAnnotations.Xfail { phase; diagnostic; reason; classification } ->
       `Assoc
         [
           ("status", `String "xfail");
+          ( "classification",
+            `String
+              (match classification with
+              | CompilerAnnotations.AotRejection -> "aot-rejection"
+              | CompilerAnnotations.MissingSupport -> "missing-support"
+              | CompilerAnnotations.UpstreamBug -> "upstream-bug") );
           ("reason", `String reason);
           ( "phase",
             `String

@@ -85,6 +85,7 @@ def capabilities(root, filename):
 
 def summarize(root, rows):
     counts, reasons, kinds, identities = defaultdict(Counter), defaultdict(Counter), Counter(), set()
+    failures, failure_reasons, failure_sources = defaultdict(Counter), defaultdict(Counter), defaultdict(Counter)
     for row in rows:
         for item in row['items']:
             identity = (row['source'], item['kind'], item['name'], item['line'], item['column'])
@@ -96,6 +97,16 @@ def summarize(root, rows):
             disposition = item['compiler']
             if disposition.get('reason') == 'pending-validation':
                 raise ValueError('Unclassified imported test: ' + row['source'] + '#' + item['name'])
+            if disposition['status'] == 'xfail':
+                classification = disposition.get('classification')
+                phase = disposition.get('phase')
+                if classification not in {'aot-rejection', 'missing-support', 'upstream-bug'}:
+                    raise ValueError('Expected failure requires a classification: ' + row['source'] + '#' + item['name'])
+                if phase not in {'compile', 'runtime'} or (classification == 'aot-rejection' and phase != 'compile'):
+                    raise ValueError('Invalid expected failure phase: ' + row['source'] + '#' + item['name'])
+                failures[classification][phase] += 1
+                failure_reasons[classification][disposition['reason']] += 1
+                failure_sources[classification][row['source']] += 1
             counts[area][disposition['status']] += 1
             if 'reason' in disposition:
                 reasons[area][disposition['reason']] += 1
@@ -107,7 +118,12 @@ def summarize(root, rows):
                 kinds=dict(sorted(kinds.items())), features=capabilities(root, 'porting/language-features.yaml'),
                 parser=capabilities(root, 'porting/parser.yaml'), builtins=dict(sorted(builtin_counts.items())),
                 dispositions={area: dict(sorted(values.items())) for area, values in sorted(counts.items())},
-                reasons={area: dict(sorted(values.items())) for area, values in sorted(reasons.items())})
+                reasons={area: dict(sorted(values.items())) for area, values in sorted(reasons.items())},
+                expected_failures={
+                    classification: dict(phases=dict(sorted(failures[classification].items())),
+                                         reasons=dict(sorted(failure_reasons[classification].items())),
+                                         sources=dict(sorted(failure_sources[classification].items())))
+                    for classification in sorted(failures)})
 
 
 def markdown(summary):
@@ -118,6 +134,23 @@ def markdown(summary):
              '| Area | Source dispositions |', '| --- | --- |']
     for area, counts in summary['dispositions'].items():
         lines.append('| ' + area + ' | ' + ', '.join(f'{n:,} {status}' for status, n in counts.items()) + ' |')
+    lines += ['', '## Expected test failures', '',
+              'Verified AOT rejection contracts cover programs rejected under the compiler’s static rules; they are not unfinished support.',
+              'Missing support includes compiler bugs, unavailable dependencies and test-runner gaps. Counts describe source contracts; execution receipts remain separate.', '',
+              'Upstream bugs record interpreter behavior or test expectations that the compiler deliberately rejects as incorrect; they are separate from missing support.', '',
+              '| Class | Compile | Runtime | Total |', '| --- | ---: | ---: | ---: |']
+    for classification, values in summary['expected_failures'].items():
+        phases = values['phases']
+        lines.append(f"| `{classification}` | {phases.get('compile', 0):,} | {phases.get('runtime', 0):,} | {sum(phases.values()):,} |")
+    lines += ['', '| Class | Reason | Tests |', '| --- | --- | ---: |']
+    lines += [f'| `{classification}` | `{reason}` | {n:,} |'
+              for classification, values in summary['expected_failures'].items()
+              for reason, n in values['reasons'].items()]
+    lines += ['', '### Remaining support by source', '',
+              'Each row links to the authoritative per-test annotations. A named test remains one case even when it contains several assertions.', '',
+              '| Source | Tests |', '| --- | ---: |']
+    lines += [f'| [{path.removeprefix("upstream/")}](../../../{path}) | {n:,} |'
+              for path, n in summary['expected_failures'].get('missing-support', {}).get('sources', {}).items()]
     lines += ['', '| Kind | Items |', '| --- | --- |']
     lines += [f'| {kind} | {n:,} |' for kind, n in summary['kinds'].items()]
     lines += ['', '## Reasons', '', 'Tags are defined in [the glossary](../../../porting/compiler-reasons.json).', '',

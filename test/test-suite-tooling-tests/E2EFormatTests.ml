@@ -552,64 +552,176 @@ let testCompilerAnnotationOverrideOrdering () =
         && test.errorExpectation = Some CompileError)
         "Override or annotation lost")
 
-let testCompilerXfailStrictness () =
+let testCompilerXfailConstraintRenumbering () =
+  let diagnostic =
+    {|Expected TTuple [TVar "t$constraint_-24174_0"; TVar "t$constraint_-24174_1"; TVar "t$constraint_-24176_0"], got TInt64|}
+  in
+  let renumbered =
+    {|Expected TTuple [TVar "t$constraint_-24377_0"; TVar "t$constraint_-24377_1"; TVar "t$constraint_-24379_0"], got TInt64|}
+  in
   one
-    "// @compiler xfail compile: \"known missing function\" reason=test-counter\n\
-     Unknown.fn () = 1L"
-    "Expected compile xfail" (fun test ->
-      let expected = CompileFailed (1, "known missing function", 0L) in
-      let unrelated = CompileFailed (1, "unrelated failure", 0L) in
-      let wrongPhase = Ran (1, "", "known missing function", 0L, 0L) in
-      let passed = Ran (0, "true\n", "", 0L, 0L) in
+    (Printf.sprintf
+       "// @compiler xfail compile: %S class=aot-rejection reason=test-counter\n\
+        Unknown.fn () = 1L"
+       diagnostic)
+    "Expected compile xfail with generated constraint identifiers" (fun test ->
       let* () =
         require
-          (Result.is_ok (evaluateExpectations test expected))
-          "Known failure was not accepted"
-      in
-      let* () =
-        require
-          (List.for_all
-             (fun run -> Result.is_error (evaluateExpectations test run))
-             [ unrelated; wrongPhase; passed ])
-          "Unexpected pass, error or phase satisfied xfail"
-      in
-      let negative =
-        {
-          test with
-          errorExpectation = Some CompileError;
-          expectedErrorMessage = Some "known missing function";
-        }
-      in
-      let* () =
-        require
-          (Result.is_error (evaluateExpectations negative unrelated))
-          "Quoted expected diagnostic satisfied xfail without actual evidence"
+          (Result.is_ok
+             (evaluateExpectations test
+                (CompileFailed (1, "module: " ^ renumbered, 0L))))
+          "Renumbering generated declaration identifiers changed xfail matching"
       in
       require
-        (Option.is_none (tryPrepareBatchTest test))
-        "Expected failure was batched")
+        (List.for_all
+           (fun run -> Result.is_error (evaluateExpectations test run))
+           [
+             CompileFailed
+               ( 1,
+                 {|Expected TTuple [TVar "t$constraint_-24377_0"; TVar "t$constraint_-24377_1"; TVar "t$constraint_-24377_0"], got TInt64|},
+                 0L );
+             CompileFailed
+               ( 1,
+                 {|Expected TTuple [TVar "t$constraint_-24377_0"; TVar "t$constraint_-24377_2"; TVar "t$constraint_-24379_0"], got TInt64|},
+                 0L );
+             CompileFailed (1, "Expected TBool, got TInt64", 0L);
+             CompileFailed (1, "t$constraint_-123", 0L);
+             CompileFailed (139, renumbered, 0L);
+             Ran (1, "", renumbered, 0L, 0L);
+           ])
+        "Constraint normalization accepted different types, variables, phase \
+         or a crash")
+
+let testRuntimeXfailConstraintIdsRemainLiteral () =
+  one
+    "// @compiler xfail runtime: \"t$constraint_-24174_0\" \
+     class=missing-support reason=test-counter\n\
+     Unknown.fn () = 1L"
+    "Expected runtime xfail with literal diagnostic text" (fun test ->
+      require
+        (Result.is_ok
+           (evaluateExpectations test
+              (Ran (1, "", "t$constraint_-24174_0", 0L, 0L)))
+        && Result.is_error
+             (evaluateExpectations test
+                (Ran (1, "", "t$constraint_-24377_0", 0L, 0L))))
+        "Compile-time identifier normalization changed runtime diagnostic \
+         matching")
+
+let testCompilerXfailStrictness () =
+  let check classification =
+    one
+      ("// @compiler xfail compile: \"known missing function\" class="
+     ^ classification ^ " reason=test-counter\nUnknown.fn () = 1L")
+      "Expected compile xfail"
+      (fun test ->
+        let expected = CompileFailed (1, "known missing function", 0L) in
+        let unrelated = CompileFailed (1, "unrelated failure", 0L) in
+        let wrongPhase = Ran (1, "", "known missing function", 0L, 0L) in
+        let passed = Ran (0, "true\n", "", 0L, 0L) in
+        let* () =
+          require
+            (Result.is_ok (evaluateExpectations test expected))
+            "Known failure was not accepted"
+        in
+        let* () =
+          require
+            (List.for_all
+               (fun run -> Result.is_error (evaluateExpectations test run))
+               [
+                 unrelated;
+                 wrongPhase;
+                 passed;
+                 CompileFailed (139, "known missing function", 0L);
+               ])
+            "Unexpected pass, error or phase satisfied xfail"
+        in
+        let negative =
+          {
+            test with
+            errorExpectation = Some CompileError;
+            expectedErrorMessage = Some "known missing function";
+          }
+        in
+        let* () =
+          require
+            (Result.is_error (evaluateExpectations negative unrelated))
+            "Quoted expected diagnostic satisfied xfail without actual evidence"
+        in
+        require
+          (Option.is_none (tryPrepareBatchTest test))
+          "Expected failure was batched")
+  in
+  let* () = check "missing-support" in
+  let* () = check "aot-rejection" in
+  check "upstream-bug"
+
+let testCompilerErrorMessageOverride () =
+  let check phase expected wrongPhase =
+    one
+      ("// @compiler error-message " ^ phase
+     ^ ": \"compiler diagnostic\" reason=annotation-probe\n"
+     ^ "Builtin.crash \"compiler diagnostic\" = error=\"upstream diagnostic\"")
+      "Expected compiler error-message override"
+      (fun test ->
+        require
+          (Result.is_ok (evaluateExpectations test expected)
+          && Result.is_error (evaluateExpectations test wrongPhase)
+          && Result.is_error
+               (evaluateExpectations test (Ran (0, "", "", 0L, 0L)))
+          && Result.is_error
+               (evaluateExpectations test
+                  (Ran (139, "", "compiler diagnostic", 0L, 0L)))
+          && Result.is_error
+               (evaluateExpectations test (Ran (1, "", "unrelated", 0L, 0L)))
+          && Result.is_error
+               (evaluateExpectations test
+                  (Ran (1, "", "compiler diagnostic\nleaks: 1\n", 0L, 0L)))
+          && Option.is_none (tryPrepareBatchTest test))
+          "Error-message override accepted a wrong phase, message, pass, \
+           signal or leak")
+  in
+  let compile = CompileFailed (1, "compiler diagnostic", 0L) in
+  let runtime = Ran (1, "", "compiler diagnostic", 0L, 0L) in
+  let* () =
+    withTempFile
+      "// @compiler error-message runtime: \"compiler diagnostic\" \
+       reason=annotation-probe\n\
+       1L = 1L" (fun path ->
+        require
+          (Result.is_error (parseE2ETestFile path))
+          "Error-message annotation accepted a positive upstream test")
+  in
+  let* () = check "compile" compile runtime in
+  check "runtime" runtime compile
 
 let testCompilerRuntimeXfailStrictness () =
-  one
-    "// @compiler xfail runtime: \"known runtime failure\" \
-     reason=annotation-probe\n\
-     Builtin.crash \"known runtime failure\" = 1L"
-    "Expected runtime xfail" (fun test ->
-      let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
-      let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
-      let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
-      let leaked = Ran (1, "", "known runtime failure\nleaks: 1\n", 0L, 0L) in
-      require
-        (Result.is_ok (evaluateExpectations test expected)
-        && Result.is_error (evaluateExpectations test signal)
-        && Result.is_error (evaluateExpectations test leaked)
-        && Result.is_error (evaluateExpectations test wrongPhase))
-        "Runtime xfail accepted an unrelated phase or signal")
+  let check classification =
+    one
+      ("// @compiler xfail runtime: \"known runtime failure\" class="
+     ^ classification
+     ^ " reason=annotation-probe\nBuiltin.crash \"known runtime failure\" = 1L"
+      )
+      "Expected runtime xfail"
+      (fun test ->
+        let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
+        let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
+        let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
+        let leaked = Ran (1, "", "known runtime failure\nleaks: 1\n", 0L, 0L) in
+        require
+          (Result.is_ok (evaluateExpectations test expected)
+          && Result.is_error (evaluateExpectations test signal)
+          && Result.is_error (evaluateExpectations test leaked)
+          && Result.is_error (evaluateExpectations test wrongPhase))
+          "Runtime xfail accepted an unrelated phase or signal")
+  in
+  let* () = check "missing-support" in
+  check "upstream-bug"
 
 let testExpectedLanguageErrorIsNotAnXfail () =
   one
     "// @compiler xfail runtime: \"known runtime failure\" \
-     reason=annotation-probe\n\
+     class=missing-support reason=annotation-probe\n\
      Builtin.crash \"known runtime failure\" = error=\"known runtime failure\""
     "Expected ordinary negative test" (fun test ->
       match
@@ -710,6 +822,9 @@ let tests =
   ( "canonical named result reporter parses and preserves the body",
     testCanonicalNamedResultReporter )
   :: [
+       ( "compiler error-message overrides require the annotated phase and \
+          diagnostic",
+         testCompilerErrorMessageOverride );
        ( "compiler annotations preserve inventory",
          testCompilerAnnotationsPreserveInventory );
        ( "compiler annotations reject unknown reason tags",
@@ -718,6 +833,10 @@ let tests =
          testCompilerAnnotationOverrideOrdering );
        ( "compiler xfail requires the known compile failure",
          testCompilerXfailStrictness );
+       ( "compiler xfail tolerates generated constraint renumbering",
+         testCompilerXfailConstraintRenumbering );
+       ( "runtime xfail constraint identifiers remain literal",
+         testRuntimeXfailConstraintIdsRemainLiteral );
        ( "compiler xfail requires the known runtime failure",
          testCompilerRuntimeXfailStrictness );
        ( "passing negative tests cannot satisfy xfail",

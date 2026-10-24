@@ -32,27 +32,27 @@ module WithTypeArgs =
     getC (A { b = B { c = C { v = 5L } } }) |> Stdlib.Test.equal 5L
 
 module InvalidCols =
-  // @compiler xfail compile: "Duplicate record field 'col1'" reason=compiler-gap
+  // @compiler xfail compile: "Duplicate record field 'col1'" class=aot-rejection reason=aot-invalid-field
   test duplicateFieldRaises =
     Cols1 { col1 = 1L, col1 = 2L } => raises "Duplicate field `col1`"
 
-  // @compiler xfail compile: "Unknown field '' on Darklang.Language.Tests.Records.Cols2" reason=compiler-gap
+  // @compiler xfail compile: "Unknown field '' on Darklang.Language.Tests.Records.Cols2" class=aot-rejection reason=aot-invalid-field
   test emptyKeyRaises =
     Cols2 { col1 = 2L, ___ = 3L } => raises "Empty key in record creation"
 
-  // @compiler xfail compile: "record literal does not contain exactly the declared field slots" reason=compiler-gap
+  // @compiler xfail compile: "record literal does not contain exactly the declared field slots" class=aot-rejection reason=aot-invalid-field
   test missingFieldRaises =
     Cols2 { col1 = 2L } => raises "Missing field `col2`"
 
-  // @compiler xfail compile: "Unknown field 'other' on Darklang.Language.Tests.Records.Cols2" reason=compiler-gap
+  // @compiler xfail compile: "Unknown field 'other' on Darklang.Language.Tests.Records.Cols2" class=aot-rejection reason=aot-invalid-field
   test unknownFieldRaises =
     Cols2 { col1 = 2L, other = 3L } => raises "No field named `other`"
 
-  // @compiler xfail compile: "Unknown field 'col3' on Darklang.Language.Tests.Records.Cols2" reason=compiler-gap
+  // @compiler xfail compile: "Unknown field 'col3' on Darklang.Language.Tests.Records.Cols2" class=aot-rejection reason=aot-invalid-field
   test extraFieldRaises =
     Cols2 { col1 = 2L, col2 = 3L, col3 = 4L } => raises "No field named `col3`"
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test wrongFieldTypeRaises =
     Cols1 { col1 = "" }
     => raises
@@ -61,7 +61,7 @@ module InvalidCols =
 module InvalidType =
   // Evaluate the unresolved name from source at run time so it does not prevent
   // the package from loading. Check both the error branch and its message.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.PackageOps.currentBranch'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.PackageOps.currentBranch'" class=missing-support reason=upstream-dependency
   test unknownTypeRaises =
     let branch = Darklang.SCM.PackageOps.currentBranch ()
     let source = "MyNonExistantType { col1 = 2L }"
@@ -71,7 +71,7 @@ module InvalidType =
       |> Stdlib.Test.equal "MyNonExistantType not found"
     | _ -> Stdlib.Test.fail "expected a runtime error for an unknown record type"
 
-  // @compiler xfail compile: "Expected a record type" reason=compiler-gap
+  // @compiler xfail compile: "Expected a record type" class=aot-rejection reason=aot-type-error
   test enumIsNotRecordRaises =
     AnEnum { col1 = 2L }
     => raises
@@ -102,7 +102,7 @@ module Update =
   type RecordForUpdate = { x: Int64, y: Int64 }
   type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 }
 
-  // @compiler xfail compile: "Duplicate record field 'y'" reason=compiler-gap
+  // @compiler xfail compile: "Duplicate record field 'y'" class=missing-support reason=compiler-gap
   test updates =
     Stdlib.Test.all
       [ ({ RecordForUpdate { x = 4L, y = 1L } with y = 2L })
@@ -139,19 +139,19 @@ module Update =
       Stdlib.List.length (viaGeneric [ 1L ]).updItems |> Stdlib.Test.equal 0
 
   module Invalid =
-    // @compiler xfail compile: "Unknown field 'p' on Darklang.Language.Tests.Records.Update.RecordForUpdateMultiple" reason=compiler-gap
+    // @compiler xfail compile: "Unknown field 'p' on Darklang.Language.Tests.Records.Update.RecordForUpdateMultiple" class=aot-rejection reason=aot-invalid-field
     test unknownFieldRaises =
       (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
        { myRec with z = 3L, x = 42L, y = 11L, p = 10L })
       => raises "No field named `p`"
 
-    // @compiler xfail compile: "Unknown field 'other' on Darklang.Language.Tests.Records.Update.RecordForUpdate" reason=compiler-gap
+    // @compiler xfail compile: "Unknown field 'other' on Darklang.Language.Tests.Records.Update.RecordForUpdate" class=aot-rejection reason=aot-invalid-field
     test otherFieldRaises =
       (let myRec = RecordForUpdate { x = 4L, y = 1L }
        { myRec with other = 2L })
       => raises "No field named `other`"
 
-    // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+    // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
     test wrongFieldTypeRaises =
       (let myRec = RecordForUpdate { x = 4L, y = 1L }
        { myRec with y = "2" })
@@ -165,18 +165,18 @@ module FieldAccess =
     (let x = MyRecord { col1 = 1L } in x.col1) |> Stdlib.Test.equal 1L
 
   module Errors =
-    // @compiler xfail compile: "Unknown field '' on Darklang.Language.Tests.Records.FieldAccess.MyRecord" reason=compiler-gap
+    // @compiler xfail compile: "Unknown field '' on Darklang.Language.Tests.Records.FieldAccess.MyRecord" class=aot-rejection reason=aot-invalid-field
     test emptyFieldNameRaises =
       (let x = MyRecord { col1 = 1L } in x.___) => raises "Field name is empty"
 
-    // @compiler xfail compile: "Unknown field 'fieldName' on Darklang.Language.Tests.Records.FieldAccess.MyRecord" reason=compiler-gap
+    // @compiler xfail compile: "Unknown field 'fieldName' on Darklang.Language.Tests.Records.FieldAccess.MyRecord" class=aot-rejection reason=aot-invalid-field
     test missingFieldRaises =
       (let x = MyRecord { col1 = 1L } in x.fieldName)
       => raises "Tried to access field `fieldName`, but it doesn't exist"
 
     // `(Builtin.testRuntimeError "error").fieldName` is in errorPropagation.dark.
 
-    // @compiler xfail compile: "Field access requires a record value" reason=compiler-gap
+    // @compiler xfail compile: "Field access requires a record value" class=aot-rejection reason=aot-invalid-field
     test accessOnInt64Raises =
       (let x = 6L in x.fieldName)
       => raises

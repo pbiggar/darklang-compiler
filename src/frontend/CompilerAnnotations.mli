@@ -1,12 +1,19 @@
 (* CompilerAnnotations.mli - Per-item compiler decisions kept in imported source comments. *)
 type phase = Compile | Runtime
+type failureClass = AotRejection | MissingSupport | UpstreamBug
 
 type disposition =
   | Run
+  | ErrorMessage of { phase : phase; diagnostic : string; reason : string }
   | Blocked of string
   | Excluded of string
   | Replace of { target : string; reason : string }
-  | Xfail of { phase : phase; diagnostic : string; reason : string }
+  | Xfail of {
+      phase : phase;
+      diagnostic : string;
+      reason : string;
+      classification : failureClass;
+    }
 
 type item = { position : Tokenizer.pos; isTest : bool }
 type annotation = { position : Tokenizer.pos; disposition : disposition }

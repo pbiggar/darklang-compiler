@@ -2,7 +2,7 @@ module Darklang.Cli.Tests.Listing
 
 module GroupedByModule =
   // Modules sorted, leaves in the order they came.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Listing.groupedByModule'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Listing.groupedByModule'" class=missing-support reason=upstream-dependency
   test groupedByModule =
     Stdlib.Test.all
       [ Darklang.Cli.Listing.groupedByModule [ "B.y.f", "A.g", "B.y.e", "A.h", "top" ]

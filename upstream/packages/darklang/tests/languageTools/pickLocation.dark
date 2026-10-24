@@ -97,7 +97,7 @@ test shorterPathWinsWithoutContext =
       |> Stdlib.Test.equal (Some(loc "Darklang" [] "Person")) ]
 
 // pickLocation: context matches one location → prefer it
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test contextMatchWins =
   Stdlib.Test.all
     [ // We're in Darklang.Stdlib.List — Stdlib.List.map has better prefix match
@@ -116,7 +116,7 @@ test contextMatchWins =
 //
 // We're in Darklang.Stdlib.Json. Stdlib.List.map shares 2-segment prefix
 // (Darklang.Stdlib). SomeOther.map shares only 1 (Darklang). Stdlib.List.map wins.
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test partialPrefixBeatsNoMatch =
   pick (ctx [ "Darklang", "Stdlib", "Json" ])
     [ loc "Darklang" [ "SomeOther" ] "map"
@@ -126,7 +126,7 @@ test partialPrefixBeatsNoMatch =
 // pickLocation: equal prefix match → shorter path wins
 //
 // Both share "Darklang.Stdlib" prefix (2 segments). Shorter one wins.
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test equalPrefixShorterPathWins =
   pick (ctx [ "Darklang", "Stdlib" ])
     [ loc "Darklang" [ "Stdlib", "List", "Internal" ] "helper"
@@ -150,7 +150,7 @@ test fullTieKeepsFirst =
 //
 // We're in Darklang.UserDefinedAliases. Person2 matches 2 segments.
 // Person matches only 1 (Darklang). Context wins despite Person being shorter.
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test contextBeatsShorterPath =
   pick (ctx [ "Darklang", "UserDefinedAliases" ])
     [ loc "Darklang" [] "Person"
@@ -161,7 +161,7 @@ test contextBeatsShorterPath =
 //
 // We're in Darklang.Stdlib.List. Stdlib.List.map matches 3 segments.
 // Stdlib.map matches only 2. Deeper match wins.
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test deeperContextMatchWins =
   pick (ctx [ "Darklang", "Stdlib", "List" ])
     [ loc "Darklang" [ "Stdlib" ] "map"
@@ -169,7 +169,7 @@ test deeperContextMatchWins =
   |> Stdlib.Test.equal (Some(loc "Darklang" [ "Stdlib", "List" ] "map"))
 
 // pickLocation: different owners
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test differentOwners =
   Stdlib.Test.all
     [ // We're in Stachu.MyLib — Stachu.MyLib.helper matches 2 segments.
@@ -185,7 +185,7 @@ test differentOwners =
       |> Stdlib.Test.equal (Some(loc "Darklang" [ "Stdlib" ] "helper")) ]
 
 // pickLocation: three candidates with context
-// @compiler xfail compile: "Unknown function or value 'ctx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ctx'" class=missing-support reason=upstream-dependency
 test threeCandidates =
   Stdlib.Test.all
     [ // Three locations, context matches the deepest one best
@@ -202,7 +202,7 @@ test threeCandidates =
       |> Stdlib.Test.equal (Some(loc "Darklang" [] "flatten")) ]
 
 // pickLocation: an asked-for name beats scoring
-// @compiler xfail compile: "Unknown function or value 'preferCtx'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'preferCtx'" class=missing-support reason=upstream-dependency
 test askedForNameBeatsScoring =
   Stdlib.Test.all
     [ // Two names sharing a body share a hash, so both come back as candidates.

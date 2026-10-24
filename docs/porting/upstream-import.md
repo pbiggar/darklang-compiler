@@ -35,7 +35,7 @@ let inspect ... = ...
 // @compiler replace: packages/darklang/stdlib/base64.dark#Darklang.Stdlib.Base64.decode reason=interpreter-intrinsic
 let decode ... = ...
 
-// @compiler xfail compile: "Unknown function" reason=test-counter
+// @compiler xfail compile: "Unknown function" class=missing-support reason=test-counter
 test unavailable =
   ...
 ```
@@ -45,7 +45,9 @@ validation rejects unknown tags, duplicate dispositions, annotations inside
 bodies or after an item, and orphaned annotations. Only real line comments are
 read: text inside strings, doc comments and block comments is not metadata.
 Expected failures apply only to tests and require a nonempty diagnostic matcher
-and a compile/runtime phase. Replacement targets are repository-relative
+and a compile/runtime phase, plus exactly one `class=aot-rejection`,
+`class=missing-support` or `class=upstream-bug` field before `reason=TAG`. An AOT classification with a
+runtime phase is invalid. Replacement targets are repository-relative
 `path#declaration` references and require a reason.
 
 The existing fixture runner reads these annotations in both execution tests and
@@ -55,6 +57,67 @@ ordinary passing test is an unexpected pass, even when the original test is a
 negative test. A failure must match its phase and diagnostic; a signal cannot
 satisfy a runtime expected failure. Compiler expectation overrides remain
 separate from expected failures and can coexist with an annotation.
+
+For an accepted diagnostic difference, use a per-test annotation such as
+`// @compiler error-message compile: "Cannot parse JSON into function type" reason=diagnostic-difference`.
+Use `runtime:` when rejection depends on the value. The upstream test must
+already expect an error. These are runnable negative tests, not expected
+failures: compilation or execution must fail in the annotated phase with the
+compiler diagnostic. Wrong phases, unrelated messages, successful execution,
+signals and runtime leaks fail the test. The original upstream expectation
+remains unchanged. The ledger records these tests as `run`, with the override
+and its reason available in the native inventory.
+
+## Classifying expected failures
+
+Read the original test, its selected dependencies and the actual diagnostic;
+neither `raises` nor compilation failure alone determines the class.
+
+- `upstream-bug`: an explicit language decision considers the interpreter
+  behavior or test expectation incorrect. Keep the original upstream test body
+  and a strict diagnostic matcher; use `reason=upstream-bug`, whose glossary
+  entry records the decision. This is separate from incomplete compiler support.
+  For signed-zero patterns, `0.0` and `-0.0` are distinct literals even though
+  numeric equality considers them equal. The upstream numeric-equality pattern
+  expectation is deliberately rejected.
+
+- `aot-rejection`: the compiler rejects a program invalid under its intended
+  static rules, and the diagnostic identifies the invalid construct. Use the
+  specific `aot-*` reason describing that rule. For example, `true && 5L` is a
+  type error; a match missing enum alternatives is non-exhaustive; a dictionary
+  key containing a function is invalid. These remain individually executed
+  rejection contracts with strict phase and diagnostic matching.
+- `missing-support`: the observed failure represents incomplete or incorrect
+  compiler/runtime/runner behavior, or prevents us from verifying the intended
+  rejection. An undefined name caused by a blocked declaration is missing
+  support, even if the eventual test expects a type error. `valDictSetRejectsWrongKeyType`
+  is one example: the unavailable `valDict` currently prevents checking its
+  invalid key. An enum-inference diagnostic on `None`, or failure to infer a
+  lambda's type before checking its dictionary-key validity, also remains here.
+
+Static validation checks all branches, match arms and callback types, including
+code that the interpreter never executes. Consequently `filter [] (fun _ ->
+"a")` is an AOT type rejection, and a named test containing that expression is
+classified as a whole. `Stdlib.Test.raiseRuntimeError` explicitly returns
+`Int64`; using it as a Bool, tuple or differently typed match arm is likewise a
+static type error despite its never returning at runtime. A genuinely missing
+helper is a support gap. Duplicate record *updates* that the interpreter
+accepts, unresolved generic specialization, receiver methods and nominal versus
+content-addressed type behavior remain support differences; this audit does
+not establish new language exclusions for them.
+
+Do not promote a test merely because its name sounds negative. For example,
+`ambiguousReceiverRaises` still fails on generic field access rather than
+checking trait-method ambiguity, and remains missing support. Conversely a
+reference to the deliberately nonexistent `functionWhichDoesntExist` is an AOT
+name rejection, not a missing upstream dependency. Nested forward calls are
+outside the supported scope in both implementations and are name rejections.
+
+When reclassifying, preserve the pinned source body. Change only the real
+annotation comment, require the relevant diagnostic, and regenerate the ledger.
+Signals, timeouts, leaks, unrelated errors and unexpected passes cannot satisfy
+either class. AOT annotations describe verified *contracts*; only execution
+receipts establish that a particular revision actually met those contracts.
 
 ## Selecting declarations
 

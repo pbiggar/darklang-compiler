@@ -39,10 +39,10 @@ let __flush (context: Stdlib.HttpServer.Quic.Context) (owner: Stdlib.HttpServer.
     Stdlib.__Datagram.pollSend context.socket owner.peer packet |> Stdlib.Result.mapError (fun _code -> "QUIC listener send failed") |> Stdlib.Result.map (fun sent ->
       if sent then Stdlib.Stream.__cellSet owner.outbox rest else ())
 
-let __input (connection: Stdlib.__QuicConnection.State) (datagram: Option<Stdlib.__Datagram.Message>) (now: Int64) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
+let __input (connection: Stdlib.__QuicConnection.State) (datagram: Option<Stdlib.__Datagram.Message>) (now: Int64) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, Stdlib.__QuicConnection.Failure> =
   match datagram with
   | None -> Ok connection
-  | Some datagram -> Stdlib.__QuicConnection.__idle connection now |> Stdlib.Result.andThen (fun _unit -> Stdlib.__QuicConnection.__packets connection datagram.payload now)
+  | Some datagram -> Stdlib.__QuicConnection.__idle connection now |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun _unit -> Stdlib.__QuicConnection.__packets connection datagram.payload now)
 
 let __bootstrap (state: Stdlib.HttpServer.Quic.__Bootstrap) (now: Int64) : Stdlib.Result.Result<Stdlib.HttpServer.Quic.__Phase, String> =
   if now >= state.deadline then Error "HTTP/3 initial stream credit timed out"
@@ -84,38 +84,51 @@ let __advance (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Re
   let phase = match owner.phase with
     | Handshake ((flight, deadline)) ->
       let received = match datagram with | None -> Ok flight | Some datagram -> Stdlib.__QuicServer.receive flight owner.peer datagram now in
-      received |> Stdlib.Result.andThen (fun flight ->
-        if now >= deadline then Error "QUIC server handshake timed out"
+      received |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun flight ->
+        if now >= deadline then Error (Stdlib.__QuicConnection.Failure.OpaqueFailure "QUIC server handshake timed out")
         else if pending then Ok (Stdlib.HttpServer.Quic.__Phase.Handshake ((flight, deadline)))
-        else Stdlib.__QuicServer.advance owner.socket owner.peer flight None now deadline |> Stdlib.Result.andThen (fun progress ->
+        else Stdlib.__QuicServer.advance owner.socket owner.peer flight None now deadline |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun progress ->
           match progress with
           | Waiting flight -> Ok (Stdlib.HttpServer.Quic.__Phase.Handshake ((flight, deadline)))
           | Complete ready -> Stdlib.__QuicConnection.fromServer ready context.signals |> Stdlib.Result.map (fun connection ->
               Stdlib.HttpServer.Quic.__Phase.Initializing (Stdlib.HttpServer.Quic.__Bootstrap { connection = connection, opened = false, index = 0L, offset = 0L, deadline = now + 10000L }))))
     | Initializing state ->
       Stdlib.HttpServer.Quic.__input state.connection datagram now |> Stdlib.Result.andThen (fun connection ->
+        (
         if pending then
           if now >= state.deadline then Error "HTTP/3 initial stream credit timed out" else Ok (Stdlib.HttpServer.Quic.__Phase.Initializing { state with connection = connection })
-        else Stdlib.__QuicConnection.__tick connection now |> Stdlib.Result.andThen (fun connection -> Stdlib.HttpServer.Quic.__bootstrap { state with connection = connection } now))
+        else Stdlib.__QuicConnection.__tick connection now |> Stdlib.Result.andThen (fun connection -> Stdlib.HttpServer.Quic.__bootstrap { state with connection = connection } now)) |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque)
     | Serving state ->
       Stdlib.HttpServer.Quic.__input state.wire.connection datagram now |> Stdlib.Result.andThen (fun connection ->
+        (
         let state = { state with wire = { state.wire with connection = connection } } in
         if Stdlib.Option.isSome connection.meta.closed then Ok (Stdlib.HttpServer.Quic.__Phase.Draining ((connection, now)))
         else if pending then Stdlib.__QuicConnection.__idle connection now |> Stdlib.Result.map (fun _unit -> Stdlib.HttpServer.Quic.__Phase.Serving state)
         else if (state.goAwaySent && state.streams == []) || (now >= state.deadline && state.streams == []) then Ok (Stdlib.HttpServer.Quic.__Phase.Draining ((connection, now + 10000L)))
         else Stdlib.__Http3Server.step (Stdlib.__Http3Server.Context { config = context.config, handler = handler, limit = context.limit }) state now
           |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicConnection.__tick state.wire.connection now |> Stdlib.Result.map (fun connection ->
-            Stdlib.HttpServer.Quic.__Phase.Serving { state with wire = { state.wire with connection = connection } })))
+            Stdlib.HttpServer.Quic.__Phase.Serving { state with wire = { state.wire with connection = connection } }))) |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque)
     | Draining ((connection, deadline)) ->
       Stdlib.HttpServer.Quic.__input connection datagram now |> Stdlib.Result.andThen (fun connection ->
+        (
         if Stdlib.Option.isSome connection.meta.closed then Ok (Stdlib.HttpServer.Quic.__Phase.Draining ((connection, now)))
         else if pending then
           if now >= deadline then Error "QUIC output drain timed out"
           else Stdlib.__QuicConnection.__idle connection now |> Stdlib.Result.map (fun _unit -> Stdlib.HttpServer.Quic.__Phase.Draining ((connection, deadline)))
         else if now >= deadline || (connection.space.queued == [] && connection.space.recovery.congestion.inFlight == 0L) then
-          Stdlib.__QuicConnection.__beginClose connection now |> Stdlib.Result.map (fun closing -> Stdlib.HttpServer.Quic.__Phase.Closing closing)
-        else Stdlib.__QuicConnection.__tick connection now |> Stdlib.Result.map (fun connection -> Stdlib.HttpServer.Quic.__Phase.Draining ((connection, deadline))))
+          Stdlib.__QuicConnection.__beginClose connection now (Stdlib.__QuicConnection.CloseReason.ApplicationCloseReason 256L) |> Stdlib.Result.map (fun closing -> Stdlib.HttpServer.Quic.__Phase.Closing closing)
+        else Stdlib.__QuicConnection.__tick connection now |> Stdlib.Result.map (fun connection -> Stdlib.HttpServer.Quic.__Phase.Draining ((connection, deadline)))) |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque)
     | Closing closing -> Ok (Stdlib.HttpServer.Quic.__Phase.Closing closing) in
+  let phase = match phase with
+    | Ok phase -> Ok phase
+    | Error failure ->
+      match failure with
+      | OpaqueFailure message -> Error message
+      | TransportFailure ((connection, kind, error)) ->
+        // Keep the child and its sealed outbox alive until the listener flushes
+        // this transport close. Closing immediately would dispose the packet.
+        Stdlib.__QuicConnection.__beginClose connection now (Stdlib.__QuicConnection.CloseReason.TransportCloseReason ((error.code, kind)))
+          |> Stdlib.Result.map (fun closing -> Stdlib.HttpServer.Quic.__Phase.Closing closing) in
   phase |> Stdlib.Result.map (fun phase ->
     match phase with
     | Draining ((connection, _deadline)) -> if Stdlib.Option.isSome connection.meta.closed then None else Some { owner with phase = phase }

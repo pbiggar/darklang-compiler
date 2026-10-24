@@ -261,6 +261,7 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () =
       typeParams = [];
       params = NonEmptyList.singleton (unitId, C.checkedType AST.TUnit);
       returnType = C.checkedType AST.TInt64;
+      bodyType = C.checkedType AST.TInt64;
       body = C.Int64Literal 1L;
       recursion = None;
     }
@@ -334,6 +335,7 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions () =
       typeParams = [];
       params = NonEmptyList.singleton (baseParam, C.checkedType AST.TInt64);
       returnType = C.checkedType AST.TInt64;
+      bodyType = C.checkedType AST.TInt64;
       body = C.Local baseParam;
       recursion = None;
     }
@@ -347,6 +349,7 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions () =
       typeParams = [];
       params = NonEmptyList.singleton (localParam, C.checkedType AST.TInt64);
       returnType = C.checkedType AST.TInt64;
+      bodyType = C.checkedType AST.TInt64;
       body = C.Local localParam;
       recursion = None;
     }

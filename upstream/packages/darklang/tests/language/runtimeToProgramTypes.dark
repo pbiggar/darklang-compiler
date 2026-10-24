@@ -29,7 +29,7 @@ let fakeType () : Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName =
     Darklang.LanguageTools.RuntimeTypes.Hash.Hash "deadbeef")
 
 // --- literals ---
-// @compiler xfail compile: "Unknown function or value 'promote'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'promote'" class=missing-support reason=upstream-dependency
 test literals =
   Stdlib.Test.all
     [ (match promote Darklang.LanguageTools.RuntimeTypes.Dval.DUnit with
@@ -73,7 +73,7 @@ test literals =
 // A float with no plain-decimal form has no literal syntax. This matters beyond
 // looking wrong: the REPL stores a captured value as a binding's source, so
 // `NaN.0` / `Infinity.0` / `1e+30.0` would wedge a session.
-// @compiler xfail compile: "Unknown function or value 'promote'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'promote'" class=missing-support reason=upstream-dependency
 test floatsWithoutLiteralSyntax =
   Stdlib.Test.all
     [ Stdlib.Result.isError (
@@ -90,7 +90,7 @@ test floatsWithoutLiteralSyntax =
       |> Stdlib.Test.equal true ]
 
 // --- collections ---
-// @compiler xfail compile: "Unknown function or value 'promote'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'promote'" class=missing-support reason=upstream-dependency
 test collections =
   Stdlib.Test.all
     [ (match
@@ -126,7 +126,7 @@ test collections =
       |> Stdlib.Test.equal 5 ]
 
 // --- records and enums carry their type name across (RT -> PT) ---
-// @compiler xfail compile: "Unknown function or value 'promote'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'promote'" class=missing-support reason=upstream-dependency
 test recordsAndEnums =
   Stdlib.Test.all
     [ (match
@@ -169,7 +169,7 @@ test recordsAndEnums =
       |> Stdlib.Test.equal true ]
 
 // --- values with no literal syntax fail (Error), so the caller can fall back ---
-// @compiler xfail compile: "Unknown function or value 'promote'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'promote'" class=missing-support reason=upstream-dependency
 test valuesWithoutLiteralSyntax =
   Stdlib.Test.all
     [ Stdlib.Result.isError (

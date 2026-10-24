@@ -68,6 +68,13 @@ let doubleWrap<'T> (x: T) : List<List<T>> = wrap<List<T>> (wrap<T> x)
 
 The algorithm uses a fixed-point iteration: keep specializing until no new TypeApps are found.
 
+Checked functions retain both the declared return type and the inferred body
+type. Specialization substitutes both and rejects incompatible results before
+native representation selection. For example, `let constant<'a> () : 'a = 5L`
+can be instantiated with `Int64`, while `constant<String> ()` fails compilation
+with `Expected TString, got TInt64`. A body that never returns remains valid
+for any result type.
+
 ### External Generic Definitions
 
 When compiling user code that calls stdlib generics (like `List.map<T>`), the compiler needs access to the generic function bodies from stdlib. The `monomorphizeWithExternalDefs` function handles this by:

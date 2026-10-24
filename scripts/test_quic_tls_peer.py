@@ -68,7 +68,7 @@ let packets (state: Exchange) (bytes: Blob) : Stdlib.Result.Result<Exchange, Str
               if state.largestInitial >= 0L && Stdlib.Blob.toHex packet.source != Stdlib.Blob.toHex state.destination then
                 Error "QUIC Initial source connection ID changed"
               else
-              match Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.initial) with
+              match Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage |> Stdlib.Result.andThen (collect state.initial) with
               | Error message -> Error message
               | Ok initial ->
                 let available = Stdlib.__QuicReassembly.available initial in
@@ -90,7 +90,7 @@ let packets (state: Exchange) (bytes: Blob) : Stdlib.Result.Result<Exchange, Str
               match Stdlib.__QuicCrypto.openPacket tls.receive packet.bytes packet.numberOffset state.largestHandshake with
               | Error message -> Error message
               | Ok opened ->
-                match Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.crypto) with
+                match Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage |> Stdlib.Result.andThen (collect state.crypto) with
                 | Error message -> Error message
                 | Ok crypto ->
                   let available = Stdlib.__QuicReassembly.available crypto in

@@ -27,7 +27,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib : X.stdlibResult) source =
     Types.mergeTypeCheckEnv stdlib.X.context.X.typeCheckEnv
       (WrittenChecking.typeCheckEnvironment typed)
   in
-  let planned = JsonPlanning.rewriteProgram env typed in
+  let* planned = JsonPlanning.rewriteProgram env typed in
   let typ = Types.resolveType env.Types.aliasReg programType in
   let rendered, boundary =
     if typ = AST.TUnit then (planned, AST.TUnit)

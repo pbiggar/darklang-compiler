@@ -26,7 +26,7 @@ test numericTypes =
       2y > 1y |> Stdlib.Test.equal true ]
 
 // `%` is integer-only: Float has no Modulo implementation, deliberately
-// @compiler xfail runtime: "1.5" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test floatModuloRaises =
   7.5 % 2.0
   => raises
@@ -34,11 +34,11 @@ test floatModuloRaises =
 
 // Mixed operand types are a type error (no implicit coercion), said before
 // dispatch so the message is the operator's, not the impl fn's
-// @compiler xfail compile: "Expected TInt64, got TBool" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TBool" class=aot-rejection reason=aot-type-error
 test int64PlusBoolRaises =
   5L + true => raises "Cannot perform numeric operation on Int64 and Bool"
 
-// @compiler xfail compile: "Expected TInt64, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TFloat64" class=aot-rejection reason=aot-type-error
 test int64PlusFloatRaises =
   1L + 2.0 => raises "Cannot perform numeric operation on Int64 and Float"
 
@@ -46,7 +46,7 @@ test int64PlusFloatRaises =
 test stringAdd =
   "a" + "b" |> Stdlib.Test.equal "ab"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test stringSubtractRaises =
   "a" - "b"
   => raises
@@ -78,7 +78,7 @@ test floatOverflowIsInfinity =
   2.0 ** 100000.0 |> Stdlib.Test.equal (1.0 / 0.0)
 
 // `**` (power) works on every numeric type, the 128-bit ints included
-// @compiler xfail compile: "Cannot perform numeric operation on Int128 and Int128" reason=compiler-gap
+// @compiler xfail compile: "Cannot perform numeric operation on Int128 and Int128" class=missing-support reason=compiler-gap
 test power =
   Stdlib.Test.all
     [ 2y ** 3y |> Stdlib.Test.equal 8y
@@ -162,30 +162,30 @@ test bitwiseNot =
 
 // bitwise operators are traits like every other operator, so a Float says what
 // is missing
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test floatBitwiseAndRaises =
   1.0 & 2.0
   => raises
     "Float has no implementation of Darklang.Stdlib.BitwiseAnd. Write `impl BitwiseAnd for Float = ...`, or run `dark impls BitwiseAnd` to see which types do"
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test floatShiftLeftRaises =
   1.0 << 2.0
   => raises
     "Float has no implementation of Darklang.Stdlib.ShiftLeft. Write `impl ShiftLeft for Float = ...`, or run `dark impls ShiftLeft` to see which types do"
 
-// @compiler xfail compile: "Unary operator is unavailable for TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Unary operator is unavailable for TFloat64" class=aot-rejection reason=aot-type-error
 test floatBitwiseNotRaises =
   ~1.0
   => raises
     "Float has no implementation of Darklang.Stdlib.BitwiseNot. Write `impl BitwiseNot for Float = ...`, or run `dark impls BitwiseNot` to see which types do"
 
 // mixed widths are a type error, exactly as for the arithmetic operators
-// @compiler xfail compile: "Expected TInt64, got TInt8" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TInt8" class=aot-rejection reason=aot-type-error
 test mixedBitwiseWidthsRaises =
   1L & 2y => raises "Cannot perform numeric operation on Int64 and Int8"
 
-// @compiler xfail compile: "Expected TInt64, got TInt" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TInt" class=aot-rejection reason=aot-type-error
 test mixedShiftWidthsRaises =
   1L << 2 => raises "Cannot perform numeric operation on Int64 and Int"
 

@@ -10,7 +10,7 @@ test simpleAlias =
   |> Stdlib.Test.equal (Something { ID = "2", Data = "test" })
 
 // CELANUP: would be better if this noted that `Id` is an alias for `String`
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test simpleAliasWrongTypeRaises =
   Something { ID = 2L, Data = "test" }
   => raises
@@ -65,7 +65,7 @@ module NestedAlias =
         ))
         |> Stdlib.Test.equal "Alice" ]
 
-  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test wrongTupleTypeRaises =
     getUserID (("Alice", 123L))
     => raises
@@ -115,19 +115,19 @@ module RecordWithTypeArgs =
     Inner<String, Int64> { a = "test", b = 5L }
     |> Stdlib.Test.equal (Inner { a = "test", b = 5L })
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test explicitTypeArgMismatchRaises =
     Inner<String, Int64> { a = "test", b = "five" }
     => raises
       "Failed to create record. Expected Int64 for field `b`, but got \"five\" (a String)"
 
-  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test outer2WrongFieldRaises =
     Outer2 { a = 5L, b = 6L }
     => raises
       "Failed to create record. Expected String for field `a`, but got 5 (an Int64)"
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test outer1WrongFieldRaises =
     Outer1 { a = "a", b = "b" }
     => raises
@@ -144,13 +144,13 @@ module RecordWithTypeArgsDifferentName =
     MostOutest { a = 5L, b = "string" }
     |> Stdlib.Test.equal (Inner { a = 5L, b = "string" })
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test wrongFieldARaises =
     MostOutest { a = "not allowed", b = "string" }
     => raises
       "Failed to create record. Expected Int64 for field `a`, but got \"not allow... (a String)"
 
-  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test wrongFieldBRaises =
     MostOutest { a = 5L, b = 6L }
     => raises
@@ -165,7 +165,7 @@ module RecordWithRecursiveTypeArgs =
   // @compiler blocked: missing-implementation
   type Alias<'x> = Inner<'x>
 
-  // @compiler xfail compile: "Unknown type 'Inner'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown type 'Inner'" class=missing-support reason=upstream-dependency
   test recursiveAlias =
     Inner
       { a = 5L
@@ -228,13 +228,13 @@ module EnumWithTypeArgs =
         Outer2.A "str" |> Stdlib.Test.equal (Outer1.A "str")
         Outer2.B 5L |> Stdlib.Test.equal (Outer1.B 5L) ]
 
-  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test outer2WrongPayloadRaises =
     Outer2.A 5L
     => raises
       "Failed to create enum. Expected String for field 0 in `A`, but got Int64 (5)"
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test outer1WrongPayloadRaises =
     Outer1.B "b"
     => raises
@@ -255,13 +255,13 @@ module EnumWithTypeArgsDifferentName =
       [ MostOutest.A 5L |> Stdlib.Test.equal (Inner.A 5L)
         MostOutest.B "test" |> Stdlib.Test.equal (Inner.B "test") ]
 
-  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
   test wrongPayloadARaises =
     MostOutest.A "not allowed"
     => raises
       "Failed to create enum. Expected Int64 for field 0 in `A`, but got String (\"not allowed\")"
 
-  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
   test wrongPayloadBRaises =
     MostOutest.B 6L
     => raises
@@ -276,7 +276,7 @@ module EnumWithRecursiveTypeArgs =
   // @compiler blocked: missing-implementation
   type Alias<'x> = Inner<'x>
 
-  // @compiler xfail compile: "Unknown type 'Alias'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown type 'Alias'" class=missing-support reason=upstream-dependency
   test recursiveAlias =
     Alias.B(Stdlib.Result.Result.Ok(Alias.A 5L))
     |> Stdlib.Test.equal (Inner.B(Stdlib.Result.Result.Ok(Inner.A 5L)))

@@ -211,7 +211,7 @@ test fromFloat =
     [ // fromFloat truncates toward zero, like Int.fromFloat; fromFloatRounded rounds
       Stdlib.Int64.fromFloat 3.9 |> Stdlib.Test.equal (Some 3L)
       Stdlib.Int64.fromFloat -3.9 |> Stdlib.Test.equal (Some -3L)
-      Stdlib.Int64.fromFloat 1000000000000000000000000000000.0
+      Stdlib.Int64.fromFloat 1e30
       |> Stdlib.Test.equal None
       Stdlib.Int64.fromFloat (0.0 / 0.0) |> Stdlib.Test.equal None
       Stdlib.Int64.fromFloat (1.0 / 0.0) |> Stdlib.Test.equal None
@@ -224,7 +224,7 @@ test fromFloatRounded =
   Stdlib.Test.all
     [ Stdlib.Int64.fromFloatRounded 3.9 |> Stdlib.Test.equal (Some 4L)
       Stdlib.Int64.fromFloatRounded -3.9 |> Stdlib.Test.equal (Some -4L)
-      Stdlib.Int64.fromFloatRounded 1000000000000000000000000000000.0
+      Stdlib.Int64.fromFloatRounded 1e30
       |> Stdlib.Test.equal None
       Stdlib.Int64.fromFloatRounded (0.0 / 0.0) |> Stdlib.Test.equal None
       Stdlib.Int64.fromFloatRounded (1.0 / 0.0) |> Stdlib.Test.equal None
@@ -274,7 +274,7 @@ test multiply =
       // Actual: a Float: 1.0"
       8L * 8L |> Stdlib.Test.equal 64L ]
 
-// @compiler xfail compile: "Expected TInt64, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TFloat64" class=aot-rejection reason=aot-type-error
 test multiplyByFloatRaises =
   1L * 1.0 => raises "Cannot perform numeric operation on Int64 and Float"
 
@@ -529,7 +529,6 @@ test shiftLeft =
       (1L << 62L) |> Stdlib.Test.equal 4611686018427387904L
       (5L << 3L) |> Stdlib.Test.equal 40L ]
 
-// @compiler xfail runtime: "assertion 5: Values differ" reason=compiler-gap
 test shiftRight =
   Stdlib.Test.all
     [ (8L >> 2L) |> Stdlib.Test.equal 2L

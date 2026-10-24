@@ -31,7 +31,7 @@ let emit (bytes: Blob) (offset: Int64) : Unit =
     let _ = Stdlib.printLine (Stdlib.Blob.toHex part) in
     emit bytes (offset + 512L)
 let initialize (ready: Stdlib.__QuicClient.Ready) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
-  Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.andThen (fun state ->
+  Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.mapError Stdlib.__QuicConnection.__reportFailure |> Stdlib.Result.andThen (fun state ->
     Stdlib.__QuicConnection.openStream state 2L |> Stdlib.Result.andThen (fun state ->
     Stdlib.__QuicConnection.openStream state 6L |> Stdlib.Result.andThen (fun state ->
     Stdlib.__QuicConnection.openStream state 10L |> Stdlib.Result.andThen (fun state ->
@@ -52,6 +52,7 @@ let controls (state: Stdlib.__QuicConnection.State) (uni: Stdlib.__Http3Uni.Stat
       let (connection, streams) = pair in
       Stdlib.__QuicConnection.read connection channel.id |> Stdlib.Result.andThen (fun read ->
         Stdlib.__Http3Uni.receive streams channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
+          |> Stdlib.Result.mapError (fun error -> error.message)
           |> Stdlib.Result.map (fun received -> (read.state, received.state)))))
 let receive (state: Stdlib.__QuicConnection.State) (deadline: Int64)
   (message: Stdlib.__Http3Message.State) (uni: Stdlib.__Http3Uni.State)
@@ -61,9 +62,9 @@ let receive (state: Stdlib.__QuicConnection.State) (deadline: Int64)
   Stdlib.__QuicConnection.read connection 0L |> Stdlib.Result.andThen (fun read ->
     let _ = emit read.bytes 0L in
     if Stdlib.Option.isSome read.reset then Error "Response reset"
-    else Stdlib.__Http3Message.feed message read.bytes |> Stdlib.Result.andThen (fun received ->
+    else Stdlib.__Http3Message.feed message read.bytes |> Stdlib.Result.mapError (fun error -> error.message) |> Stdlib.Result.andThen (fun received ->
       if read.finished then
-        Stdlib.__Http3Message.finish received.state |> Stdlib.Result.andThen (fun _unit ->
+        Stdlib.__Http3Message.finish received.state |> Stdlib.Result.mapError (fun error -> error.message) |> Stdlib.Result.andThen (fun _unit ->
           Stdlib.__QuicConnection.flush read.state |> Stdlib.Result.map (fun _state -> ()))
       else match Stdlib.__Network.monotonicMillis () with
       | Error _ -> Error "Clock failed"

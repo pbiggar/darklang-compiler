@@ -13,7 +13,7 @@ module DictionarySignatures =
         Darklang.LanguageTools.ProgramTypes.TypeReference.TInt))
       (Darklang.LanguageTools.ProgramTypes.TypeReference.TDict(key, value))
 
-// @compiler xfail compile: "Unknown function or value 'DictionarySignatures.same'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'DictionarySignatures.same'" class=missing-support reason=upstream-dependency
 test dictionarySignatures =
   Stdlib.Test.all
     [ DictionarySignatures.same Darklang.LanguageTools.ProgramTypes.TypeReference.TString Darklang.LanguageTools.ProgramTypes.TypeReference.TInt

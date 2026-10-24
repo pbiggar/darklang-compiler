@@ -99,8 +99,15 @@ let record check literal globals locals symbols expected
                   fields
               in
               bind inference (fun (patterns, actuals, _) ->
+                  let freshParams, renaming =
+                    CheckingDiagnostics.freshenTypeParams (Some canonical)
+                      entry.params
+                  in
                   map Option.some
-                    (Unification.inferTypeArgs entry.params (List.rev patterns)
+                    (Unification.inferTypeArgs freshParams
+                       (List.map
+                          (CheckingDiagnostics.applyTypeVarRenaming renaming)
+                          (List.rev patterns))
                        (List.rev actuals) None None))))
   in
   bind
@@ -141,7 +148,10 @@ let access check literal globals locals symbols expected record fieldName =
       match typ with
       | AST.TTuple fields -> (
           match int_of_string_opt fieldName with
-          | Some index when index > 0 && index <= List.length fields -> (
+          | Some index
+            when index > 0
+                 && index <= List.length fields
+                 && string_of_int index = fieldName -> (
               match List.nth_opt fields (index - 1) with
               | Some fieldType ->
                   literal expected symbols fieldType

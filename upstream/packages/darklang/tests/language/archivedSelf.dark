@@ -148,7 +148,7 @@ test tupleMatchWithShadowing =
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.tupleMatchWithShadowing (2, 3) |> Stdlib.Test.equal 30
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.tupleMatchWithShadowing (4, 5) |> Stdlib.Test.equal 9 ]
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing'" class=missing-support reason=upstream-dependency
 test letBindingShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing 4 |> Stdlib.Test.equal [12, 10]

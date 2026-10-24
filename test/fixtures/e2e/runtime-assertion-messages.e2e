@@ -1,0 +1,16 @@
+// Assertion failures render values using their concrete compiler-known types.
+type AssertionRecord = { value: Int64 }
+let recordFailure () : Stdlib.Test.Result = Stdlib.Test.equal (AssertionRecord { value = 8L }) (AssertionRecord { value = 9L })
+let assertionMessage (result: Stdlib.Test.Result) : String = match result with | Pass -> "" | Fail messages -> match messages with | head :: _ -> head | [] -> ""
+(Stdlib.Test.equal 8L 9L == Stdlib.Test.Result.Fail ["expected 9, got 8"]) = true
+(Stdlib.Test.notEqual 1L 1L == Stdlib.Test.Result.Fail ["did not expect 1"]) = true
+(Stdlib.Test.equal [1L, 2L] [3L] == Stdlib.Test.Result.Fail ["expected [3], got [1, 2]"]) = true
+(recordFailure () == Stdlib.Test.Result.Fail ["expected AssertionRecord { value: 9 }, got AssertionRecord { value: 8 }"]) = true
+(Stdlib.Test.equal 8L 8L == Stdlib.Test.Result.Pass) = true
+(Stdlib.Test.notEqual 1L 2L == Stdlib.Test.Result.Pass) = true
+(Stdlib.Test.equal [] [] == Stdlib.Test.Result.Pass) = true
+(Stdlib.Test.equal Stdlib.Option.Option.None Stdlib.Option.Option.None == Stdlib.Test.Result.Pass) = true
+(Stdlib.Test.equal (Stdlib.Result.Result.Ok 1L) (Stdlib.Result.Result.Ok 1L) == Stdlib.Test.Result.Pass) = true
+(Stdlib.Test.equal (Stdlib.Result.Result.Error "x") (Stdlib.Result.Result.Error "x") == Stdlib.Test.Result.Pass) = true
+(Stdlib.Test.equal (Stdlib.Result.Result.Ok 1L) (Stdlib.Result.Result.Ok 2L) |> assertionMessage |> Stdlib.String.endsWith ".Ok(1)") = true
+(Stdlib.Test.notEqual Stdlib.Option.Option.None Stdlib.Option.Option.None |> assertionMessage |> Stdlib.String.endsWith ".None") = true

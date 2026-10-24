@@ -11,19 +11,19 @@ test interpolation =
       (let one = 1L in $"test {Stdlib.toString one}")
       |> Stdlib.Test.equal "test 1" ]
 
-// @compiler xfail compile: "Expected String in string interpolation, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected String in string interpolation, got TFloat64" class=aot-rejection reason=aot-type-error
 test floatInterpolationRaises =
   (let one = 1.0 in $"test {one}")
   => raises
     "Expected String in string interpolation, got a Float (1.0) instead. Try wrapping it with `Stdlib.toString`."
 
-// @compiler xfail compile: "Expected String in string interpolation, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected String in string interpolation, got TInt64" class=aot-rejection reason=aot-type-error
 test int64InterpolationRaises =
   (let one = 1L in $"test {one}")
   => raises
     "Expected String in string interpolation, got an Int64 (1) instead. Try wrapping it with `Stdlib.toString`."
 
-// @compiler xfail compile: "Unbound local variable 'one'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'one'" class=aot-rejection reason=aot-name-error
 test unboundVariableRaises =
   (let two = 2L in "test 1" == $"test {one}")
   => raises "There is no variable named: one"

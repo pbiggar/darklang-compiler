@@ -11,6 +11,8 @@
   "pending-validation": "This test is imported but has not yet been classified by execution.",
   "upstream-dependency": "The test depends on an imported declaration that is not yet available to the compiler.",
   "compiler-gap": "The compiler behavior for this case still differs from the interpreter.",
+  "diagnostic-difference": "The compiler deliberately uses a different error message. The negative test must fail in the annotated phase with the annotated compiler diagnostic.",
+  "upstream-bug": "The interpreter behavior or test expectation is considered incorrect. In float patterns, positive and negative zero are distinct literals even though numeric equality considers them equal.",
   "compiler-crash": "The compiler or generated program currently terminates abnormally for this case.",
   "interpreter-fixture": "This case requires interpreter-specific host fixtures that are not provided by the native test runner.",
   "test-diagnostics": "The compiler assertion implementation does not yet render arbitrary values in failure messages.",
@@ -19,5 +21,11 @@
   "compiler-timeout": "The case exceeds the compilation or execution time budget used to validate imported tests.",
   "constructor-identity": "The declaration collides with an existing enum constructor identity in the compiler bounded tag space.",
   "value-specialization": "The global value initializer requires a generic specialization the compiler does not yet provide.",
-  "compiler-resource": "Compilation or execution exceeds the trial resource budget or terminates the test host before a result is produced."
+  "compiler-resource": "Compilation or execution exceeds the trial resource budget or terminates the test host before a result is produced.",
+  "aot-type-error": "The compiler correctly rejects statically incompatible types, unsupported operators, or unsatisfied trait constraints, including in unexecuted branches and callbacks.",
+  "aot-name-error": "The compiler correctly rejects an undefined or ambiguous name, including in code the interpreter does not evaluate.",
+  "aot-match-error": "The compiler correctly rejects a non-exhaustive match, invalid pattern, or inconsistent pattern bindings before execution.",
+  "aot-arity-error": "The compiler correctly rejects an invalid number of function arguments, type arguments, constructor fields, or callback parameters.",
+  "aot-invalid-field": "The compiler correctly rejects invalid record construction, record field access, or tuple indexing.",
+  "aot-invalid-key": "The compiler correctly rejects duplicate literal dictionary keys or keys containing functions."
 }

@@ -144,7 +144,8 @@ let select ~context ~roots ~supplements ~sources =
             else
               match candidate.disposition with
               | A.Run -> Ok candidate
-              | A.Blocked _ | A.Excluded _ | A.Replace _ | A.Xfail _ ->
+              | A.Blocked _ | A.Excluded _ | A.Replace _ | A.Xfail _
+              | A.ErrorMessage _ ->
                   Error
                     ("Replacement target must be a concrete unannotated \
                       implementation: " ^ target)))
@@ -195,7 +196,8 @@ let select ~context ~roots ~supplements ~sources =
                   Error
                     ("Member replacement requires a replacement for its \
                       containing trait or implementation: " ^ entry.I.name)
-              | A.Xfail _ -> Error "Expected failure on a package member"))
+              | A.Xfail _ | A.ErrorMessage _ ->
+                  Error "Expected failure on a package member"))
     in
     find members
   in
@@ -223,7 +225,9 @@ let select ~context ~roots ~supplements ~sources =
                 let excluded =
                   match node.disposition with
                   | A.Excluded _ -> true
-                  | A.Run | A.Blocked _ | A.Replace _ | A.Xfail _ -> false
+                  | A.Run | A.Blocked _ | A.Replace _ | A.Xfail _
+                  | A.ErrorMessage _ ->
+                      false
                 in
                 selectNodes kept
                   ({ name = node.name; reason; excluded } :: unavailable)
@@ -237,7 +241,7 @@ let select ~context ~roots ~supplements ~sources =
                   :: contracts)
                   (S.add selected.file targets)
                   rest
-            | A.Xfail _ ->
+            | A.Xfail _ | A.ErrorMessage _ ->
                 Error
                   "Expected-failure annotations cannot select a package \
                    declaration"))
@@ -254,7 +258,9 @@ let select ~context ~roots ~supplements ~sources =
           (fun node ->
             match node.disposition with
             | A.Excluded _ -> true
-            | A.Run | A.Blocked _ | A.Replace _ | A.Xfail _ -> false)
+            | A.Run | A.Blocked _ | A.Replace _ | A.Xfail _ | A.ErrorMessage _
+              ->
+                false)
           originals)
   in
   let* supplementalSources = ResultList.traverse lookup supplements in

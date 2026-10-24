@@ -40,7 +40,7 @@ test remainder =
       Stdlib.Int8.remainder 5y 0y |> Stdlib.Test.equal (Error "Cannot divide by 0") ]
 
 /// Wraps on overflow.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Test.Values.int8Value'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.Test.Values.int8Value'" class=missing-support reason=upstream-dependency
 test add =
   Stdlib.Test.all
     [ (10y + 9y) |> Stdlib.Test.equal 19y
@@ -237,7 +237,6 @@ test parse =
       Stdlib.Int8.parse "127" |> Stdlib.Test.equal (Ok 127y)
       Stdlib.Int8.parse "-128" |> Stdlib.Test.equal (Ok -128y) ]
 
-// @compiler blocked: compiler-resource
 test parseOutOfRange =
   Stdlib.Test.all
     [ Stdlib.Int8.parse "-10001"

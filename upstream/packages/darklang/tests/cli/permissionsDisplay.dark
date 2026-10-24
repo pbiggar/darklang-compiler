@@ -46,7 +46,7 @@ module PermissionsDisplay =
         approvedAs = [ "Acme.Client.fetch" ]
         instancePolicy = instancePolicy () }
 
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Permissions.Command.renderAccessReport'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Permissions.Command.renderAccessReport'" class=missing-support reason=upstream-dependency
   test approvedReport =
     Darklang.Cli.Permissions.Command.renderAccessReport (approved ())
     |> Stdlib.Test.equal
@@ -79,7 +79,7 @@ module PermissionsDisplay =
         packagePolicy = Stdlib.Option.Option.None
         approvedAs = [] }
 
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Permissions.Command.renderAccessReport'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Permissions.Command.renderAccessReport'" class=missing-support reason=upstream-dependency
   test unapprovedReport =
     Darklang.Cli.Permissions.Command.renderAccessReport (unapproved ())
     |> Stdlib.Test.equal

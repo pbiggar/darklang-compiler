@@ -23,11 +23,11 @@ type ColourAlias = Colour
 // @compiler blocked: value-specialization
 val valDict = Dict { 1L: "a", 2L: "b" }
 
-// @compiler xfail compile: "Unbound local variable 'valDict'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'valDict'" class=missing-support reason=upstream-dependency
 test valDictKeys =
   Stdlib.Dict.keys valDict |> Stdlib.Test.equal [ 1L, 2L ]
 
-// @compiler xfail compile: "Unbound local variable 'valDict'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'valDict'" class=missing-support reason=upstream-dependency
 test valDictSetRejectsWrongKeyType =
   Stdlib.Dict.set valDict "notAnInt" "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"notAnInt\")"
@@ -35,17 +35,17 @@ test valDictSetRejectsWrongKeyType =
 test empty =
   Stdlib.Dict.empty |> Stdlib.Test.equal (Dict { })
 
-// @compiler xfail compile: "Duplicate dictionary key \"a\"" reason=compiler-gap
+// @compiler xfail compile: "Duplicate dictionary key \"a\"" class=aot-rejection reason=aot-invalid-key
 test literalRejectsDuplicateKeys =
   Dict { "a": 1, "a": 2 }
   => raises "Cannot add two dictionary entries with the same key \"a\""
 
-// @compiler xfail compile: "Expected TInt32, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt32, got TString" class=aot-rejection reason=aot-type-error
 test literalRejectsMixedValueTypes =
   Dict { "a": 1l, "b": "two" }
   => raises "Cannot add a String (\"two\") to a dict of Int32. Failed at key \"b\"."
 
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test filterMap =
   Stdlib.Test.all
     [ Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L)
@@ -70,7 +70,7 @@ test filterMap =
 //   => raises
 //     "Darklang.Stdlib.Option.map's 1st argument (`option`) should be a Darklang.Stdlib.Option.Option<'a>. However, a Bool (false) was passed instead."
 
-// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
 test filter =
   Stdlib.Test.all
     [ Stdlib.Dict.filter
@@ -81,7 +81,7 @@ test filter =
       |> Stdlib.Test.equal (Dict { "key1": 1L })
       Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) |> Stdlib.Test.equal (Dict { }) ]
 
-// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
 test filterRejectsNonBoolPredicate =
   Stdlib.Dict.filter (Dict { "a": 1L, "b": 2L, "c": 3L }) (fun k v -> 2L)
   => raises "Encountered a condition that must be a Bool, but got an Int64 (2)"
@@ -97,7 +97,7 @@ test fromListOverwritingDuplicates =
       Stdlib.Dict.fromListOverwritingDuplicates [ (1L, 2L) ]
       |> Stdlib.Test.equal (Dict { 1L: 2L }) ]
 
-// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" reason=compiler-gap
+// @compiler xfail compile: "got TList TInt64" class=aot-rejection reason=aot-type-error
 test fromListOverwritingDuplicatesRejectsNonTuples =
   Stdlib.Dict.fromListOverwritingDuplicates [ 1L ]
   => raises "Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(_ * _)>, but got List<Int64> ([1])"
@@ -172,22 +172,20 @@ test set =
       Stdlib.Dict.set (Dict { }) "key1" 2L
       |> Stdlib.Test.equal (Dict { "key1": 2L }) ]
 
-// @compiler xfail runtime: "Uncaught exception: Dictionary key renderer was not specialized" reason=compiler-gap
 test setRejectsExistingKey =
   Stdlib.Dict.set (Dict { "key1": "val1before" }) "key1" "val1after"
   => raises "Cannot add two dictionary entries with the same key \"key1\""
 
-// @compiler xfail runtime: "Uncaught exception: Dictionary key renderer was not specialized" reason=compiler-gap
 test setRejectsExistingKeyAmongOthers =
   Stdlib.Dict.set (Dict { "key1": "val1", "key2": "val2" }) "key2" "newVal2"
   => raises "Cannot add two dictionary entries with the same key \"key2\""
 
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test literalRejectsValueOfAnotherType =
   Dict { "key1": "val1", "key2": 2L }
   => raises "Cannot add an Int64 (2) to a dict of String. Failed at key \"key2\"."
 
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test setRejectsWrongValueType =
   Stdlib.Dict.set (Dict { "key1": "val1" }) "key2" 2L
   => raises "Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (2)"
@@ -208,7 +206,7 @@ test setOverridingDuplicates =
         "newVal2"
       |> Stdlib.Test.equal (Dict { "key1": "val1", "key2": "newVal2" }) ]
 
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test setOverridingDuplicatesRejectsWrongValueType =
   Stdlib.Dict.setOverridingDuplicates (Dict { "key1": "val1" }) "key2" 2L
   => raises "Darklang.Stdlib.Dict.setOverridingDuplicates's 3rd parameter `val` expects String, but got Int64 (2)"
@@ -385,7 +383,7 @@ test nonStringKeysFromListInfersTypes =
       Stdlib.Dict.fromList [ (2L, "b"), (1L, "a") ]
       |> Stdlib.Test.equal Some(Dict { 1L: "a", 2L: "b" }) ]
 
-// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
 test nonStringKeysFromListInfersKeyType =
   Stdlib.Dict.set
     (Builtin.unwrap (Stdlib.Dict.fromList [ (1L, "a") ]))
@@ -393,7 +391,7 @@ test nonStringKeysFromListInfersKeyType =
     "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"b\")"
 
-// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
 test nonStringKeysFromListOverwritingDuplicatesInfersKeyType =
   Stdlib.Dict.set
     (Stdlib.Dict.fromListOverwritingDuplicates [ (1L, "a") ])
@@ -401,12 +399,12 @@ test nonStringKeysFromListOverwritingDuplicatesInfersKeyType =
     "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"b\")"
 
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test nonStringKeysFromListInfersValueType =
   Stdlib.Dict.set (Builtin.unwrap (Stdlib.Dict.fromList [ (1L, "a") ])) 2L 3L
   => raises "Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (3)"
 
-// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
+// @compiler xfail compile: "Lambda requires an expected function type" class=missing-support reason=compiler-gap
 test nonStringKeysFromListRejectsLambdaKey =
   Stdlib.Dict.fromList [ (1L, "a"), ((fun x -> x), "b") ]
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
@@ -429,7 +427,7 @@ test nonStringKeysIdentityMatchesEquality =
         (SameShape { px = 1L, py = 2L })
       |> Stdlib.Test.equal true ]
 
-// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test nonStringKeysDifferentShapesCannotBeCompared =
   (Point { px = 1L, py = 2L }) == (DifferentShape { a = 1L, b = 2L })
   => raises "Cannot perform equality check on Darklang.Stdlib.Dict.Tests.SameShape and Darklang.Stdlib.Dict.Tests.DifferentShape"
@@ -467,75 +465,75 @@ test nonStringKeysDeepComposites =
       Stdlib.Dict.keys (Dict { [ [ 2L ] ]: 1L, [ [ 1L ], [ 3L ] ]: 2L })
       |> Stdlib.Test.equal [ [ [ 1L ], [ 3L ] ], [ [ 2L ] ] ] ]
 
-// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" class=aot-rejection reason=aot-invalid-key
 test nonStringKeysRejectsLambdaInList =
   Dict { [ (fun x -> x) ]: 1L }
   => raises "Cannot use [(lambda)] as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" class=aot-rejection reason=aot-invalid-key
 test nonStringKeysRejectsLambdaInTuple =
   Dict { (1L, (fun x -> x)): 1L }
   => raises "Cannot use (1, (lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" class=aot-rejection reason=aot-invalid-key
 test nonStringKeysRejectsLambdaInEnum =
   Dict { (Stdlib.Option.Option.Some (fun x -> x)): 1L }
   => raises "Cannot use Some((lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
 test nonStringKeysLiteralRejectsMixedKeyTypes =
   Dict { 1L: "a", "b": "c" }
   => raises "This dict uses keys of type Int64, but \"b\" has type String."
 
-// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" class=aot-rejection reason=aot-invalid-key
 test nonStringKeysLiteralRejectsLambdaKey =
   Dict { (fun x -> x): 1L }
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
+// @compiler xfail compile: "Lambda requires an expected function type" class=missing-support reason=compiler-gap
 test nonStringKeysGetRejectsLambdaKey =
   Stdlib.Dict.get (Dict { 1L: "a" }) (fun x -> x)
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" class=aot-rejection reason=aot-invalid-key
 test nonStringKeysSetRejectsLambdaKeyOnEmptyDict =
   Stdlib.Dict.set (Dict { }) (fun x -> x) 1L
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
+// @compiler xfail compile: "Lambda requires an expected function type" class=missing-support reason=compiler-gap
 test nonStringKeysSetRejectsLambdaKey =
   Stdlib.Dict.set (Dict { 1L: "a" }) (fun x -> x) "b"
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
+// @compiler xfail compile: "Lambda requires an expected function type" class=missing-support reason=compiler-gap
 test nonStringKeysSetOverridingDuplicatesRejectsLambdaKey =
   Stdlib.Dict.setOverridingDuplicates (Dict { 1L: "a" }) (fun x -> x) "b"
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
+// @compiler xfail compile: "Lambda requires an expected function type" class=missing-support reason=compiler-gap
 test nonStringKeysMemberRejectsLambdaKey =
   Stdlib.Dict.``member`` (Dict { 1L: "a" }) (fun x -> x)
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
+// @compiler xfail compile: "Lambda requires an expected function type" class=missing-support reason=compiler-gap
 test nonStringKeysRemoveRejectsLambdaKey =
   Stdlib.Dict.remove (Dict { 1L: "a" }) (fun x -> x)
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 // Supply the dict so the callback executes and its invalid Bool result is rejected.
-// @compiler xfail compile: "Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TString])" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TString])" class=aot-rejection reason=aot-type-error
 test filterMapRejectsNonOptionResult =
   Stdlib.Dict.filterMap
     (Dict { "a": "x", "b": "y", "c": "z" })
     (fun key value -> if value == "y" then false else Some(key + value))
   => raises "No matching case found for value false in match expression"
 
-// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" reason=compiler-gap
+// @compiler xfail compile: "got TList TInt64" class=aot-rejection reason=aot-type-error
 test fromListOverwritingDuplicatesPropagatesElementError =
   Stdlib.Dict.fromListOverwritingDuplicates [ Stdlib.Test.raiseRuntimeError "err" ]
   => raises "Uncaught exception: err"
 
-// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" reason=compiler-gap
+// @compiler xfail compile: "got TList TInt64" class=aot-rejection reason=aot-type-error
 test fromListPropagatesElementError =
   Stdlib.Dict.fromList [ Stdlib.Test.raiseRuntimeError "err" ]
   => raises "Uncaught exception: err"

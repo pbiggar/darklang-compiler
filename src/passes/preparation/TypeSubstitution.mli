@@ -52,6 +52,8 @@ val specializeFunction :
   AST.semanticType list ->
   CheckedAST.functionDef
 
+val validateFunctionReturn : CheckedAST.functionDef -> (unit, string) result
+
 val rewriteTypeApps :
   ?rewriteReference:
     (AST.functionId ->

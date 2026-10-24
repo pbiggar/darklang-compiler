@@ -29,7 +29,7 @@ test map =
       Stdlib.List.map [] (fun x -> x + 1L) |> Stdlib.Test.equal [] ]
 
 // A run nobody scheduled (this harness) spawns onto the shared scheduler.
-// @compiler xfail compile: "Unknown function or value 'Stdlib.List.parallelMap'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.List.parallelMap'" class=missing-support reason=upstream-dependency
 test parallelMap =
   Stdlib.Test.all
     [ Stdlib.List.parallelMap [ 1L, 2L, 3L ] (fun x -> x * 2L)
@@ -38,7 +38,7 @@ test parallelMap =
 
 // Create more children than Scheduler.keepFinished retains. Their answers must
 // outlive their process rows so late awaits still succeed.
-// @compiler xfail compile: "Unknown function or value 'Stdlib.List.parallelMap'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.List.parallelMap'" class=missing-support reason=upstream-dependency
 test parallelMapOutlivesProcessTable =
   (Stdlib.List.parallelMap (Stdlib.List.range 1 500) (fun x -> x * 2))
   |> Stdlib.Test.equal
@@ -50,7 +50,7 @@ test parallelMapOutlivesProcessTable =
 // concurrency rather than wall clock, so a loaded machine cannot fail it. Measured
 // both ways: against `List.map` every item reports exactly 2, and against
 // `parallelMap` the counts run 3 to 10.
-// @compiler xfail compile: "Unknown function or value 'Stdlib.List.parallelMap'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.List.parallelMap'" class=missing-support reason=upstream-dependency
 test parallelMapRunsConcurrently =
   (Stdlib.List.contains
     (Stdlib.List.parallelMap (Stdlib.List.range 1 8) (fun i ->
@@ -142,7 +142,7 @@ test dropWhile =
       Stdlib.List.dropWhile [] (fun item -> item < 3L)
       |> Stdlib.Test.equal [] ]
 
-// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
+// @compiler xfail compile: "Non-exhaustive match expression" class=aot-rejection reason=aot-match-error
 test filter =
   Stdlib.Test.all
     [ Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
@@ -158,7 +158,7 @@ test filter =
       Stdlib.List.filter [] (fun _ -> "a")
       |> Stdlib.Test.equal [] ]
 
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test filterMap =
   Stdlib.Test.all
     [ Stdlib.List.filterMap [ 1L, 2L, 3L ] (fun item ->
@@ -207,7 +207,7 @@ test flatten =
       Stdlib.List.flatten []
       |> Stdlib.Test.equal [] ]
 
-// @compiler xfail compile: "Expected TList (TInferenceVar (\"t$constraint_-24176_3\", \"t$constraint_-24176_3\")), got TInt64" reason=compiler-gap
+// @compiler xfail compile: "got TInt64" class=aot-rejection reason=aot-type-error
 test fold =
   Stdlib.Test.all
     [ Stdlib.List.fold [] [] (fun _ _ -> 5L)
@@ -310,7 +310,7 @@ test interpose =
       Stdlib.List.interpose [] 5L
       |> Stdlib.Test.equal [] ]
 
-// @compiler xfail compile: "Lambda lifting could not infer return type for lambda body: BinOp" reason=compiler-gap
+// @compiler xfail compile: "Lambda lifting could not infer return type for lambda body: BinOp" class=missing-support reason=compiler-gap
 test map2 =
   Stdlib.Test.all
     [ Stdlib.List.map2 [ 10L, 20L, 30L ] [ 1L, 2L, 3L ] (fun a b -> a - b)
@@ -337,7 +337,7 @@ test contains =
       Stdlib.List.contains [ 1L, 2L, 3L ] 4L |> Stdlib.Test.equal false
       Stdlib.List.contains [] 1L |> Stdlib.Test.equal false ]
 
-// @compiler xfail compile: "Expected TBool, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TString" class=aot-rejection reason=aot-type-error
 test partition =
   Stdlib.Test.all
     [ Stdlib.List.partition [ -20L, 5L, 9L ] (fun x -> x > 0L)
@@ -646,27 +646,27 @@ test splitLast =
       |> Stdlib.Test.equal (Some (([ 1L, 2L ], 3L))) ]
 
 // CLEANUP the following tests should fail on having mixed types
-// @compiler xfail compile: "Expected TInt32, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt32, got TFloat64" class=aot-rejection reason=aot-type-error
 test rejectsMixedListElements =
   [ 1l, 2.3 ]
   => raises "Cannot add a Float (2.3) to a list of Int32. Failed at index 1."
 
-// @compiler xfail compile: "Expected TTuple [TInt32; TInt32], got TInt32" reason=compiler-gap
+// @compiler xfail compile: "Expected TTuple [TInt32; TInt32], got TInt32" class=aot-rejection reason=aot-type-error
 test rejectsMixedTupleAndScalar =
   [ (1l, 10l), 10l, (3l, 30l) ]
   => raises "Cannot add an Int32 (10) to a list of (Int32 * Int32). Failed at index 1."
 
-// @compiler xfail compile: "Expected TTuple [TInt32; TInt32], got TTuple [TInt32; TInt32; TInt32]" reason=compiler-gap
+// @compiler xfail compile: "Expected TTuple [TInt32; TInt32], got TTuple [TInt32; TInt32; TInt32]" class=aot-rejection reason=aot-type-error
 test rejectsTuplesWithDifferentArity =
   [ (1l, 10l), (2l, 20l), (3l, 30l, 40l) ]
   => raises "Cannot add an (Int32 * Int32 * Int32) ((3, 30, 40)) to a list of (Int32 * Int32). Failed at index 2."
 
-// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
 test dropWhileRejectsNonBoolCondition =
   Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun _ -> 0L - 1L)
   => raises "Encountered a condition that must be a Bool, but got an Int64 (-1)"
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TSum" class=aot-rejection reason=aot-type-error
 test filterRejectsOptionCondition =
   Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
     match item with
@@ -675,42 +675,42 @@ test filterRejectsOptionCondition =
     | 3L -> true)
   => raises "Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)"
 
-// @compiler xfail compile: "Expected TBool, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TString" class=aot-rejection reason=aot-type-error
 test filterRejectsStringCondition =
   Stdlib.List.filter [ true, false, true ] (fun _ -> "a")
   => raises "Encountered a condition that must be a Bool, but got a String (\"a\")"
 
-// @compiler xfail compile: "Expected TList (TList (TVar \"t$constraint_-24174_0\")), got TList TInt32" reason=compiler-gap
+// @compiler xfail compile: "got TList TInt32" class=aot-rejection reason=aot-type-error
 test flattenRejectsScalarElements =
   Stdlib.List.flatten [ 1l, 2l, 3l ]
   => raises "Darklang.Stdlib.List.flatten's 1st parameter `list` expects List<List<_>>, but got List<Int32> ([1, 2, 3])"
 
-// @compiler xfail compile: "Expected TInt64, got TList TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TList TInt64" class=aot-rejection reason=aot-type-error
 test flattenRejectsDifferentNestingDepths =
   Stdlib.List.flatten [ [ 1L ], [ [ 2L, 3L ] ] ]
   => raises "Cannot add a List<List<Int64>> ([[2, 3]]) to a list of List<Int64>. Failed at index 1."
 
-// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
 test setAtRejectsWrongValueType =
   Stdlib.List.setAt [ 1L, 2L ] 0 "x"
   => raises "Darklang.Stdlib.List.setAt's 3rd parameter `value` expects Int64, but got String (\"x\")"
 
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test interleaveRejectsMixedElementTypes =
   Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ]
   => raises "Darklang.Stdlib.List.interleave's 2nd parameter `lB` expects List<String>, but got List<Int64> ([0])"
 
-// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TString, got TInt64" class=aot-rejection reason=aot-type-error
 test interposeRejectsWrongSeparatorType =
   Stdlib.List.interpose [ "a", "b", "c" ] 0L
   => raises "Darklang.Stdlib.List.interpose's 2nd parameter `sep` expects String, but got Int64 (0)"
 
-// @compiler xfail compile: "Expected TBool, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TString" class=aot-rejection reason=aot-type-error
 test partitionRejectsStringCondition =
   Stdlib.List.partition [ true, false, true ] (fun _ -> "a")
   => raises "Encountered a condition that must be a Bool, but got a String (\"a\")"
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TSum" class=aot-rejection reason=aot-type-error
 test partitionRejectsOptionCondition =
   Stdlib.List.partition [ 1L, 2L, 3L ] (fun item ->
     match item with
@@ -720,36 +720,36 @@ test partitionRejectsOptionCondition =
   => raises "Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)"
 
 // CLEANUP: it should be a type error on the function not returning an Int64
-// @compiler xfail compile: "Expected TInt, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt, got TFloat64" class=aot-rejection reason=aot-type-error
 test comparatorRejectsFloatResult =
   Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun _ _ -> 0.1)
   => raises "Cannot perform equality check on Float and Int"
 
 // CLEANUP: it should be a type error on the function not returning an Int64
-// @compiler xfail compile: "Expected TInt, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt, got TString" class=aot-rejection reason=aot-type-error
 test comparatorRejectsStringResult =
   Stdlib.List.sortByComparator [ 1L, 2L, 3L ] (fun _ _ -> "㧑༷釺")
   => raises "Cannot perform equality check on String and Int"
 
 //TODO: better error message
-// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
 test takeWhileRejectsNonBoolCondition =
   Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun _ -> 0L - 1L)
   => raises "Encountered a condition that must be a Bool, but got an Int64 (-1)"
 
-// @compiler xfail compile: "Expected TInt64, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TFloat64" class=aot-rejection reason=aot-type-error
 test uniqueByRejectsMixedElementTypes =
   Stdlib.List.uniqueBy [ 6L, 2.0 ] (fun x -> x)
   => raises "Cannot add a Float (2.0) to a list of Int64. Failed at index 1."
 
 // A key type a Dict cannot hold raises, rather than being compared by identity.
-// @compiler xfail compile: "Type TFunction" reason=compiler-gap
+// @compiler xfail compile: "Type TFunction" class=aot-rejection reason=aot-invalid-key
 test uniqueByRejectsFunctionKeys =
   Stdlib.List.uniqueBy [ 1L ] (fun _ -> (fun value -> value))
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 // and a value no Dict can key raises instead of being compared by identity.
-// @compiler xfail compile: "Type TFunction" reason=compiler-gap
+// @compiler xfail compile: "Type TFunction" class=aot-rejection reason=aot-invalid-key
 test dedupRejectsFunctionKeys =
   Stdlib.List.dedup [ (fun value -> value) ]
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
@@ -772,24 +772,24 @@ test zipEvaluatesElements =
 
 // The counter records callback calls within this test.
 module IterEffects =
-  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" class=missing-support reason=test-counter
   test invokesCallbackForEachElement =
     let _ = Stdlib.List.iter [ 1L, 2L, 3L ] (fun _ -> Stdlib.Test.incrementCounter ())
     Stdlib.Test.counterValue () |> Stdlib.Test.equal 3L
 
-  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" class=missing-support reason=test-counter
   test runsConditionalEffects =
     let _ =
       Stdlib.List.iter [ 1L, 2L, 3L, 4L, 5L ] (fun x ->
         if x % 2L == 0L then Stdlib.Test.incrementCounter ())
     Stdlib.Test.counterValue () |> Stdlib.Test.equal 2L
 
-  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" class=missing-support reason=test-counter
   test doesNotInvokeCallbackForEmptyList =
     let _ = Stdlib.List.iter [] (fun _ -> Stdlib.Test.incrementCounter ())
     Stdlib.Test.counterValue () |> Stdlib.Test.equal 0L
 
-  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" class=missing-support reason=test-counter
   test runsMultipleEffectsPerElement =
     let _ =
       Stdlib.List.iter [ 10L, 20L, 30L ] (fun _ ->
@@ -797,14 +797,14 @@ module IterEffects =
         Stdlib.Test.incrementCounter ())
     Stdlib.Test.counterValue () |> Stdlib.Test.equal 6L
 
-  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" class=missing-support reason=test-counter
   test visitsLastElement =
     let _ =
       Stdlib.List.iter [ 1L, 2L, 3L ] (fun x ->
         if x > 2L then Stdlib.Test.incrementCounter ())
     Stdlib.Test.counterValue () |> Stdlib.Test.equal 1L
 
-// @compiler xfail compile: "Lambda parameter count mismatch" reason=compiler-gap
+// @compiler xfail compile: "Lambda parameter count mismatch" class=aot-rejection reason=aot-arity-error
 test comparatorRejectsWrongArity =
   Stdlib.List.sortByComparator [6.0, 2.0] (fun x -> x)
   => raises "Lambda expects 1 argument, but got 2 arguments"
