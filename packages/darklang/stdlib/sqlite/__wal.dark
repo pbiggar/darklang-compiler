@@ -43,8 +43,12 @@ let __validIndex (b: Blob) (size: Int) : Bool =
     let index = Stdlib.Blob.slice b 0 48
     let raw = __le index 14 2
     __equal index (Stdlib.Blob.slice b 48 48) && __equal index (__finishIndex index) && __le index 0 4 == 3007000 && __le index 12 1 == 1 && (if raw == 1 then 65536 else raw) == size
-let __readIndex (shm: Int) (size: Int) : Stdlib.Result.Result<Blob,String> =
-  Stdlib.Sqlite.__Io.__readAt shm 0 96 |> Stdlib.Result.andThen (fun b -> if __validIndex b size then Ok (Stdlib.Blob.slice b 0 48) else Error "SQLite: invalid or changing WAL index")
+let __readIndexTries (shm: Int) (size: Int) (remaining: Int) : Stdlib.Result.Result<Blob,String> =
+  Stdlib.Sqlite.__Io.__readAt shm 0 96 |> Stdlib.Result.andThen (fun b ->
+    if __validIndex b size then Ok (Stdlib.Blob.slice b 0 48)
+    else if remaining == 0 then Error "SQLite: invalid or changing WAL index"
+    else let _ = Stdlib.Cli.Posix.sleep 1.0 in __readIndexTries shm size (remaining - 1))
+let __readIndex (shm: Int) (size: Int) : Stdlib.Result.Result<Blob,String> = __readIndexTries shm size 20
 let __frameOffset (size: Int) (frame: Int) : Int = 32 + (frame - 1) * (size + 24)
 let __location (frame: Int) : (Int * Int * Int) =
   if frame <= 4062 then (0,frame,136 + (frame - 1) * 4)
@@ -110,7 +114,7 @@ let __chooseSlot (shm: Int) (frame: Int) (slot: Int) : Stdlib.Result.Result<Int,
   else Stdlib.Sqlite.__Locks.__try shm (123 + slot) 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired ->
     if Stdlib.Bool.not acquired then
       Stdlib.Sqlite.__Io.__readAt shm (100 + slot * 4) 4 |> Stdlib.Result.andThen (fun mark ->
-        if __le mark 0 4 != frame then __chooseSlot shm frame (slot + 1)
+        if __le mark 0 4 > frame then __chooseSlot shm frame (slot + 1)
         else Stdlib.Sqlite.__Locks.__try shm (123 + slot) 1 Stdlib.Sqlite.__Locks.__Kind.Shared |> Stdlib.Result.andThen (fun shared -> if shared then Ok slot else __chooseSlot shm frame (slot + 1)))
     else
       let result = Stdlib.Sqlite.__Io.__writeAt shm (100 + slot * 4) (__little frame 4)
@@ -128,7 +132,7 @@ let __snapshot (fd: Int) (shm: Int) (size: Int) (attempts: Int) : Stdlib.Result.
         else __chooseSlot shm frame 1
       chosen |> Stdlib.Result.andThen (fun slot ->
         let ready = __readIndex shm size |> Stdlib.Result.andThen (fun after ->
-          Stdlib.Sqlite.__Io.__readAt shm (if slot == 0 then 96 else 100 + slot * 4) 4 |> Stdlib.Result.map (fun mark -> __equal index after && __le mark 0 4 == frame))
+          Stdlib.Sqlite.__Io.__readAt shm (if slot == 0 then 96 else 100 + slot * 4) 4 |> Stdlib.Result.map (fun mark -> __equal index after && (if slot == 0 then __le mark 0 4 == frame else __le mark 0 4 <= frame)))
         match ready with
         | Ok true ->
           let loaded = (if slot == 0 then Ok (Dict {}) else __map shm 1 frame (Dict {})) |> Stdlib.Result.andThen (fun pages ->
@@ -195,12 +199,20 @@ let __commit (state: __State) (count: Int) (pages: List<(Int * Blob)>) : Stdlib.
           if state.frame == 0 then
             __newHeader state.size |> Stdlib.Result.andThen (fun header -> Stdlib.Sqlite.__Io.__writeAt state.fd 0 header |> Stdlib.Result.map (fun _ -> header))
           else Stdlib.Sqlite.__Io.__readAt state.fd 0 32
-        prepared |> Stdlib.Result.andThen (fun header ->
+        let committed = prepared |> Stdlib.Result.andThen (fun header ->
           let seed = if state.frame == 0 then (__be header 24 4,__be header 28 4) else (__le current 24 4,__le current 28 4)
           let (block,key,_) = __location (state.frame + 1)
           (if key == 1 then Ok () else __cleanHash state.shm block (key - 1))
           |> Stdlib.Result.andThen (fun _ -> __append state header (state.frame + 1) seed count pages)
-          |> Stdlib.Result.andThen (fun (frame,checksum) -> __publish state.shm (__makeIndex state.size ((__le current 8 4 + 1) % 4294967296) frame count header checksum)))))
+          |> Stdlib.Result.andThen (fun (frame,checksum) -> __publish state.shm (__makeIndex state.size ((__le current 8 4 + 1) % 4294967296) frame count header checksum)))
+        match committed with
+        | Ok _ -> Ok ()
+        | Error error ->
+          // A failed append must not become a committed transaction during the
+          // next attachment's frame recovery. Keep the old published snapshot.
+          let restored = Stdlib.Sqlite.__Io.__truncate state.fd (if state.frame == 0 then 0 else __frameOffset state.size (state.frame + 1))
+            |> Stdlib.Result.andThen (fun _ -> __publish state.shm current)
+          match restored with | Ok _ -> Error error | Error rollback -> Error (error + "; WAL rollback also failed: " + rollback)))
 let __close (state: __State) : Stdlib.Result.Result<Unit,String> =
   let a = Stdlib.Sqlite.__Io.__close state.shm
   let b = Stdlib.Sqlite.__Io.__close state.fd
