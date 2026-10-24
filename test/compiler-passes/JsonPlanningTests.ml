@@ -20,7 +20,7 @@ let testNonJsonProgramIsUnchanged (stdlib : CompilationContexts.stdlibResult) ()
       stdlib.CompilationContexts.context.CompilationContexts.typeCheckEnv
       (WrittenChecking.typeCheckEnvironment typedProgram)
   in
-  let planned = JsonPlanning.rewriteProgram env typedProgram in
+  let* planned = JsonPlanning.rewriteProgram env typedProgram in
   if planned = typedProgram then Ok ()
   else
     Error
