@@ -23,8 +23,8 @@ parser:
   partial: 1
   supported: 30
 builtins:
-  missing: 169
-  present: 79
+  missing: 166
+  present: 82
   unassessed: 533
 dispositions:
   packages:
@@ -33,13 +33,13 @@ dispositions:
     replace: 35
     run: 431
   stdlib:
-    blocked: 848
+    blocked: 830
     excluded: 3
     replace: 1142
-    run: 5
+    run: 23
   tests:
-    run: 1517
-    xfail: 842
+    run: 1524
+    xfail: 835
 reasons:
   packages:
     compiler-contract: 12
@@ -58,7 +58,7 @@ reasons:
     compiler-implementation: 1139
     container-adaptation: 490
     interpreter-intrinsic: 1
-    missing-implementation: 350
+    missing-implementation: 332
     runtime-reflection: 3
     test-counter: 2
     test-diagnostics: 2
@@ -71,7 +71,7 @@ reasons:
     aot-type-error: 142
     compiler-gap: 32
     test-counter: 7
-    upstream-dependency: 587
+    upstream-dependency: 580
 expected_failures:
   aot-rejection:
     phases:
@@ -113,12 +113,12 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/string.dark: 2
   missing-support:
     phases:
-      compile: 617
+      compile: 610
       runtime: 9
     reasons:
       compiler-gap: 32
       test-counter: 7
-      upstream-dependency: 587
+      upstream-dependency: 580
     sources:
       upstream/packages/darklang/tests/cli/builtinGroups.dark: 4
       upstream/packages/darklang/tests/cli/commandCompletions.dark: 8
@@ -182,5 +182,4 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/list.dark: 9
       upstream/packages/darklang/tests/stdlib/live.dark: 2
       upstream/packages/darklang/tests/stdlib/pretty.dark: 1
-      upstream/packages/darklang/tests/stdlib/sqlite.dark: 7
       upstream/packages/darklang/tests/stdlib/string.dark: 2

@@ -11,8 +11,8 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | Area | Source dispositions |
 | --- | --- |
 | packages | 3,235 blocked, 2 excluded, 35 replace, 431 run |
-| stdlib | 848 blocked, 3 excluded, 1,142 replace, 5 run |
-| tests | 1,517 run, 842 xfail |
+| stdlib | 830 blocked, 3 excluded, 1,142 replace, 23 run |
+| tests | 1,524 run, 835 xfail |
 
 ## Expected test failures
 
@@ -22,7 +22,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
 | `aot-rejection` | 216 | 0 | 216 |
-| `missing-support` | 617 | 9 | 626 |
+| `missing-support` | 610 | 9 | 619 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -34,7 +34,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-type-error` | 142 |
 | `missing-support` | `compiler-gap` | 32 |
 | `missing-support` | `test-counter` | 7 |
-| `missing-support` | `upstream-dependency` | 587 |
+| `missing-support` | `upstream-dependency` | 580 |
 
 ### Remaining support by source
 
@@ -104,7 +104,6 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/stdlib/list.dark](../../../upstream/packages/darklang/tests/stdlib/list.dark) | 9 |
 | [packages/darklang/tests/stdlib/live.dark](../../../upstream/packages/darklang/tests/stdlib/live.dark) | 2 |
 | [packages/darklang/tests/stdlib/pretty.dark](../../../upstream/packages/darklang/tests/stdlib/pretty.dark) | 1 |
-| [packages/darklang/tests/stdlib/sqlite.dark](../../../upstream/packages/darklang/tests/stdlib/sqlite.dark) | 7 |
 | [packages/darklang/tests/stdlib/string.dark](../../../upstream/packages/darklang/tests/stdlib/string.dark) | 2 |
 
 | Kind | Items |
@@ -140,7 +139,7 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | stdlib | `compiler-implementation` | 1,139 |
 | stdlib | `container-adaptation` | 490 |
 | stdlib | `interpreter-intrinsic` | 1 |
-| stdlib | `missing-implementation` | 350 |
+| stdlib | `missing-implementation` | 332 |
 | stdlib | `runtime-reflection` | 3 |
 | stdlib | `test-counter` | 2 |
 | stdlib | `test-diagnostics` | 2 |
@@ -152,7 +151,7 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `aot-type-error` | 142 |
 | tests | `compiler-gap` | 32 |
 | tests | `test-counter` | 7 |
-| tests | `upstream-dependency` | 587 |
+| tests | `upstream-dependency` | 580 |
 
 ## Separate capability assessments
 
@@ -160,4 +159,4 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | --- | --- |
 | features | 6 excluded, 9 missing, 1 partial, 199 supported |
 | parser | 1 partial, 30 supported |
-| builtins | 169 missing, 79 present, 533 unassessed |
+| builtins | 166 missing, 82 present, 533 unassessed |

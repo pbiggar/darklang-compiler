@@ -839,6 +839,12 @@ files:
     runtimeMonotonicCounter_v0: present
     runtimeRealtimeTicks_v0: present
 bindings:
+  builtins:backend/src/Builtins/Builtins.Matter/Libs/Sqlite.fs#fn/sqliteExec/v0:
+  - packages/darklang/stdlib/__builtin/__sqlite.dark
+  builtins:backend/src/Builtins/Builtins.Matter/Libs/Sqlite.fs#fn/sqliteExecBatch/v0:
+  - packages/darklang/stdlib/__builtin/__sqlite.dark
+  builtins:backend/src/Builtins/Builtins.Matter/Libs/Sqlite.fs#fn/sqliteQuery/v0:
+  - packages/darklang/stdlib/__builtin/__sqlite.dark
   builtins:backend/src/Builtins/Builtins.Pure/Libs/Bool.fs#fn/boolNot/v0:
   - src/frontend/WrittenApplicationSupport.ml
   builtins:backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs#fn/unwrap/v0:
