@@ -72,7 +72,7 @@ let generateDictRefCountIncHelper () =
   ]
 
 let generateDictRefCountDecHelper helperLabel keyReleasePlan
-    releaseLeafDynamicValue releaseLeafListValue releaseLeafDictValueHelper
+    releaseLeafDynamicValue releaseLeafListValue releaseLeafRootValueHelper
     releaseLeafClosureValue releaseLeafStreamValue leafFixedBlockValueRelease
     enableLeakCheck recordRegistry sumShapeRegistry =
   let label name = helperLabel ^ "_" ^ name in
@@ -233,8 +233,8 @@ let generateDictRefCountDecHelper helperLabel keyReleasePlan
           skipLeafListValueRelease
       else []
     in
-    let dictValueInstrs =
-      match releaseLeafDictValueHelper with
+    let rootValueInstrs =
+      match releaseLeafRootValueHelper with
       | Some target ->
           releaseManagedRootValueInstrs baseReg 8 target
             skipLeafDictValueRelease
@@ -266,14 +266,14 @@ let generateDictRefCountDecHelper helperLabel keyReleasePlan
     let dynamicValueInstrs =
       releaseDynamicBufferValueInstrs baseReg skipLeafDynamicValueRelease
     in
-    keyInstrs @ dynamicValueInstrs @ listValueInstrs @ dictValueInstrs
+    keyInstrs @ dynamicValueInstrs @ listValueInstrs @ rootValueInstrs
     @ closureValueInstrs @ streamValueInstrs @ fixedBlockValueInstrs
   in
   let hasPayloadRelease =
     keyReleasePlan <> MemoryModel.NoReleasePlan
     || Option.is_some releaseLeafDynamicValue
     || releaseLeafListValue
-    || Option.is_some releaseLeafDictValueHelper
+    || Option.is_some releaseLeafRootValueHelper
     || releaseLeafClosureValue || releaseLeafStreamValue
     || Option.is_some leafFixedBlockValueRelease
   in
@@ -493,13 +493,18 @@ let generatePlannedDictRefCountDecHelper helperLabel releasePlan enableLeakCheck
       ( _,
         MemoryModel.DictHeap,
         MemoryModel.DictPayloadRelease (keyRelease, valueRelease) ) ->
-      let dynamic, list, dict, closure, stream, fixed =
+      let dynamic, list, root, closure, stream, fixed =
         match valueRelease with
         | MemoryModel.NoReleasePlan -> (None, false, None, false, false, None)
         | MemoryModel.DynamicBufferRelease operation ->
             (Some operation, false, None, false, false, None)
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
-            (None, true, None, false, false, None)
+            ( None,
+              false,
+              Some (listDecHelperForReleasePlan valueRelease),
+              false,
+              false,
+              None )
         | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
             ( None,
               false,
@@ -521,7 +526,7 @@ let generatePlannedDictRefCountDecHelper helperLabel releasePlan enableLeakCheck
         | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
             (None, false, None, false, false, Some (payloadSize, valueRelease))
       in
-      generateDictRefCountDecHelper helperLabel keyRelease dynamic list dict
+      generateDictRefCountDecHelper helperLabel keyRelease dynamic list root
         closure stream fixed enableLeakCheck recordRegistry sumShapeRegistry
   | other ->
       Crash.crash
