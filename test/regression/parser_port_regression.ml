@@ -47,7 +47,9 @@ let () =
           (fun sign ->
             let source = sign ^ Int64.to_string integer ^ ".0" in
             if offset mod 2 = 0 then ignore (parsed source)
-            else rejects source "Float literal loses precision specified in the source")
+            else
+              rejects source
+                "Float literal loses precision specified in the source")
           [ ""; "-" ]
       done);
   run "float precision diagnostics cover expressions and patterns" (fun () ->
