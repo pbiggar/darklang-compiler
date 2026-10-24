@@ -24,8 +24,9 @@ to the interpreter revision in `porting/sources.yaml`, including their public
 documentation. These packages use the compiler's existing native dependencies.
 Individual portable functions and types in List, Dict, String, Char, numeric,
 HTTP, HTML, Diff, and JSON modules also track that pin; engine-specific adapters
-remain native. Sqlite contains only the shared cell type and pure accessors,
-not a database adapter. Nested public fragments retain upstream module nesting
+remain native. Sqlite combines shared cell types/accessors with upstream public
+wrappers and a restricted page-backed Dark engine; see [SQLite](runtime/sqlite.md).
+Nested public fragments retain upstream module nesting
 and declaration text. The declaration ledger records exact per-item identity.
 The native implementations of `List.uniqueBy`, `List.dedup`,
 `List.groupByWithKey`, and `String.endsWith` remain in place;
@@ -197,7 +198,14 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/string.dark` | `Darklang.Stdlib.String`  | `packages/darklang/stdlib/string.dark` |
 | `packages/darklang/stdlib/__hash.dark` | (root declarations) | Compiler hashing helpers |
 | `packages/darklang/stdlib/dict.dark` | `Darklang.Stdlib.Dict`  | `packages/darklang/stdlib/dict.dark` |
-| `packages/darklang/stdlib/sqlite.dark` | `Darklang.Stdlib.Sqlite` | `packages/darklang/stdlib/sqlite.dark`: Value and six pure accessors only; database operations remain unsupported |
+| `packages/darklang/stdlib/sqlite.dark` | `Darklang.Stdlib.Sqlite` | Shared cell values and six accessors; the other public wrappers come from the porting pin |
+| `packages/darklang/stdlib/sqlite/__codec.dark` | `Darklang.Stdlib.Sqlite.__Codec` | Compiler SQLite record, integer and IEEE codecs |
+| `packages/darklang/stdlib/sqlite/__pager.dark` | `Darklang.Stdlib.Sqlite.__Pager` | Compiler page I/O, dirty-page transactions and freelist allocation |
+| `packages/darklang/stdlib/sqlite/__btree.dark` | `Darklang.Stdlib.Sqlite.__Btree` | Compiler rowid B-trees, splits and overflow chains |
+| `packages/darklang/stdlib/sqlite/__sql.dark` | `Darklang.Stdlib.Sqlite.__Sql` | Compiler restricted SQL tokenizer and parser |
+| `packages/darklang/stdlib/sqlite/__eval.dark` | `Darklang.Stdlib.Sqlite.__Eval` | Compiler SQL affinity and scalar evaluation |
+| `packages/darklang/stdlib/sqlite/__engine.dark` | `Darklang.Stdlib.Sqlite.__Engine` | Compiler statement execution and public-operation lifetime |
+| `packages/darklang/stdlib/__builtin/__sqlite.dark` | `Builtin` | SQLite builtin contracts delegated to the Dark engine |
 | `packages/darklang/stdlib/dict/__hamt.dark` | `Darklang.Stdlib.Dict`  | Compiler dictionary representation; package defined in `packages/darklang/stdlib/dict.dark` |
 | `packages/darklang/stdlib/uuid.dark` | `Darklang.Stdlib.Uuid`  | `packages/darklang/stdlib/uuid.dark` |
 | `packages/darklang/stdlib/diff.dark` | `Darklang.Stdlib.Diff`  | `packages/darklang/stdlib/diff.dark` |

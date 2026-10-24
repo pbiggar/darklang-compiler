@@ -170,9 +170,9 @@ let __selectRows (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite
     | Star -> fields @ Stdlib.List.map columns (fun c -> (Stdlib.Sqlite.__Sql.__Expr.Column c.name,c.name))
     | _ -> fields @ [(expr,alias)])
   let aggregate = Stdlib.List.any fields (fun (expr,_) -> match expr with | Count -> true | _ -> false)
-  let validations = Stdlib.List.map fields (fun (expr,_) -> Stdlib.Sqlite.__Eval.__validate columns params true expr)
-    @ Stdlib.List.map select.order (fun (expr,_) -> Stdlib.Sqlite.__Eval.__validate columns params false expr)
-    @ [__validatePredicate columns params select.predicate]
+  let validations = Stdlib.List.map fields (fun (expr,_) -> Stdlib.Sqlite.__Eval.__validate columns params true expr) @
+    Stdlib.List.map select.order (fun (expr,_) -> Stdlib.Sqlite.__Eval.__validate columns params false expr) @
+    [__validatePredicate columns params select.predicate]
   Stdlib.List.fold validations (Ok ()) (fun result check -> result |> Stdlib.Result.andThen (fun _ -> check))
   |> Stdlib.Result.andThen (fun _ -> __filtered columns rows params select.predicate)
   |> Stdlib.Result.andThen (fun rows ->
@@ -201,8 +201,7 @@ let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List
   else
     Stdlib.List.fold rows (Ok s) (fun result row -> result |> Stdlib.Result.andThen (fun s ->
       __values table.columns row.values params (Stdlib.List.map assignments (fun (_,expr) -> expr)) |> Stdlib.Result.andThen (fun changes ->
-        let values = Stdlib.List.fold (Stdlib.List.map2shortest assignments changes (fun (name,_) value -> (name,value))) row.values
-          (fun values (name,value) ->
+        let values = Stdlib.List.fold (Stdlib.List.map2shortest assignments changes (fun (name,_) value -> (name,value))) row.values (fun values (name,value) ->
             let affinity = Stdlib.Sqlite.__Eval.__affinity table.columns (Stdlib.Sqlite.__Sql.__Expr.Column name)
             Stdlib.Dict.setOverridingDuplicates values (__lower name) (Stdlib.Sqlite.__Eval.__coerce affinity value))
         // Updating the rowid alias needs a second uniqueness pass; reject it in this subset.
@@ -258,13 +257,13 @@ let __execute (path: String) (sql: String) (params: List<String>) : Stdlib.Resul
 let __batchRows (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (rows: List<List<String>>) (counts: List<Int>)
   : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<Int>), String> =
   match rows with
-  | [] -> Ok (s,counts)
+  | [] -> Ok ((s,counts))
   | params :: rest -> __run s statement params |> Stdlib.Result.andThen (fun outcome -> __batchRows outcome.state statement rest (counts @ [outcome.affected]))
 
 let __batchStatements (s: Stdlib.Sqlite.__Pager.__State) (statements: List<(String * List<List<String>>)>) (counts: List<Int>)
   : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<Int>), String> =
   match statements with
-  | [] -> Ok (s,counts)
+  | [] -> Ok ((s,counts))
   | (sql,rows) :: rest -> Stdlib.Sqlite.__Sql.__parse sql |> Stdlib.Result.andThen (fun statement ->
     __batchRows s statement (if Stdlib.List.isEmpty rows then [[]] else rows) counts
     |> Stdlib.Result.andThen (fun (s,counts) -> __batchStatements s rest counts))

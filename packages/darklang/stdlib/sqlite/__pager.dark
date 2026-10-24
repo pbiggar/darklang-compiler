@@ -3,7 +3,7 @@
 module Darklang.Stdlib.Sqlite.__Pager
 
 type __State = { fd: Int, size: Int, count: Int, originalCount: Int,
-  cache: Dict<Int, Blob>, dirty: Dict<Int, Blob> }
+  cache: Dict<Int64, Blob>, dirty: Dict<Int64, Blob> }
 
 let __get (b: Blob) (o: Int) (w: Int) : Int = Stdlib.Sqlite.__Codec.__beRead b o w
 let __put (b: Blob) (o: Int) (w: Int) (v: Int) : Blob = Stdlib.Sqlite.__Codec.__put b o w v
@@ -29,23 +29,23 @@ let __writeAt (fd: Int) (offset: Int) (b: Blob) : Stdlib.Result.Result<Unit, Str
 
 let __read (s: __State) (page: Int) : Stdlib.Result.Result<(__State * Blob), String> =
   if page < 1 || page > s.count then Error "SQLite: page number outside database"
-  else match Stdlib.Dict.get s.dirty page with
-  | Some b -> Ok (s, b)
+  else match Stdlib.Dict.get s.dirty (Stdlib.Sqlite.__Codec.__i64 page) with
+  | Some b -> Ok ((s, b))
   | None ->
-    match Stdlib.Dict.get s.cache page with
-    | Some b -> Ok (s, b)
+    match Stdlib.Dict.get s.cache (Stdlib.Sqlite.__Codec.__i64 page) with
+    | Some b -> Ok ((s, b))
     | None -> __readAt s.fd ((page - 1) * s.size) s.size |> Stdlib.Result.map (fun b ->
-      ({ s with cache = Stdlib.Dict.set s.cache page b }, b))
+      ({ s with cache = Stdlib.Dict.set s.cache (Stdlib.Sqlite.__Codec.__i64 page) b }, b))
 
 let __write (s: __State) (page: Int) (b: Blob) : Stdlib.Result.Result<__State, String> =
   if page < 1 || page > s.count || Stdlib.Blob.length b != s.size then Error "SQLite: invalid page write"
   else __read s page |> Stdlib.Result.map (fun (loaded, _) ->
-    { loaded with dirty = Stdlib.Dict.setOverridingDuplicates loaded.dirty page b })
+    { loaded with dirty = Stdlib.Dict.setOverridingDuplicates loaded.dirty (Stdlib.Sqlite.__Codec.__i64 page) b })
 
 let __newPage (s: __State) : (__State * Int) =
   let page = s.count + 1
   let b = Stdlib.Sqlite.__Codec.__zeros s.size
-  ({ s with count = page, dirty = Stdlib.Dict.set s.dirty page b }, page)
+  ({ s with count = page, dirty = Stdlib.Dict.set s.dirty (Stdlib.Sqlite.__Codec.__i64 page) b }, page)
 
 let __allocate (s: __State) : Stdlib.Result.Result<(__State * Int), String> =
   __read s 1 |> Stdlib.Result.andThen (fun (s, header) ->
@@ -86,7 +86,7 @@ let __empty (size: Int) : Blob =
 let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
   if length == 0 then
     Ok (__State { fd = fd, size = 4096, count = 1, originalCount = 0,
-      cache = Dict {}, dirty = Stdlib.Dict.singleton 1 (__empty 4096) })
+      cache = Dict {}, dirty = Stdlib.Dict.singleton 1L (__empty 4096) })
   else if length < 100 then Error "SQLite: invalid database header"
   else __readAt fd 0 100 |> Stdlib.Result.andThen (fun header ->
     let rawSize = __get header 16 2
@@ -126,12 +126,12 @@ let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
   else __read s 1 |> Stdlib.Result.andThen (fun (s, header) ->
     let counter = (__get header 24 4 + 1) % 4294967296
     let header = __put (__put (__put header 24 4 counter) 92 4 counter) 28 4 s.count
-    let pages = Stdlib.Dict.toList (Stdlib.Dict.remove s.dirty 1) @ [(1,header)]
+    let pages = Stdlib.List.map (Stdlib.Dict.toList (Stdlib.Dict.remove s.dirty 1L)) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b)) @ [(1,header)]
     match __flush s pages with
     | Ok () -> Ok ()
     | Error e ->
       // Before images cover ordinary write errors. They are not power-loss recovery.
-      let originals = Stdlib.Dict.toList s.cache
+      let originals = Stdlib.List.map (Stdlib.Dict.toList s.cache) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b))
       match __flush s originals with
       | Ok () -> Error e
       | Error rollback -> Error (e + "; rollback also failed: " + rollback))

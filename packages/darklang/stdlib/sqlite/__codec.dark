@@ -52,8 +52,8 @@ let __readVarLoop (b: Blob) (offset: Int) (count: Int) (acc: Int)
   if offset >= Stdlib.Blob.length b then Error "SQLite: truncated varint"
   else
     let byte = __byte b offset
-    if count == 8 then Ok (acc * 256 + byte, offset + 1)
-    else if byte < 128 then Ok (acc * 128 + byte, offset + 1)
+    if count == 8 then Ok ((acc * 256 + byte, offset + 1))
+    else if byte < 128 then Ok ((acc * 128 + byte, offset + 1))
     else __readVarLoop b (offset + 1) (count + 1) (acc * 128 + byte - 128)
 
 let __readVar (b: Blob) (offset: Int) : Stdlib.Result.Result<(Int * Int), String> =

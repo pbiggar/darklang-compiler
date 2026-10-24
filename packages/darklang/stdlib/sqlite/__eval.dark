@@ -16,6 +16,13 @@ let __numeric (v: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
           if Stdlib.Int.toFloat n == f then
             match Stdlib.Int.toInt64 n with | Some i -> Stdlib.Sqlite.Value.Int i | None -> Stdlib.Sqlite.Value.Real f
           else Stdlib.Sqlite.Value.Real f
+  | Real f ->
+    if f >= -9223372036854775808.0 && f < 9223372036854775808.0 then
+      let n = Stdlib.Int.fromFloat f
+      if Stdlib.Int.toFloat n == f then
+        match Stdlib.Int.toInt64 n with | Some i -> Stdlib.Sqlite.Value.Int i | None -> v
+      else v
+    else v
   | _ -> v
 
 let __text (v: Stdlib.Sqlite.Value) : String =
@@ -114,10 +121,12 @@ let __binaryValue (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.
       else Stdlib.Sqlite.Value.Null
     else
       let cmp = __compare a b
-      __bool (if operator == "=" || operator == "==" || operator == "is" then cmp == 0
+      let answer =
+        if operator == "=" || operator == "==" || operator == "is" then cmp == 0
         else if operator == "!=" || operator == "<>" || operator == "is not" then cmp != 0
         else if operator == "<" then cmp < 0 else if operator == ">" then cmp > 0
-        else if operator == "<=" then cmp <= 0 else cmp >= 0)
+        else if operator == "<=" then cmp <= 0 else cmp >= 0
+      __bool answer
 
 let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: List<String>)
   (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =

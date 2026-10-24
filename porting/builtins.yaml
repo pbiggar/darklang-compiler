@@ -229,9 +229,9 @@ files:
     localDbRestoreFrom_v0: missing
     storeVersion_v0: missing
   Builtins.Matter/Libs/Sqlite.fs:
-    sqliteExec_v0: missing
-    sqliteExecBatch_v0: missing
-    sqliteQuery_v0: missing
+    sqliteExec_v0: present
+    sqliteExecBatch_v0: present
+    sqliteQuery_v0: present
   Builtins.Matter/Libs/Traces.fs:
     tracesApplyRecording_v0: missing
     tracesArmResume_v0: missing

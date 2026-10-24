@@ -34,6 +34,7 @@ grouped by purpose; each subject has one canonical source.
 - [Design decisions](compiler/design-decisions.md)
 - [Frontend](compiler/frontend/)
 - [Runtime and language representations](compiler/runtime/)
+- [Page-backed SQLite in Dark](compiler/runtime/sqlite.md)
 - [Native backends](compiler/backend/)
 - [Optimizations](compiler/optimizations/)
 
