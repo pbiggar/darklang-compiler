@@ -1,8 +1,8 @@
 // A deliberately restricted SQL grammar. Unsupported syntax fails before any commit.
 module Darklang.Stdlib.Sqlite.__Sql
 
-type __Token = Word of String | Quoted of String | Atom of Stdlib.Sqlite.Value | Symbol of String | Param of Int
-type __Expr = Literal of Stdlib.Sqlite.Value | Column of String | Parameter of Int
+type __Token = Word of String | Quoted of String | Atom of Stdlib.Sqlite.Value | Symbol of String | Param of String
+type __Expr = Literal of Stdlib.Sqlite.Value | Column of String | Parameter of String
   | Cast of __Expr * String | Binary of __Expr * String * __Expr | Count | Star
 type __Column = { name: String, affinity: String, primary: Bool, notNull: Bool }
 type __Select = { fields: List<(__Expr * String)>, table: Stdlib.Option.Option<String>,
@@ -62,13 +62,10 @@ let __lex (s: String) (i: Int) (acc: List<__Token>) : Stdlib.Result.Result<List<
   else if c >= 48L && c <= 57L then
     let end_ = __numberEnd s i
     __number (__slice s i end_) |> Stdlib.Result.andThen (fun value -> __lex s end_ ([Atom value] @ acc))
-  else if c == 64L then
+  else if c == 64L || c == 36L || c == 58L then
     let end_ = __wordEnd s (i + 1)
-    let name = __slice s (i + 1) end_
-    if Stdlib.String.startsWith (__lower name) "p" then
-      Stdlib.Int.parse (__slice name 1 (end_ - i - 1)) |> Stdlib.Result.mapError (fun _ -> "SQLite: parameters must be @p0, @p1, ...")
-      |> Stdlib.Result.andThen (fun n -> if n < 0 then Error "SQLite: invalid parameter" else __lex s end_ ([Param n] @ acc))
-    else Error "SQLite: parameters must be @p0, @p1, ..."
+    if end_ == i + 1 then Error "SQLite: empty parameter name"
+    else __lex s end_ ([Param (__slice s i end_)] @ acc)
   else if __identifierStart c then
     let end_ = __wordEnd s (i + 1)
     __lex s end_ ([Word (__slice s i end_)] @ acc)
@@ -270,3 +267,17 @@ let __parse (sql: String) : Stdlib.Result.Result<__Statement, String> =
     | [] -> Ok statement
     | [Symbol ";"] -> Ok statement
     | _ -> Error "SQLite: unsupported trailing SQL")
+
+// Tokenize once so semicolons in strings/comments never split a statement.
+let __statements (tokens: List<__Token>) (acc: List<__Statement>) : Stdlib.Result.Result<List<__Statement>, String> =
+  match tokens with
+  | [] -> Ok (Stdlib.List.reverse acc)
+  | Symbol ";" :: rest -> __statements rest acc
+  | _ -> __statement tokens |> Stdlib.Result.andThen (fun (statement,rest) ->
+    match rest with
+    | [] -> Ok (Stdlib.List.reverse ([statement] @ acc))
+    | Symbol ";" :: tail -> __statements tail ([statement] @ acc)
+    | _ -> Error "SQLite: unsupported trailing SQL")
+
+let __parseMany (sql: String) : Stdlib.Result.Result<List<__Statement>, String> =
+  __lex sql 0 [] |> Stdlib.Result.andThen (fun tokens -> __statements tokens [])

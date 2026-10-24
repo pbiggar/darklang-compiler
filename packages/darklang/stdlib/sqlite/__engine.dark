@@ -70,20 +70,20 @@ let __rows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table)
     Stdlib.List.fold entries (Ok []) (fun result entry -> result |> Stdlib.Result.andThen (fun rows ->
       __row table entry |> Stdlib.Result.map (fun row -> rows @ [row]))) |> Stdlib.Result.map (fun rows -> (s,rows)))
 
-let __validatePredicate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: List<String>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>)
+let __validatePredicate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<String, Stdlib.Sqlite.Value>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>)
   : Stdlib.Result.Result<Unit, String> =
   match predicate with | None -> Ok () | Some expr -> Stdlib.Sqlite.__Eval.__validate columns params false expr
-let __matches (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: __Row) (params: List<String>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>)
+let __matches (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: __Row) (params: Dict<String, Stdlib.Sqlite.Value>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>)
   : Stdlib.Result.Result<Bool, String> =
   match predicate with | None -> Ok true | Some expr -> Stdlib.Sqlite.__Eval.__eval columns row.values params expr
     |> Stdlib.Result.map (fun v -> Stdlib.Sqlite.__Eval.__truth v == Some true)
 
-let __filtered (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>) (params: List<String>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>)
+let __filtered (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>)
   : Stdlib.Result.Result<List<__Row>, String> =
   Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun acc ->
     __matches columns row params predicate |> Stdlib.Result.map (fun yes -> if yes then acc @ [row] else acc)))
 
-let __values (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: List<String>)
+let __values (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: Dict<String, Stdlib.Sqlite.Value>)
   (expressions: List<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<List<Stdlib.Sqlite.Value>, String> =
   Stdlib.List.fold expressions (Ok []) (fun result expr -> result |> Stdlib.Result.andThen (fun acc ->
     Stdlib.Sqlite.__Eval.__eval columns row params expr |> Stdlib.Result.map (fun value -> acc @ [value])))
@@ -152,7 +152,7 @@ let __create (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (name: S
         Stdlib.Sqlite.__Btree.__insert s 1 key payload |> Stdlib.Result.andThen __bumpSchema
         |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] }))))
 
-let __project (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: List<String>) (fields: List<(Stdlib.Sqlite.__Sql.__Expr * String)>) (row: __Row)
+let __project (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<String, Stdlib.Sqlite.Value>) (fields: List<(Stdlib.Sqlite.__Sql.__Expr * String)>) (row: __Row)
   : Stdlib.Result.Result<Dict<String, Stdlib.Sqlite.Value>, String> =
   Stdlib.List.fold fields (Ok (Dict {})) (fun result (expr,alias) -> result |> Stdlib.Result.andThen (fun output ->
     Stdlib.Sqlite.__Eval.__eval columns row.values params expr |> Stdlib.Result.map (fun value -> Stdlib.Dict.setOverridingDuplicates output alias value)))
@@ -163,7 +163,7 @@ let __orderCompare (order: List<(Stdlib.Sqlite.__Sql.__Expr * Bool)>) (a: List<S
     if cmp == 0 then __orderCompare rest xs ys else if desc then 0 - cmp else cmp
   | _ -> 0
 
-let __selectRows (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>) (params: List<String>) (select: Stdlib.Sqlite.__Sql.__Select)
+let __selectRows (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (select: Stdlib.Sqlite.__Sql.__Select)
   : Stdlib.Result.Result<__Outcome, String> =
   let fields = Stdlib.List.fold select.fields [] (fun fields (expr,alias) ->
     match expr with
@@ -194,7 +194,7 @@ let __selectRows (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite
           __project columns params fields row |> Stdlib.Result.map (fun output -> acc @ [output])))
         |> Stdlib.Result.map (fun rows -> __Outcome { state = s, affected = -1, rows = rows })))
 
-let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<__Row>) (params: List<String>) (assignments: List<(String * Stdlib.Sqlite.__Sql.__Expr)>)
+let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (assignments: List<(String * Stdlib.Sqlite.__Sql.__Expr)>)
   : Stdlib.Result.Result<__Outcome, String> =
   if Stdlib.Bool.not (__unique (Stdlib.List.map assignments (fun (name,_) -> name))) then Error "SQLite: duplicate UPDATE target"
   else if Stdlib.List.any assignments (fun (name,_) -> Stdlib.Bool.not (Stdlib.List.any table.columns (fun c -> __lower c.name == __lower name))) then Error "SQLite: unknown UPDATE target"
@@ -212,7 +212,7 @@ let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List
             Stdlib.Sqlite.__Btree.__insert s table.root row.key (Stdlib.Sqlite.__Codec.__record fields))))))
     |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = Stdlib.List.length rows, rows = [] })
 
-let __run (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: List<String>)
+let __run (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String, Stdlib.Sqlite.Value>)
   : Stdlib.Result.Result<__Outcome, String> =
   __schema s |> Stdlib.Result.andThen (fun (s,tables) ->
     match statement with
@@ -250,15 +250,34 @@ let __finish (opened: Stdlib.Sqlite.__Pager.__State) (result: Stdlib.Result.Resu
   let closed = Stdlib.Sqlite.__Pager.__close opened
   match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok outcome,Ok _) -> Ok outcome
 
+// Public string parameters retain their original @p0, @p1 convention. The engine
+// itself receives typed cells, including BLOB and NULL, with case-sensitive names.
+let __stringParams (params: List<String>) : Dict<String, Stdlib.Sqlite.Value> =
+  let (_,bindings) = Stdlib.List.fold params (0,Dict {}) (fun (i,bindings) value ->
+    (i + 1,Stdlib.Dict.set bindings ("@p" + Stdlib.Int.toString i) (Stdlib.Sqlite.Value.Text value)))
+  bindings
+
+let __runStatements (s: Stdlib.Sqlite.__Pager.__State) (statements: List<Stdlib.Sqlite.__Sql.__Statement>)
+  (params: Dict<String, Stdlib.Sqlite.Value>) (affected: Int) (rows: List<Dict<String, Stdlib.Sqlite.Value>>)
+  : Stdlib.Result.Result<__Outcome, String> =
+  match statements with
+  | [] -> Ok (__Outcome { state = s, affected = affected, rows = rows })
+  | statement :: rest -> __run s statement params |> Stdlib.Result.andThen (fun outcome ->
+    let affected = if outcome.affected < 0 then affected else (if affected < 0 then 0 else affected) + outcome.affected
+    __runStatements outcome.state rest params affected outcome.rows)
+
+let __executeTyped (path: String) (sql: String) (params: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome, String> =
+  Stdlib.Sqlite.__Sql.__parseMany sql |> Stdlib.Result.andThen (fun statements ->
+    Stdlib.Sqlite.__Pager.__open path |> Stdlib.Result.andThen (fun opened -> __finish opened (__runStatements opened statements params -1 [])))
+
 let __execute (path: String) (sql: String) (params: List<String>) : Stdlib.Result.Result<__Outcome, String> =
-  Stdlib.Sqlite.__Sql.__parse sql |> Stdlib.Result.andThen (fun statement ->
-    Stdlib.Sqlite.__Pager.__open path |> Stdlib.Result.andThen (fun opened -> __finish opened (__run opened statement params)))
+  __executeTyped path sql (__stringParams params)
 
 let __batchRows (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (rows: List<List<String>>) (counts: List<Int>)
   : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<Int>), String> =
   match rows with
   | [] -> Ok ((s,counts))
-  | params :: rest -> __run s statement params |> Stdlib.Result.andThen (fun outcome -> __batchRows outcome.state statement rest (counts @ [outcome.affected]))
+  | params :: rest -> __run s statement (__stringParams params) |> Stdlib.Result.andThen (fun outcome -> __batchRows outcome.state statement rest (counts @ [outcome.affected]))
 
 let __batchStatements (s: Stdlib.Sqlite.__Pager.__State) (statements: List<(String * List<List<String>>)>) (counts: List<Int>)
   : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<Int>), String> =
@@ -274,3 +293,23 @@ let __batch (path: String) (statements: List<(String * List<List<String>>)>) : S
       Stdlib.Sqlite.__Pager.__commit s |> Stdlib.Result.map (fun _ -> counts))
     let closed = Stdlib.Sqlite.__Pager.__close opened
     match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok counts,Ok _) -> Ok counts)
+
+// Prepared programs contain syntax only: each execution supplies a fresh binding
+// dictionary, so resetting/reusing a command cannot retain a previous value.
+let __prepare (sql: String) : Stdlib.Result.Result<List<Stdlib.Sqlite.__Sql.__Statement>, String> =
+  Stdlib.Sqlite.__Sql.__parseMany sql
+
+let __executePrepared (state: Stdlib.Sqlite.__Pager.__State) (prepared: List<Stdlib.Sqlite.__Sql.__Statement>)
+  (params: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Result.Result<__Outcome, String> =
+  __runStatements state prepared params -1 []
+
+// A scoped connection owns the file descriptor and lock. Successful callbacks
+// return the current pager explicitly; errors abandon all pending page changes.
+let __transaction (path: String)
+  (work: Stdlib.Sqlite.__Pager.__State -> Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * 'a), String>)
+  : Stdlib.Result.Result<'a, String> =
+  Stdlib.Sqlite.__Pager.__open path |> Stdlib.Result.andThen (fun opened ->
+    let result = work opened |> Stdlib.Result.andThen (fun (state,value) ->
+      Stdlib.Sqlite.__Pager.__commit state |> Stdlib.Result.map (fun _ -> value))
+    let closed = Stdlib.Sqlite.__Pager.__close opened
+    match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok value,Ok _) -> Ok value)

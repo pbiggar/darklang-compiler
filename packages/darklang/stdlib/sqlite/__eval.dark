@@ -128,13 +128,13 @@ let __binaryValue (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.
         else if operator == "<=" then cmp <= 0 else cmp >= 0
       __bool answer
 
-let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: List<String>)
+let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: Dict<String, Stdlib.Sqlite.Value>)
   (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
   match expr with
   | Literal v -> Ok v
   | Column name -> __lookup row name
   | Parameter n ->
-    match Stdlib.List.getAt params n with | Some s -> Ok (Stdlib.Sqlite.Value.Text s) | None -> Error "SQLite: missing bound parameter"
+    match Stdlib.Dict.get params n with | Some value -> Ok value | None -> Error ("SQLite: missing bound parameter: " + n)
   | Count -> Error "SQLite: aggregate is not valid here"
   | Star -> Error "SQLite: wildcard is not valid here"
   | Cast (inner,kind) -> __eval columns row params inner |> Stdlib.Result.andThen (fun v ->
@@ -166,11 +166,11 @@ let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdl
           else (a,b)
         __binaryValue operator a b))
 
-let __validate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: List<String>) (aggregate: Bool)
+let __validate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<String, Stdlib.Sqlite.Value>) (aggregate: Bool)
   (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Unit, String> =
   match expr with
   | Literal _ -> Ok ()
-  | Parameter n -> if n < Stdlib.List.length params then Ok () else Error "SQLite: missing bound parameter"
+  | Parameter n -> if Stdlib.Dict.member params n then Ok () else Error ("SQLite: missing bound parameter: " + n)
   | Column name ->
     if Stdlib.String.toLowercase name == "rowid" || Stdlib.List.any columns (fun c -> Stdlib.String.toLowercase c.name == Stdlib.String.toLowercase name) then Ok ()
     else Error ("SQLite: no such column: " + name)
