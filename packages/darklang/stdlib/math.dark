@@ -42,10 +42,10 @@ let __cosKernel (value: Float) : Float =
                     + squared
                         * (0.00002480158728947673
                             + squared
-                                * (-0.00000027557314351390664
+                                * (-0.00000027557314351390663
                                     + squared
                                         * (0.000000002087572321298175
-                                            + squared * -0.000000000011359647557788194)))))
+                                            + squared * -0.000000000011359647557788193)))))
 
 let __quadrant (value: Float) : Int =
     Stdlib.Float.round (value / (Stdlib.Math.pi / 2.0))

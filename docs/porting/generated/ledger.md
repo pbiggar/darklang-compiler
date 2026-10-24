@@ -2,7 +2,7 @@
 
 [How to read and update this ledger](../README.md).
 
-Interpreter revision: `e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`.
+Interpreter revision: `06be3203f31820bcaa99db7bca6756cda3ae5c8d`.
 
 The complete corpus contains 433 source files. Items are counted directly from parsed source annotations.
 
