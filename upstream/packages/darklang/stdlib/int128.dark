@@ -7,13 +7,13 @@ type ParseError =
   | OutOfRange
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Modulo for Int128 requires an explicit replacement contract"
 impl Modulo for Int128 =
   /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
   /// The modulus <param b> must be greater than 0.
   /// Use <fn Int128.remainder> if you want the remainder after division, which has
   /// a different behavior for negative numbers.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Modulo for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Modulo for Int128 requires an explicit replacement contract"
   let modulo (a: Int128) (b: Int128) : Int128 = Builtin.int128Mod a b
 
 
@@ -31,65 +31,65 @@ let remainder
   Builtin.int128Remainder value divisor
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Add for Int128 requires an explicit replacement contract"
 impl Add for Int128 =
   /// Adds two 128-bit signed integers together (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Add for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Add for Int128 requires an explicit replacement contract"
   let add (a: Int128) (b: Int128) : Int128 = Builtin.int128Add a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Subtract for Int128 requires an explicit replacement contract"
 impl Subtract for Int128 =
   /// Subtracts two 128-bit signed integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Subtract for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Subtract for Int128 requires an explicit replacement contract"
   let subtract (a: Int128) (b: Int128) : Int128 = Builtin.int128Subtract a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Multiply for Int128 requires an explicit replacement contract"
 impl Multiply for Int128 =
   /// Multiplies two 128-bit signed integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Multiply for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Multiply for Int128 requires an explicit replacement contract"
   let multiply (a: Int128) (b: Int128) : Int128 = Builtin.int128Multiply a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Divide for Int128 requires an explicit replacement contract"
 impl Divide for Int128 =
   /// Divides two 128-bit signed integers
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Divide for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Divide for Int128 requires an explicit replacement contract"
   let divide (a: Int128) (b: Int128) : Int128 = Builtin.int128Divide a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Power for Int128 requires an explicit replacement contract"
 impl Power for Int128 =
   /// Raise <param base> to the power of <param exponent>.
   /// Overflow wraps around.
   /// Raises an error if <param exponent> is negative.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Power for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Power for Int128 requires an explicit replacement contract"
   let power (``base``: Int128) (exponent: Int128) : Int128 =
     Builtin.int128Power ``base`` exponent
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Negate for Int128 requires an explicit replacement contract"
 impl Negate for Int128 =
   /// Returns the negation of <param a>, {{-a}}. Negating the minimum value wraps back to itself.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Negate for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Negate for Int128 requires an explicit replacement contract"
   let negate (a: Int128) : Int128 = Builtin.int128Negate a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Compare for Int128 requires an explicit replacement contract"
 impl Compare for Int128 =
   /// Returns {{true}} if <param a> is less than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Compare for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Compare for Int128 requires an explicit replacement contract"
   let lessThan (a: Int128) (b: Int128) : Bool = Builtin.int128LessThan a b
   /// Returns {{true}} if <param a> is less than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Compare for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Compare for Int128 requires an explicit replacement contract"
   let lessThanOrEqualTo (a: Int128) (b: Int128) : Bool =
     Builtin.int128LessThanOrEqualTo a b
   /// Returns {{true}} if <param a> is greater than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Compare for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Compare for Int128 requires an explicit replacement contract"
   let greaterThan (a: Int128) (b: Int128) : Bool = Builtin.int128GreaterThan a b
   /// Returns {{true}} if <param a> is greater than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Compare for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Compare for Int128 requires an explicit replacement contract"
   let greaterThanOrEqualTo (a: Int128) (b: Int128) : Bool =
     Builtin.int128GreaterThanOrEqualTo a b
 
@@ -155,59 +155,59 @@ let fromInt64 (i: Int64) : Int128 = Builtin.int128FromInt64 i
 let fromUInt64 (i: UInt64) : Int128 = Builtin.int128FromUInt64 i
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseAnd for Int128 requires an explicit replacement contract"
 impl BitwiseAnd for Int128 =
   /// Bitwise AND on two <type Int128> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl BitwiseAnd for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseAnd for Int128 requires an explicit replacement contract"
   let bitwiseAnd (a: Int128) (b: Int128) : Int128 = Builtin.int128BitwiseAnd a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseOr for Int128 requires an explicit replacement contract"
 impl BitwiseOr for Int128 =
   /// Bitwise OR on two <type Int128> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl BitwiseOr for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseOr for Int128 requires an explicit replacement contract"
   let bitwiseOr (a: Int128) (b: Int128) : Int128 = Builtin.int128BitwiseOr a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseXor for Int128 requires an explicit replacement contract"
 impl BitwiseXor for Int128 =
   /// Bitwise XOR on two <type Int128> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl BitwiseXor for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseXor for Int128 requires an explicit replacement contract"
   let bitwiseXor (a: Int128) (b: Int128) : Int128 = Builtin.int128BitwiseXor a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseNot for Int128 requires an explicit replacement contract"
 impl BitwiseNot for Int128 =
   /// Bitwise NOT on an <type Int128> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl BitwiseNot for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl BitwiseNot for Int128 requires an explicit replacement contract"
   let bitwiseNot (a: Int128) : Int128 = Builtin.int128BitwiseNot a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl ShiftLeft for Int128 requires an explicit replacement contract"
 impl ShiftLeft for Int128 =
   /// Bitwise left shift of an <type Int128> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl ShiftLeft for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl ShiftLeft for Int128 requires an explicit replacement contract"
   let shiftLeft (a: Int128) (b: Int128) : Int128 = Builtin.int128ShiftLeft a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl ShiftRight for Int128 requires an explicit replacement contract"
 impl ShiftRight for Int128 =
   /// Bitwise right shift of an <type Int128> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl ShiftRight for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl ShiftRight for Int128 requires an explicit replacement contract"
   let shiftRight (a: Int128) (b: Int128) : Int128 = Builtin.int128ShiftRight a b
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl ToString for Int128 requires an explicit replacement contract"
 impl ToString for Int128 =
   /// Stringify <param int128>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl ToString for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl ToString for Int128 requires an explicit replacement contract"
   let toString (int128: Int128) : String = Builtin.int128ToString int128
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Zero for Int128 requires an explicit replacement contract"
 impl Zero for Int128 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl Zero for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl Zero for Int128 requires an explicit replacement contract"
   let zero () : Int128 = 0Q
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl One for Int128 requires an explicit replacement contract"
 impl One for Int128 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int128.impl One for Int128: Already selected from packages/darklang/stdlib/int128.dark; importing another declaration of Darklang.Stdlib.Int128.impl One for Int128 requires an explicit replacement contract"
   let one () : Int128 = 1Q

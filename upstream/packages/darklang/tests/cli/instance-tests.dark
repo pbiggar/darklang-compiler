@@ -72,7 +72,7 @@ test disposeRemovesTheStore =
 /// The only test here that needs a pty, which is the whole reason `Interactive` exists.
 /// Wait for the Home tab and the footer before sending q. These are part of
 /// every initial frame, including an instance that has already been set up.
-// @compiler xfail compile: "Unknown function or value 'Interactive.available'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Instance.withInstance'" class=missing-support reason=upstream-dependency
 test workbenchPaints =
   if Stdlib.Bool.not (Interactive.available ()) then
     Stdlib.Test.fail "expect is not installed, so the interactive tests cannot run"

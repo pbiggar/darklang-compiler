@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Operators
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Operators
 

@@ -29,6 +29,9 @@ means the item is selected normally, not that an execution has passed.
 test evaluatesOnce =
   ...
 
+// @compiler blocked: upstream-dependency diagnostic="Unknown function or value 'Stdlib.LocalStore.path'"
+let localDb () : String = Stdlib.LocalStore.path ()
+
 // @compiler excluded: runtime-reflection
 let inspect ... = ...
 
@@ -44,6 +47,11 @@ Reasons are short tags defined in `porting/compiler-reasons.json`. Annotation
 validation rejects unknown tags, duplicate dispositions, annotations inside
 bodies or after an item, and orphaned annotations. Only real line comments are
 read: text inside strings, doc comments and block comments is not metadata.
+Blocked items may carry a nonempty JSON-quoted `diagnostic=` field recording
+the observed compiler error. It is investigation evidence, not an executed
+expected-failure contract. The native inventory preserves it. Use this to name
+the actual unavailable dependency or compiler limitation rather than treating
+an imported implementation as absent.
 Expected failures apply only to tests and require a nonempty diagnostic matcher
 and a compile/runtime phase, plus exactly one `class=aot-rejection`,
 `class=missing-support` or `class=upstream-bug` field before `reason=TAG`. An AOT classification with a
@@ -148,6 +156,27 @@ pinned interpreter contract. Compiler replacements preserve the source order of
 those implementation files so constants remain available to their callers.
 An explicit exclusion suppresses matching declarations in compiler supplements
 as well, so an excluded API cannot become callable through that layer.
+
+`probe_helpers --packages ROOT MANIFEST REPORT` probes blocked package
+functions, types and values against the selected library. It checks candidate
+types together so mutually recursive types can become available, retries other
+candidates as dependencies become available and checks the accepted declarations together,
+removing attributable combined failures and retrying their dependents. This is
+a type-checking probe; promoting declarations still requires checking the real
+source selection, native compilation and the test suite. The default invocation
+without `--packages` retains the test-helper probe.
+`--all-blocked` inspects every blocked declaration reason and includes traits
+and implementations. Its report records source checking only; a checked row
+does not authorize promoting a known native compilation or execution failure.
+
+`check_sources --native ROOT` runs the selected on-disk declarations through
+the host native library pipeline, including specialization and allocation,
+both with and without imported test helpers. It also compiles a trivial caller
+against each library to check that its context can be reused.
+This catches failures that source checking alone cannot establish. Run it before
+embedding a newly enabled batch, then rebuild and run the complete host suite.
+Executable script bodies remain blocked with `script-entrypoint`: importing a
+script does not make its entry expressions reusable library declarations.
 
 Both execution assertions and named tests are discovered from the parsed AST.
 Documentation examples in string literals are never tests. A named test is

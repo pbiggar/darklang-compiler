@@ -65,7 +65,7 @@ module ShadowingTest =
     | (a, tupleMatchWithShadowing) -> a + tupleMatchWithShadowing
 
 
-  // @compiler blocked: compiler-gap
+  // @compiler blocked: compiler-gap diagnostic="Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing: Lambda requires an expected function type"
   let letBindingShadowing (x: Int) : List<Int> =
     let letBindingShadowing = (fun v -> v * 3)
     let letBindingShadowing = [ 10, letBindingShadowing x ]

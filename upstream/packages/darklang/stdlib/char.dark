@@ -93,22 +93,22 @@ let isGreaterThanOrEqualTo (c1: Char) (c2: Char) : Bool =
   Builtin.charIsGreaterThanOrEqualTo c1 c2
 
 /// `a < b` on Chars: ordinal, the rule the four comparisons above already use.
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl Compare for Char requires an explicit replacement contract"
 impl Compare for Char =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Char.impl Compare for Char: Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl Compare for Char requires an explicit replacement contract"
   let lessThan = Stdlib.Char.isLessThan
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Char.impl Compare for Char: Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl Compare for Char requires an explicit replacement contract"
   let lessThanOrEqualTo = Stdlib.Char.isLessThanOrEqualTo
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Char.impl Compare for Char: Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl Compare for Char requires an explicit replacement contract"
   let greaterThan = Stdlib.Char.isGreaterThan
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Char.impl Compare for Char: Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl Compare for Char requires an explicit replacement contract"
   let greaterThanOrEqualTo = Stdlib.Char.isGreaterThanOrEqualTo
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl ToString for Char requires an explicit replacement contract"
 impl ToString for Char =
   /// Stringify <param c>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Char.impl ToString for Char: Already selected from packages/darklang/stdlib/char.dark; importing another declaration of Darklang.Stdlib.Char.impl ToString for Char requires an explicit replacement contract"
   let toString (c: Char) : String = Builtin.charToString c
 
 

@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Processes
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Processes: things run at once, pause, and resume
 

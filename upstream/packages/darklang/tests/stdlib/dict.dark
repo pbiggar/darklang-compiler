@@ -20,14 +20,12 @@ type Colour =
 
 type ColourAlias = Colour
 
-// @compiler blocked: value-specialization
 val valDict = Dict { 1L: "a", 2L: "b" }
 
-// @compiler xfail compile: "Unbound local variable 'valDict'" class=missing-support reason=upstream-dependency
 test valDictKeys =
   Stdlib.Dict.keys valDict |> Stdlib.Test.equal [ 1L, 2L ]
 
-// @compiler xfail compile: "Unbound local variable 'valDict'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Expected TInt64, got TString" class=aot-rejection reason=aot-type-error
 test valDictSetRejectsWrongKeyType =
   Stdlib.Dict.set valDict "notAnInt" "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"notAnInt\")"

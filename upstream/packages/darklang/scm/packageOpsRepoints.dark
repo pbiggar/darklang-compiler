@@ -9,7 +9,7 @@ module Darklang.SCM.PackageOps
 /// Deprecation is keyed on CONTENT, so it applies to every name holding that hash, which for a trivial
 /// value can be many unrelated ones. `locations` answers for MAIN only, so reading it alone under-reports
 /// the collateral on a branch -- precisely where a caller is about to warn someone about it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.namesAtContent: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let namesAtContent (branchId: Uuid) (hash: String) (itemType: String) : List<String> =
   let mainNames =
     // main-scoped: main's names for this content; the chain's names and rebinds are applied below.
@@ -62,7 +62,7 @@ let namesAtContent (branchId: Uuid) (hash: String) (itemType: String) : List<Str
 ///
 /// main-scoped, by name and on purpose: the cascade preview asks what MAIN binds, and a branch's
 /// own names are added by the caller from the overlay.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.mainNamesForHashes: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let mainNamesForHashes (hashes: List<String>) : List<(String * String)> =
   match hashes with
   | [] -> []
@@ -97,7 +97,6 @@ let mainNamesForHashes (hashes: List<String>) : List<(String * String)> =
 
 /// One knock-on repoint: <param name> moves because <param uses> did. Carrying the CAUSE is what lets the
 /// commit view read as an outcome ("Home.render -> uses User.format") instead of a bare list of names.
-// @compiler blocked: missing-implementation
 type Repoint =
   { name: String
     uses: String }
@@ -113,7 +112,7 @@ type Repoint =
 ///
 /// Three reads for the whole draft: the cascade, tagged with the binding it started from, the chain,
 /// and main's names. Asked per binding, a branch decoded its whole chain once per changed name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.draftRepoints: Unknown function or value 'Stdlib.Sqlite.rowsOrEmptyP'"
 let draftRepoints
   (changed: List<Conflicts.Binding>)
   : List<Repoint> =

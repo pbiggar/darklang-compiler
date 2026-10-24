@@ -14,7 +14,7 @@ module Darklang.Cli.Packages.Propagate
 /// history you FORKED FROM; the branch's own edits live in its op log and are prepended here. Answering
 /// from `locations` alone is the plausible-but-wrong shape: re-authoring a branch-only item reads as
 /// "Created" rather than "Updated", and propagation finds no earlier version to repoint dependents off.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Propagate.getAllPreviousHashes: Unknown function or value 'SCM.Propagation.everBoundHashes'"
 let getAllPreviousHashes
   (branchId: Uuid)
   (location: LanguageTools.ProgramTypes.PackageLocation)
@@ -43,7 +43,7 @@ let getAllPreviousHashes
 
 /// Resolve a type hash to its location name for comparison purposes.
 /// Two hashes that point to the same named location are considered equal.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Propagate.resolveTypeName: Unknown function or value 'LanguageTools.PackageManager.Type.locations'"
 let resolveTypeName
   (branchId: Uuid)
   (hash: LanguageTools.ProgramTypes.FQTypeName.Package)
@@ -54,7 +54,6 @@ let resolveTypeName
 
 
 /// Compare two lists element-wise; returns false if lengths differ.
-// @compiler blocked: missing-implementation
 let listsEqual (xs: List<'a>) (ys: List<'a>) (eq: 'a -> 'a -> Bool) : Bool =
   let checks = Stdlib.List.map2 xs ys (fun a b -> eq a b)
   let results = Stdlib.Option.withDefault checks []
@@ -64,7 +63,7 @@ let listsEqual (xs: List<'a>) (ys: List<'a>) (eq: 'a -> 'a -> Bool) : Bool =
 
 /// Structurally compare two TypeReferences, resolving hashes to names.
 /// Returns true if they are semantically equal (same structure, same named types).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeReferenceEqual
   (branchId: Uuid)
   (a: LanguageTools.ProgramTypes.TypeReference)
@@ -132,7 +131,7 @@ let typeReferenceEqual
 
 
 /// Compare two function signatures structurally (type params, parameter names/types, return type).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let fnSignatureEqual
   (branchId: Uuid)
   (oldF: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -150,7 +149,6 @@ let fnSignatureEqual
 
 
 /// What a save's propagation did, for the save to say in its own words.
-// @compiler blocked: missing-implementation
 type Followed =
   { /// The dependents now on the new version, by name, in the order they were repointed.
     names: List<String>
@@ -159,7 +157,6 @@ type Followed =
     /// Propagation itself failed; the names above are empty.
     failure: Stdlib.Option.Option<String> }
 
-// @compiler blocked: missing-implementation
 let nothingFollowed () : Followed =
   Followed { names = [], broken = [], failure = Stdlib.Option.Option.None }
 
@@ -176,7 +173,7 @@ let nothingFollowed () : Followed =
 ///
 /// Quiet by design: the caller prints, a save is at most two lines and decides its own glyph from
 /// this. A wall of per-edit consequences is the churn this design exists to remove.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Propagate.repointNow: Unknown function or value 'SCM.Propagation.repointDependents'"
 let repointNow
   (branchId: Uuid)
   (location: LanguageTools.ProgramTypes.PackageLocation)
@@ -227,14 +224,13 @@ let repointNow
     | Error e -> Followed { names = [], broken = [], failure = Stdlib.Option.Option.Some e }
 
 /// A binding that existed before this save. Method functions count too.
-// @compiler blocked: missing-implementation
 type UpdatedItem =
   { location: LanguageTools.ProgramTypes.PackageLocation
     kind: LanguageTools.ProgramTypes.ItemKind
     previous: List<LanguageTools.ProgramTypes.Hash> }
 
 /// Capture before storage, while the old bindings are still visible.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let updatedItems
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -251,7 +247,7 @@ let updatedItems
   |> Stdlib.List.uniqueBy (fun item -> item.location)
 
 /// Every updated binding uses its final stored hash, shared by all authoring paths.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Propagate.repointSaved: Unknown function or value 'SCM.Propagation.hashOn'"
 let repointSaved (branchId: Uuid) (updates: List<UpdatedItem>) : Followed =
   updates
   |> Stdlib.List.fold (nothingFollowed ()) (fun combined update ->
@@ -273,7 +269,6 @@ let repointSaved (branchId: Uuid) (updates: List<UpdatedItem>) : Followed =
         failure = failure })
 
 /// The save's second line, if it has one: who follows, or who broke. Wrapped at 80, indented.
-// @compiler blocked: missing-implementation
 let printFollowed (followed: Followed) : Unit =
   match followed.failure with
   | Some e -> Cli.Text.printWrapped Stdlib.Cli.UI.Colors.error "  " $"propagation failed: {e}"
@@ -301,7 +296,6 @@ let printFollowed (followed: Followed) : Unit =
 
 /// <fn printFollowed> as one clause for a footer that already says what was saved (the workbench's):
 /// "" when nothing followed, else `; ` and the same news, shortest first.
-// @compiler blocked: missing-implementation
 let followedNote (followed: Followed) : String =
   match followed.failure with
   | Some e -> $"; propagation failed: {e}"

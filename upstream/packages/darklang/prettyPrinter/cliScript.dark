@@ -1,6 +1,6 @@
 module Darklang.PrettyPrinter.ProgramTypes
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.SourceFile.SourceFile'"
 let sourceFileAtWidth
   (branchId: Uuid)
   (width: Int)
@@ -52,7 +52,7 @@ let sourceFileAtWidth
 
 
 /// Print a source file using the standard source width.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.SourceFile.SourceFile'"
 let sourceFile
   (branchId: Uuid)
   (source: LanguageTools.ProgramTypes.SourceFile.SourceFile)

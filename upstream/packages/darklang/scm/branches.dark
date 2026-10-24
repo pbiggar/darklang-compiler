@@ -15,7 +15,7 @@ module Darklang.SCM.Branches
 ///
 /// Lives in this silo, the lowest branch-aware module, so both `SCM.PackageOps` and `SCM.Conflicts` can ask
 /// without either depending on the other. `SCM.PackageOps.currentBranch` is the name most callers use.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.current: Unknown function or value 'Builtin.scmCurrentBranch'"
 let current () : Uuid = Builtin.scmCurrentBranch ()
 
 
@@ -24,7 +24,6 @@ let current () : Uuid = Builtin.scmCurrentBranch ()
 /// A DU rather than a sentence because one caller has to tell the empty case apart from the rest:
 /// approving a review queue that holds nothing pending is a normal outcome, not a failure, and it
 /// used to be recognised by searching the message for "nothing to merge".
-// @compiler blocked: missing-implementation
 type MergeRefusal =
   /// Main is the trunk; there is nothing above it to merge into.
   | IsMain
@@ -36,7 +35,6 @@ type MergeRefusal =
   | HasActiveChildren
 
 /// The sentence a person reads, kept beside the cases so the two cannot drift.
-// @compiler blocked: missing-implementation
 let refusalMessage (r: MergeRefusal) : String =
   match r with
   | IsMain ->
@@ -56,7 +54,7 @@ let refusalMessage (r: MergeRefusal) : String =
 ///
 /// The DECISION is here; the merge MECHANISM (flipping ops effective, folding, retagging) is transactional
 /// and stays in F#.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.canMerge: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let canMerge (branchId: Uuid) : Stdlib.Result.Result<Unit, MergeRefusal> =
   if SCM.Branch.isMain branchId then
     Stdlib.Result.Result.Error MergeRefusal.IsMain
@@ -98,7 +96,7 @@ let canMerge (branchId: Uuid) : Stdlib.Result.Result<Unit, MergeRefusal> =
 ///
 /// `canMerge` asks the same question its own way; this is the shape a caller needs when it has to
 /// NAME them. `None` from the query is a failure, not "none" -- a guard must not fail open.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.activeChildNames: Unknown function or value 'Stdlib.Sqlite.columnP'"
 let activeChildNames (branchId: Uuid) : List<String> =
   Stdlib.Sqlite.columnP
     (localDb ())
@@ -114,7 +112,7 @@ let activeChildNames (branchId: Uuid) : List<String> =
 /// Register a branch off a parent if it doesn't exist yet. Idempotent, and FIRST WRITE WINS the parent: an
 /// existing branch is never re-parented, so switching onto one can't quietly move it. Re-using an id
 /// REVIVES it (clears archived/merged), which is what lets a review queue be reused after approve/reject.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.ensure: Unknown function or value 'Stdlib.Sqlite.mustExec'"
 let ensure (branchId: Uuid) (parentId: Uuid) : Unit =
   let _ =
     Stdlib.Sqlite.mustExec
@@ -126,7 +124,7 @@ let ensure (branchId: Uuid) (parentId: Uuid) : Unit =
   ()
 
 /// Point a branch's NAME at something else. The id is untouched, so every reference survives.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.setName: Unknown function or value 'Stdlib.Sqlite.mustExec'"
 let setName (branchId: Uuid) (name: String) : Unit =
   let _ =
     Stdlib.Sqlite.mustExec
@@ -142,7 +140,7 @@ let setName (branchId: Uuid) (name: String) : Unit =
 ///
 /// Only effective=0 ops are deleted: anything that made it into main is main's now, and deleting it here
 /// would tear a hole in the shared log rather than discard a branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.archive: Unknown function or value 'Stdlib.Sqlite.execBatch'"
 let archive (branchId: Uuid) : Stdlib.Result.Result<Unit, String> =
   let b = Stdlib.toString branchId
 
@@ -178,7 +176,6 @@ let archive (branchId: Uuid) : Stdlib.Result.Result<Unit, String> =
 
 /// One active branch, as data. The CLI renders it as a line and the LSP as JSON, so the QUERY lives in
 /// one place and neither surface has to know the table.
-// @compiler blocked: missing-implementation
 type BranchRow =
   { id: Uuid
     /// a mutable display alias; "" when the id is the only handle
@@ -189,7 +186,7 @@ type BranchRow =
     merged: Bool }
 
 /// Every active branch, oldest first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.list: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let list () : List<BranchRow> =
   Stdlib.Sqlite.rowsP
     (localDb ())
@@ -216,7 +213,7 @@ let list () : List<BranchRow> =
 
 /// How many branches are already merged. The `dark branches` footer needs the count of what it
 /// hid, and asking for it separately keeps `listLines` returning only what it will print.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.mergedCount: Unknown function or value 'list'"
 let mergedCount () : Int64 =
   list ()
   |> Stdlib.List.filter (fun b -> b.merged)
@@ -226,7 +223,7 @@ let mergedCount () : Int64 =
 
 /// The branch list, one line each. <param includeMerged> false drops the ones already merged -- the
 /// default, because merged branches accumulate forever and nothing removes them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.listLines: Unknown function or value 'list'"
 let listLines (includeMerged: Bool) : List<String> =
   // Fetched ONCE: `parentLabel` reads its parent out of this list, so rendering n branches is one query
   // rather than n+1.
@@ -256,7 +253,7 @@ let listLines (includeMerged: Bool) : List<String> =
     $"{label} ({shortId}) <- {parentLabel b.parent}  [{status}]")
 
 /// The names a branch has recorded a base for -- i.e. every name it has touched.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.touchedNames: Unknown function or value 'Stdlib.Sqlite.columnP'"
 let touchedNames (branchId: Uuid) : List<String> =
   Stdlib.Sqlite.columnP
     (localDb ())
@@ -268,14 +265,12 @@ let touchedNames (branchId: Uuid) : List<String> =
 /// The key a name is looked up by. `branch_name_bases`, `locations` and the overlay all spell a name as
 /// (owner, dotted-modules, name), and this is that triple flattened so a Dict can hold it. The separator
 /// is a newline because none of the three parts can contain one.
-// @compiler blocked: missing-implementation
 let nameKey (owner: String) (modules: String) (name: String) : String =
   owner + "\n" + modules + "\n" + name
 
 
 /// How a conflicted name is SPOKEN: "owner.Module.name", or "owner.name" for a top-level item. Mirrors the
 /// detector's fqn format, because `resolve <name>` has to accept what a conflict listing prints.
-// @compiler blocked: missing-implementation
 let fqnOf (owner: String) (modules: String) (name: String) : String =
   if modules == "" then
     owner + "." + name
@@ -285,7 +280,7 @@ let fqnOf (owner: String) (modules: String) (name: String) : String =
 
 /// A branch's recorded bases: the parent's hash per name AT THE FORK, which is what a later comparison is
 /// against. `(owner, modules, name, base_hash)` rows, unformatted.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.nameBases: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let nameBases (branchId: Uuid) : List<(String * String * String * String)> =
   Stdlib.Sqlite.rowsP
     (localDb ())
@@ -312,7 +307,7 @@ let nameBases (branchId: Uuid) : List<(String * String * String * String)> =
 /// parent = main means `locations` answers directly. A non-main parent lives only as an OVERLAY, so main's
 /// answer is then overridden by that chain's own rebinds -- the same fold `SCM.PackageOps.chainBindings`
 /// already does, latest stamp per name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.parentHashesForBases: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let parentHashesForBases (parentId: Uuid) (branchId: Uuid) : Dict<String, String> =
   let fromMain =
     // main-scoped: main's hashes are the base; a non-main parent's rebinds are overlaid by the caller.
@@ -367,7 +362,6 @@ let parentHashesForBases (parentId: Uuid) (branchId: Uuid) : Dict<String, String
 ///
 /// A name the parent has since UNLISTED reads as "" and so counts as moved, which is right: the thing the
 /// branch forked from is not there any more.
-// @compiler blocked: missing-implementation
 let divergedIn
   (bases: List<(String * String * String * String)>)
   (parentHashes: Dict<String, String>)
@@ -389,7 +383,7 @@ let divergedIn
 
 /// Names the PARENT has moved since this branch forked. This is the merge GATE, not a view --
 /// `SCM.Conflicts` presents conflicts, this decides whether there are any.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.nameConflicts: Unknown function or value 'SCM.PackageOps.branchParentOf'"
 let nameConflicts (branchId: Uuid) : List<String> =
   let parent = SCM.PackageOps.branchParentOf branchId
 
@@ -397,7 +391,6 @@ let nameConflicts (branchId: Uuid) : List<String> =
 
 
 /// What a rebase did, in the two ways the parent's changes reach a branch.
-// @compiler blocked: missing-implementation
 type Rebased =
   { /// Names the parent changed that this branch had ALSO changed: a divergence, settled by recency
     /// on merge unless the person re-authors.
@@ -411,7 +404,7 @@ type Rebased =
 /// REBASE: accept the parent's current state as this branch's new base. Returns the names the parent had
 /// changed since the fork; after this the branch's own ops layer on top (LWW by origin_ts) and merge is
 /// unblocked. The union of both halves of <fn rebaseDetailed>, for callers that want one list.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.rebase: Unknown function or value 'rebaseDetailed'"
 let rebase (branchId: Uuid) : Stdlib.Result.Result<List<String>, String> =
   match rebaseDetailed branchId with
   | Ok r -> Stdlib.Result.Result.Ok(Stdlib.List.unique (Stdlib.List.append r.diverged r.repointed))
@@ -423,7 +416,7 @@ let rebase (branchId: Uuid) : Stdlib.Result.Result<List<String>, String> =
 /// Every base moves in ONE transaction. A statement per name would let an interrupted rebase leave half
 /// the bases rewritten -- a branch neither at its old fork point nor at the new one, with nothing
 /// recording which.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.rebaseDetailed: Unknown function or value 'SCM.PackageOps.branchParentOf'"
 let rebaseDetailed (branchId: Uuid) : Stdlib.Result.Result<Rebased, String> =
   let parent = SCM.PackageOps.branchParentOf branchId
   let bases = nameBases branchId
@@ -486,7 +479,6 @@ let rebaseDetailed (branchId: Uuid) : Stdlib.Result.Result<Rebased, String> =
 
 /// "owner.Module.Sub.name" -> (owner, dotted-modules, name). The inverse of <fn fqnOf>, and it has to
 /// stay that way: `dark resolve <name>` is handed back a name a conflict listing printed.
-// @compiler blocked: missing-implementation
 let parseFqn (fqn: String) : Stdlib.Option.Option<(String * String * String)> =
   match Stdlib.String.split fqn "." with
   | [] -> Stdlib.Option.Option.None
@@ -506,7 +498,7 @@ let parseFqn (fqn: String) : Stdlib.Option.Option<(String * String * String)> =
 /// Ordered, because callers take the LAST one as the branch's current word on a name; unordered, that is
 /// whatever the query happened to return. Skips an op this build cannot decode rather than raising: a
 /// peer's op on a newer format is stored here on purpose.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let ownFrontierOps
   (branchId: Uuid)
   : List<(Uuid * LanguageTools.ProgramTypes.PackageOp)> =
@@ -516,7 +508,7 @@ let ownFrontierOps
 
 /// <fn ownFrontierOps>, with what put each op on the branch: 'op', 'propagation' or 'resolution' (see
 /// `op_branches.source`). What lets a branch tell an edit you typed from a repoint that followed one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let ownFrontierOpsWithSource
   (branchId: Uuid)
   : List<(Uuid * LanguageTools.ProgramTypes.PackageOp * String)> =
@@ -541,7 +533,7 @@ let ownFrontierOpsWithSource
 ///
 /// `ownFrontierOps` deliberately includes committed ops (a branch's whole frontier is what merge
 /// and export need). Anything that DROPS ops wants this instead.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.uncommittedOpIds: Unknown function or value 'Stdlib.Sqlite.columnP'"
 let uncommittedOpIds (branchId: Uuid) : List<String> =
   Stdlib.Sqlite.columnP
     (localDb ())
@@ -552,7 +544,7 @@ let uncommittedOpIds (branchId: Uuid) : List<String> =
     "id"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.ownOpRows: Unknown function or value 'Stdlib.Sqlite.rowsOrEmptyP'"
 let ownOpRows (branchId: Uuid) : List<Dict<String, Stdlib.Sqlite.Value>> =
   Stdlib.Sqlite.rowsOrEmptyP
     (localDb ())
@@ -565,7 +557,7 @@ let ownOpRows (branchId: Uuid) : List<Dict<String, Stdlib.Sqlite.Value>> =
 
 /// Does this op bind <param key>? True for a SetName and for a Decision that overrides the binding, since
 /// both are the branch saying what that name points at.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let opBindsKey
   (op: LanguageTools.ProgramTypes.PackageOp)
   (key: (String * String * String))
@@ -594,7 +586,7 @@ let opBindsKey
 
 /// Set the branch's recorded base for one name to the parent's CURRENT hash. This is what clears a
 /// conflict: the branch stops disagreeing about where it forked from.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.setBaseToParent: Unknown function or value 'SCM.PackageOps.branchParentOf'"
 let setBaseToParent (branchId: Uuid) (key: (String * String * String)) : Unit =
   let (owner, modules, name) = key
   let parent = SCM.PackageOps.branchParentOf branchId
@@ -616,7 +608,7 @@ let setBaseToParent (branchId: Uuid) (key: (String * String * String)) : Unit =
 
 /// RESOLVE take-theirs: drop the branch's binding for <param fqn> (untag its SetName ops) so the overlay
 /// falls back to the parent's version, then set the base to the parent's current.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.resolveTakeTheirs: Unknown function or value 'ownFrontierOps'"
 let resolveTakeTheirs
   (branchId: Uuid)
   (fqn: String)
@@ -661,7 +653,7 @@ let resolveTakeTheirs
 ///
 /// MAX(origin_ts) + 1s rather than wall clock, because authoring stamps can run ahead of it (see
 /// `LibDB.OriginTs`) and a peer's op can carry a future stamp. Safe to do to an op nobody has seen yet.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.stampPastEverything: Unknown function or value 'Stdlib.Sqlite.scalarTextP'"
 let stampPastEverything () : String =
   Stdlib.Sqlite.scalarTextP
     (localDb ())
@@ -682,7 +674,7 @@ let stampPastEverything () : String =
 /// branch's frontier ops travel (`branch push`/`branch pull`), so those are exactly the ops that must not
 /// be re-stamped. `Decision`/`Override` exists for this: a deliberate human choice, recorded as its own
 /// op, carrying its own stamp and its own reason.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.resolveKeepMine: Unknown function or value 'ownFrontierOps'"
 let resolveKeepMine
   (branchId: Uuid)
   (fqn: String)
@@ -735,7 +727,7 @@ let resolveKeepMine
 ///
 /// Returns how many ops moved. `INSERT OR IGNORE` then `DELETE` handles the rare case where parent and
 /// child both tag the same op.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.retagFrontierToParent: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let retagFrontierToParent
   (branchId: Uuid)
   (parentId: Uuid)
@@ -775,7 +767,7 @@ let retagFrontierToParent
 
 /// Every op id tagged to <param branchId>, decodable or not. What a merge is about to move, read BEFORE
 /// either merge arm drops the tags, so the event that travels can name them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.frontierIds: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let frontierIds (branchId: Uuid) : List<Uuid> =
   Stdlib.Sqlite.rowsP
     (localDb ())
@@ -788,7 +780,7 @@ let frontierIds (branchId: Uuid) : List<Uuid> =
 ///
 /// Returns how many ops are ABOUT to flip, not how many are tagged. A branch can carry tags on ops main
 /// already has -- a whole-log import does -- and counting those reports work the merge did not do.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.markMergedEffective: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let markMergedEffective (branchId: Uuid) : Stdlib.Result.Result<Int, String> =
   let b = Stdlib.toString branchId
 
@@ -821,7 +813,7 @@ let markMergedEffective (branchId: Uuid) : Stdlib.Result.Result<Int, String> =
 /// frontier first leaves a branch with no ops and no merged flag, which the gate refuses as "nothing to
 /// merge" while its changes are already in main, and which `dark branches` lists as live forever. Every
 /// other point is recoverable by running the merge again, because the frontier is still tagged.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branches.finishMerge: Unknown function or value 'Stdlib.Sqlite.execBatch'"
 let finishMerge (branchId: Uuid) : Stdlib.Result.Result<Unit, String> =
   let b = Stdlib.toString branchId
 

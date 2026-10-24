@@ -13,14 +13,14 @@ module Darklang.LanguageTools.AtRestTypeChecker.Tests
 // Test helpers
 // ----------------------------------------------------------------------------------
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Verdict'"
 let verdictWord (v: Darklang.LanguageTools.AtRestTypeChecker.Verdict) : String =
   match v with
   | Checked -> "checked"
   | Failed -> "failed"
   | Incomplete -> "incomplete"
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Issue'"
 let codesOf (issues: List<Darklang.LanguageTools.AtRestTypeChecker.Issue>) : String =
   issues
   |> Stdlib.List.map (fun i ->
@@ -29,7 +29,7 @@ let codesOf (issues: List<Darklang.LanguageTools.AtRestTypeChecker.Issue>) : Str
   |> Stdlib.List.sort
   |> Stdlib.String.join ","
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Report'"
 let summary (report: Darklang.LanguageTools.AtRestTypeChecker.Report) : String =
   (verdictWord report.verdict)
   + ":"
@@ -37,7 +37,7 @@ let summary (report: Darklang.LanguageTools.AtRestTypeChecker.Report) : String =
 
 let src (lines: List<String>) : String = Stdlib.String.join lines "\n"
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageOp'"
 let parsePackageOps
   (source: String)
   : Stdlib.Result.Result<List<Darklang.LanguageTools.ProgramTypes.PackageOp>, String> =
@@ -47,7 +47,7 @@ let parsePackageOps
     [ "AtRest" ]
     source
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageOp'"
 let itemNamed
   (ops: List<Darklang.LanguageTools.ProgramTypes.PackageOp>)
   (name: String)
@@ -61,7 +61,7 @@ let itemNamed
     | _ -> Stdlib.Option.Option.None)
   |> Stdlib.List.head
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Report'"
 let itemSummary
   (report: Darklang.LanguageTools.AtRestTypeChecker.Report)
   (item: Stdlib.Option.Option<Darklang.LanguageTools.ProgramTypes.Reference>)
@@ -77,7 +77,7 @@ let itemSummary
     | None -> "no report for the declaration"
 
 /// Parse and check the source, then return the verdict and issue codes for `name`.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.check: Unknown function or value 'parsePackageOps'"
 let check (source: String) (name: String) : String =
   match parsePackageOps source with
   | Error e -> e
@@ -87,7 +87,7 @@ let check (source: String) (name: String) : String =
       (itemNamed ops name)
 
 /// Return the named declaration's errors and warnings as `Code: message` strings.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.issues: Unknown function or value 'parsePackageOps'"
 let issues (source: String) (name: String) : List<String> =
   match parsePackageOps source with
   | Error e -> [ e ]
@@ -111,7 +111,6 @@ let issues (source: String) (name: String) : List<String> =
 let hash (text: String) : Darklang.LanguageTools.ProgramTypes.Hash =
   Darklang.LanguageTools.ProgramTypes.Hash.Hash text
 
-// @compiler blocked: upstream-dependency
 let resolved (name: 'a) : Darklang.LanguageTools.ProgramTypes.NameResolution<'a> =
   Darklang.LanguageTools.ProgramTypes.NameResolution
     { originalName = []
@@ -121,7 +120,6 @@ let resolved (name: 'a) : Darklang.LanguageTools.ProgramTypes.NameResolution<'a>
             { name = name, location = Stdlib.Option.Option.None }
         ) }
 
-// @compiler blocked: upstream-dependency
 let unresolved
   (parts: List<String>)
   : Darklang.LanguageTools.ProgramTypes.NameResolution<'a> =
@@ -131,7 +129,7 @@ let unresolved
         Stdlib.Result.Result.Error
           Darklang.LanguageTools.ProgramTypes.NameResolutionError.NotFound }
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let custom
   (name: String)
   (args: List<Darklang.LanguageTools.ProgramTypes.TypeReference>)
@@ -143,7 +141,7 @@ let custom
     args
   )
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let fnNamed
   (name: String)
   (typeParams: List<String>)
@@ -169,7 +167,7 @@ let fnNamed
       bounds = []
       permissionCeiling = Stdlib.Option.Option.None }
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let oneArg
   (parameterType: Darklang.LanguageTools.ProgramTypes.TypeReference)
   (returnType: Darklang.LanguageTools.ProgramTypes.TypeReference)
@@ -177,7 +175,7 @@ let oneArg
   : Darklang.LanguageTools.ProgramTypes.PackageFn.PackageFn =
   fnNamed "function-under-test" [] [ ("value", parameterType) ] returnType body
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeDeclaration.Definition'"
 let declared
   (name: String)
   (typeParams: List<String>)
@@ -192,7 +190,7 @@ let declared
           { typeParams = typeParams, bounds = [], definition = definition }
       description = "" }
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let recordOf
   (fields: List<(String * Darklang.LanguageTools.ProgramTypes.TypeReference)>)
   : Darklang.LanguageTools.ProgramTypes.TypeDeclaration.Definition =
@@ -202,7 +200,7 @@ let recordOf
         { name = n, typ = t, description = "" })
   )
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageType.PackageType'"
 let environmentWith
   (types: List<Darklang.LanguageTools.ProgramTypes.PackageType.PackageType>)
   : Darklang.LanguageTools.AtRestTypeChecker.Model.Environment =
@@ -214,7 +212,7 @@ let environmentWith
       (fun env t -> Darklang.LanguageTools.AtRestTypeChecker.Items.addType env t)
   Darklang.LanguageTools.AtRestTypeChecker.Declarations.prepareDeclarations env
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Items.Outcome'"
 let outcomeSummary
   (outcome: Darklang.LanguageTools.AtRestTypeChecker.Items.Outcome)
   : String =
@@ -224,7 +222,7 @@ let outcomeSummary
 
 /// Check `fn` with the supplied type declarations available as dependencies.
 /// Return only the function's verdict and issue codes.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageType.PackageType'"
 let checkFunctionAst
   (types: List<Darklang.LanguageTools.ProgramTypes.PackageType.PackageType>)
   (fn: Darklang.LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -235,7 +233,7 @@ let checkFunctionAst
       fn
   outcomeSummary outcome
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageType.PackageType'"
 let checkFunctionAstOutcome
   (types: List<Darklang.LanguageTools.ProgramTypes.PackageType.PackageType>)
   (fn: Darklang.LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -248,7 +246,7 @@ let checkFunctionAstOutcome
 
 /// Check the supplied types and functions through the public API used by saves
 /// and commits. That API converts checker failures into Incomplete reports.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageType.PackageType'"
 let checkPackageOpsSummary
   (types: List<Darklang.LanguageTools.ProgramTypes.PackageType.PackageType>)
   (fns: List<Darklang.LanguageTools.ProgramTypes.PackageFn.PackageFn>)
@@ -263,7 +261,7 @@ let checkPackageOpsSummary
 
 /// Check values together so they can refer to each other. Return their summaries
 /// in input order, even if dependency checking requires a different order.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageValue.PackageValue'"
 let checkValueAsts
   (values: List<Darklang.LanguageTools.ProgramTypes.PackageValue.PackageValue>)
   : List<String> =
@@ -274,7 +272,7 @@ let checkValueAsts
     [])
   |> Stdlib.List.map (fun (_, outcome) -> outcomeSummary outcome)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let valueNamed
   (name: String)
   (body: Darklang.LanguageTools.ProgramTypes.Expr)
@@ -282,7 +280,7 @@ let valueNamed
   Darklang.LanguageTools.ProgramTypes.PackageValue.PackageValue
     { hash = hash name, body = body, description = "" }
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let useValue (id: Int64) (name: String) : Darklang.LanguageTools.ProgramTypes.Expr =
   Darklang.LanguageTools.ProgramTypes.Expr.EValue(
     id,
@@ -291,46 +289,46 @@ let useValue (id: Int64) (name: String) : Darklang.LanguageTools.ProgramTypes.Ex
         hash name))
   )
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let arg (id: Int64) : Darklang.LanguageTools.ProgramTypes.Expr =
   Darklang.LanguageTools.ProgramTypes.Expr.EArg(id, 0)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let unitExpr (id: Int64) : Darklang.LanguageTools.ProgramTypes.Expr =
   Darklang.LanguageTools.ProgramTypes.Expr.EUnit id
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let intExpr (id: Int64) (n: Int) : Darklang.LanguageTools.ProgramTypes.Expr =
   Darklang.LanguageTools.ProgramTypes.Expr.EInt(id, n)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let tInt () : Darklang.LanguageTools.ProgramTypes.TypeReference =
   Darklang.LanguageTools.ProgramTypes.TypeReference.TInt
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let tUnit () : Darklang.LanguageTools.ProgramTypes.TypeReference =
   Darklang.LanguageTools.ProgramTypes.TypeReference.TUnit
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let tList
   (inner: Darklang.LanguageTools.ProgramTypes.TypeReference)
   : Darklang.LanguageTools.ProgramTypes.TypeReference =
   Darklang.LanguageTools.ProgramTypes.TypeReference.TList inner
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let nestedListType (depth: Int) : Darklang.LanguageTools.ProgramTypes.TypeReference =
   Stdlib.List.fold (Stdlib.List.range 1 depth) (tInt ()) (fun t _ -> tList t)
 
 /// Build a tuple type with `depth` nested tuples. Checking its elements calls
 /// back through List.map at each level, exercising the native stack limit.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
 let nestedTupleType
   (depth: Int)
   : Darklang.LanguageTools.ProgramTypes.TypeReference =
   Stdlib.List.fold (Stdlib.List.range 1 depth) (tInt ()) (fun t _ ->
     Darklang.LanguageTools.ProgramTypes.TypeReference.TTuple(tInt (), t, []))
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let nestedListExpr (depth: Int) : Darklang.LanguageTools.ProgramTypes.Expr =
   Stdlib.List.fold (Stdlib.List.range 1 depth) (intExpr 1L 0) (fun e i ->
     Darklang.LanguageTools.ProgramTypes.Expr.EList(
@@ -345,7 +343,7 @@ let nestedListExpr (depth: Int) : Darklang.LanguageTools.ProgramTypes.Expr =
 module BindingIds =
   // Build `let x = 1; let y = "s"; x`. The caller chooses y's binding ID
   // so a test can make it collide with x's ID.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
   let body (secondId: Int64) : Darklang.LanguageTools.ProgramTypes.Expr =
     Darklang.LanguageTools.ProgramTypes.Expr.ELet(
       1L,
@@ -401,7 +399,7 @@ module BindingIds =
              "Multiple let bindings share a pattern node ID; their types cannot be checked") ] ]
 
 module InferenceIds =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
   let projection (id: Int64) : Darklang.LanguageTools.ProgramTypes.Expr =
     Darklang.LanguageTools.ProgramTypes.Expr.ELambda(
       id,
@@ -414,7 +412,7 @@ module InferenceIds =
   // Build `let (a, b) = (fun x -> x.field, fun x -> x.field); b 1`.
   // If both lambdas share an ID, the checker can mistakenly attach b's field
   // requirement to a and miss the invalid call b 1. Reject the duplicate IDs.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
   let body (secondId: Int64) : Darklang.LanguageTools.ProgramTypes.Expr =
     Darklang.LanguageTools.ProgramTypes.Expr.ELet(
       1L,
@@ -504,11 +502,10 @@ module LambdaArgumentSlots =
   // EArg refers to a package function's parameter by position. Inside a lambda,
   // it must be rejected rather than mistaken for the outer function's Int argument.
   // Build the value in a function so its custom type stays current across package reloads.
-  // @compiler blocked: upstream-dependency
   let parameters () : List<Darklang.LanguageTools.ProgramTypes.LetPattern> =
     [ Darklang.LanguageTools.ProgramTypes.LetPattern.LPVariable(11L, "text") ]
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
   let lambda () : Darklang.LanguageTools.ProgramTypes.Expr =
     Darklang.LanguageTools.ProgramTypes.Expr.ELambda(10L, parameters (), arg 12L)
 
@@ -875,7 +872,7 @@ module Declarations =
 // ----------------------------------------------------------------------------------
 
 module DictKeys =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.DictKeys.key: Unknown function or value 'check'"
   let key (declarations: List<String>) (keyType: String) : String =
     check
       (src (Stdlib.List.append declarations [ $"let f (x: Dict<{keyType}, String>) : Unit = ()" ]))
@@ -987,7 +984,7 @@ module RecursivePhantomKeys =
 
   // A's second type argument becomes B's `value` field. Track the argument swap
   // through the recursive declarations: only that argument must be a valid key type.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.RecursivePhantomKeys.swapped: Unknown function or value 'DictKeys.key'"
   let swapped (typ: String) : String =
     DictKeys.key
       [ "type A<'a, 'b> = End | Next of B<'b, 'a>"
@@ -1027,7 +1024,7 @@ module RecursivePhantomKeys =
         |> Stdlib.Test.equal "failed:UnsupportedDictKeyType" ]
 
 module InstantiatedDictKeys =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.InstantiatedDictKeys.signature: Unknown function or value 'check'"
   let signature (declarations: List<String>) (typ: String) : String =
     check (src (Stdlib.List.append declarations [ $"let f (x: {typ}) : Unit = ()" ])) "f"
 
@@ -1070,7 +1067,7 @@ module InstantiatedDictKeys =
         signature [ "type Node<'a> = { next: List<Node<'a -> Int>>, items: Dict<'a, Int> }" ] "Node<Int>"
         |> Stdlib.Test.equal "failed:UnsupportedDictKeyType" ]
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.InstantiatedDictKeys.call: Unknown function or value 'check'"
   let call (body: List<String>) : String =
     check (src (Stdlib.List.append
       [ "let make<'a> (x: 'a) : Dict<'a, Int> = Dict { x: 1 }", "let f () : Unit =" ] body)) "f"
@@ -1337,7 +1334,7 @@ module Builtins =
 // ----------------------------------------------------------------------------------
 
 module PostfixUnwrap =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
   let optionOf
     (inner: Darklang.LanguageTools.ProgramTypes.TypeReference)
     : Darklang.LanguageTools.ProgramTypes.TypeReference =
@@ -1351,7 +1348,7 @@ module PostfixUnwrap =
       [ inner ]
     )
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
   let unwrapArg (id: Int64) : Darklang.LanguageTools.ProgramTypes.Expr =
     Darklang.LanguageTools.ProgramTypes.Expr.EUnwrap(id, arg (id + 1L))
 
@@ -1711,7 +1708,7 @@ module TupleAccess =
   // Each use of f must get a separate type for the intermediate t.1 too.
   // That type appears only in the deferred field checks, not in f's parameter
   // or return type, so copying only the function type would lose it.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.TupleAccess.letBoundChain: Unknown function or value 'check'"
   let letBoundChain (index: String) (returnType: String) (call: String) : String =
     check
       (src
@@ -1736,7 +1733,7 @@ module TupleAccess =
 
   // inner captures t from outer. Its tuple accesses must use the type supplied
   // to outer, even though inner's own parameter is unrelated to t.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.TupleAccess.capturedChain: Unknown function or value 'check'"
   let capturedChain (index: String) : String =
     check
       (src
@@ -2286,7 +2283,7 @@ module ProvisionalDiagnostics =
   //
   // The split is the CHECKER's, which is what these cases assert. How an editor renders the two
   // severities is a separate question, and nothing in this tree answers it.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.ProvisionalDiagnostics.displayed: Unknown function or value 'parsePackageOps'"
   let displayed (last: String) : String =
     let source =
       src [ "let f () : Int =", "  let g = fun y -> y y", "  " + last ]
@@ -2692,7 +2689,7 @@ module Lets =
 
   // Reject let (x, x) regardless of whether the bound expression is generalized.
   // Construct the syntax tree directly because the parser rejects duplicate names.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
   let bindsTwice
     (value: Darklang.LanguageTools.ProgramTypes.Expr)
     : Darklang.LanguageTools.ProgramTypes.PackageFn.PackageFn =
@@ -3019,7 +3016,7 @@ module Guarded =
   // Catch failures while fetching or converting dependencies. A failed load
   // must preserve previously loaded declarations and continue with the remaining
   // queue. This loader deliberately fails on the dependency named broken.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Environment.Closure'"
   let loadDependency
     (closure: Darklang.LanguageTools.AtRestTypeChecker.Environment.Closure)
     (reference: Darklang.LanguageTools.ProgramTypes.Reference)
@@ -3042,7 +3039,7 @@ module Guarded =
              types = Stdlib.Dict.setOverridingDuplicates closure.types h typ })
     | _ -> ([], closure)
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Environment.Closure'"
   let loaded () : Darklang.LanguageTools.AtRestTypeChecker.Environment.Closure =
     Darklang.LanguageTools.AtRestTypeChecker.Environment.loadPendingDependencies
       loadDependency
@@ -3211,7 +3208,7 @@ module Invariants =
   // Exercise the branch checker with failed type and function loads, a missing
   // value, and a repeated function reference. Preserve the good and bad functions'
   // individual results, and report the repeated reference only once.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.PackageOp'"
   let loadCandidate
     (reference: Darklang.LanguageTools.ProgramTypes.Reference)
     : Stdlib.Option.Option<Darklang.LanguageTools.ProgramTypes.PackageOp> =
@@ -3229,7 +3226,7 @@ module Invariants =
         Stdlib.Option.Option.Some(
           Darklang.LanguageTools.ProgramTypes.PackageOp.AddFn fn)
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.AtRestTypeChecker.Report'"
   let branchReport () : Darklang.LanguageTools.AtRestTypeChecker.Report =
     // `checkReferences` takes the BRANCH first now, because which implementations
     // are visible is the one branch-dependent thing the checker needs. A Dark call
@@ -3310,7 +3307,7 @@ module DefiniteShapes =
 // decided.
 
 module ConcreteTypeArgImpls =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.ConcreteTypeArgImpls.withImpl: Unknown function or value 'check'"
   let withImpl (body: List<String>) : String =
     check
       (src (
@@ -3360,7 +3357,7 @@ module RigidCustomOperations =
         |> Stdlib.Test.equal "checked:" ]
 
 module DefiniteConstructorErrors =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.DefiniteConstructorErrors.construct: Unknown function or value 'check'"
   let construct (declaration: String) (expression: String) : String =
     check
       (src [ declaration, "let f () : Unit =", $"  let _ = {expression}", "  ()" ])
@@ -3383,7 +3380,7 @@ module DefiniteConstructorErrors =
         |> Stdlib.Test.equal "checked:" ]
 
 module DictKeysWithUnsupportedValues =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Tests.DictKeysWithUnsupportedValues.key: Unknown function or value 'check'"
   let key (expression: String) : String =
     check
       (src [ "let f () : Unit ="

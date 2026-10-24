@@ -8,13 +8,13 @@ module Darklang.LanguageTools.InterpreterStats
 
 
 /// Zero the counters, and start counting if they weren't already.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.InterpreterStats.reset: Unknown function or value 'Builtin.interpreterStatsReset'"
 let reset () : Unit =
   Builtin.interpreterStatsReset ()
 
 
 /// The counters so far, as a JSON string.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.InterpreterStats.get: Unknown function or value 'Builtin.interpreterStatsGet'"
 let get () : String =
   Builtin.interpreterStatsGet ()
 
@@ -22,7 +22,7 @@ let get () : String =
 /// Also record per-expression time from here on. Off by default: on some
 /// hosts reading the clock costs more than the expression being timed, so
 /// this is a deliberate, per-run choice rather than something to leave on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.InterpreterStats.enableDetailedTiming: Unknown function or value 'Builtin.interpreterStatsEnableDetailedTiming'"
 let enableDetailedTiming (enabled: Bool) : Unit =
   Builtin.interpreterStatsEnableDetailedTiming enabled
 
@@ -33,6 +33,6 @@ let enableDetailedTiming (enabled: Bool) : Unit =
 /// This is the number to compare two versions of the same code with: unlike
 /// wall-clock time it repeats exactly, and it does not care how loaded the
 /// machine is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.InterpreterStats.allocatedBytes: Unknown function or value 'Builtin.gcAllocatedBytes'"
 let allocatedBytes () : Int64 =
   Builtin.gcAllocatedBytes ()

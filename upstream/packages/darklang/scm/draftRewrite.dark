@@ -15,12 +15,12 @@ module Darklang.SCM.Draft
 /// and left unapplied on purpose -- and those are invisible to `mainDraftOps` because they cannot be
 /// decoded. The surgical path is safe by construction, since it deletes exactly the ops it was handed.
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.db: Unknown function or value 'Stdlib.LocalStore.path'"
 let db () : String = Stdlib.LocalStore.path ()
 
 
 /// One op in main's draft, with what is needed to undo its effect.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.DraftOp: Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 type DraftOp =
   { id: String
     /// The authoring stamp. `locations.origin_ts` carries the stamp of the op that wrote the row, so
@@ -35,7 +35,7 @@ type DraftOp =
 /// client-pushed ops at effective=0, untagged and uncommitted, and without the clause a
 /// discard's surgical path would DELETE data this store is only holding for someone else --
 /// and status/discard would count two different drafts.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'DraftOp'"
 let mainDraftOps () : List<DraftOp> =
   let rows =
     Stdlib.Sqlite.rowsOrEmptyP
@@ -53,7 +53,7 @@ let mainDraftOps () : List<DraftOp> =
 
 
 /// The content hashes the draft ADDS, so a naming can be told from a rename.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let addedHashes (ops: List<LanguageTools.ProgramTypes.PackageOp>) : List<String> =
   ops
   |> Stdlib.List.filterMap (fun op ->
@@ -73,7 +73,6 @@ let addedHashes (ops: List<LanguageTools.ProgramTypes.PackageOp>) : List<String>
     | _ -> Stdlib.Option.Option.None)
 
 
-// @compiler blocked: missing-implementation
 let referenceHash (r: LanguageTools.ProgramTypes.Reference) : String =
   LanguageTools.ProgramTypes.hashToString (LanguageTools.ProgramTypes.Reference.hash r)
 
@@ -91,7 +90,7 @@ let referenceHash (r: LanguageTools.ProgramTypes.Reference) : String =
 /// `Decision` (records an acknowledgement), or a `BranchEvent`
 /// (`branches` records no origin_ts). No for `Unbind`: what it unlisted is identifiable only by
 /// `unlisted_at`, the same wall-clock second as a rename.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let surgicallyUndoable
   (added: List<String>)
   (op: LanguageTools.ProgramTypes.PackageOp)
@@ -115,7 +114,7 @@ let surgicallyUndoable
 
 
 /// The `locations` row an op wrote, as the tuple identifying it: (owner, modules, name, hash, ts).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'DraftOp'"
 let locationRowOf (d: DraftOp) : Stdlib.Option.Option<(String * String * String * String * String)> =
   match d.op with
   | SetName(loc, target, _) ->
@@ -136,7 +135,7 @@ let locationRowOf (d: DraftOp) : Stdlib.Option.Option<(String * String * String 
 
 
 /// Drop the in-memory caches after this module edits `locations` outside the fold.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.invalidateCaches: Unknown function or value 'Builtin.scmInvalidateCaches'"
 let invalidateCaches () : Unit = Builtin.scmInvalidateCaches ()
 
 
@@ -149,7 +148,7 @@ let invalidateCaches () : Unit = Builtin.scmInvalidateCaches ()
 /// Deletes by the full tuple, not by `origin_ts` alone: a stamp is unique per process but two instances
 /// can mint the same one, and deleting a committed row that collided would silently unbind a name nobody
 /// touched.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'DraftOp'"
 let surgicalDrop (dropped: List<DraftOp>) : Stdlib.Result.Result<Unit, String> =
   let rows = dropped |> Stdlib.List.filterMap locationRowOf
 
@@ -200,7 +199,7 @@ let surgicalDrop (dropped: List<DraftOp>) : Stdlib.Result.Result<Unit, String> =
 
 
 /// One go at `rewriteBy`; see there.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'DraftOp'"
 let rewriteByAttempt
   (keep: List<DraftOp> -> List<DraftOp>)
   (attempt: Int)
@@ -259,7 +258,7 @@ let rewriteByAttempt
 /// The rebuild also refuses when the draft is no longer the one `keep` chose from, or main moved while it
 /// read: an author or a pull landing after `mainDraftOps` is in what the rebuild deletes and not in
 /// `keptIds`. Then nothing was written, and this reads again and lets `keep` choose again.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'DraftOp'"
 let rewriteBy
   (keep: List<DraftOp> -> List<DraftOp>)
   : Stdlib.Result.Result<Int, String> =
@@ -278,7 +277,7 @@ let rewriteBy
 ///
 /// The `Add` carrying the content STAYS; dropping content needs a real reachability check (see
 /// `collapse`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.SCM.Draft.discardName: Field access requires a record value"
 let discardName
   (owner: String)
   (modules: List<String>)
@@ -301,7 +300,7 @@ let discardName
 
 
 /// Drop main's draft entirely. Returns how many ops went.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.discardAll: Unknown function or value 'rewriteBy'"
 let discardAll () : Stdlib.Result.Result<Int, String> = rewriteBy (fun _ -> [])
 
 
@@ -315,7 +314,7 @@ let discardAll () : Stdlib.Result.Result<Int, String> = rewriteBy (fun _ -> [])
 /// wrong means a re-fold produces a different store. Keeping them re-folds identically.
 ///
 /// Run at commit. Before that every version in the draft is reachable by `undo`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.collapse: Unknown function or value 'rewriteBy'"
 let collapse () : Stdlib.Result.Result<Int, String> =
   rewriteBy (fun draft ->
     let nameKey (loc: LanguageTools.ProgramTypes.PackageLocation) : String =

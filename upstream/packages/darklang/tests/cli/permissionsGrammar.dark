@@ -11,19 +11,18 @@ module Darklang.Cli.Tests.PermissionsGrammar
 //
 
 module PermissionsGrammar =
-  // @compiler blocked: upstream-dependency
   let only (value: String) : Darklang.LanguageTools.Permissions.Scope<String> =
     Darklang.LanguageTools.Permissions.Scope.Only value
 
   /// True when rendering the rule and parsing that text gives the rule back.
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.Permissions.Rule'"
   let roundTrips (rule: Darklang.LanguageTools.Permissions.Rule) : Bool =
     (Darklang.LanguageTools.Permissions.parseRuleText
       (Darklang.LanguageTools.Permissions.renderRule rule))
     == Stdlib.Option.Option.Some [ rule ]
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.Permissions.Rule'"
   let exactHttp () : Darklang.LanguageTools.Permissions.Rule =
     Darklang.LanguageTools.Permissions.Rule.Http(
       Darklang.LanguageTools.Permissions.HttpRule
@@ -34,7 +33,7 @@ module PermissionsGrammar =
           pathPrefix = only "/p"
           query = only "?q" })
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.Permissions.Rule'"
   let broadHttp () : Darklang.LanguageTools.Permissions.Rule =
     Darklang.LanguageTools.Permissions.Rule.Http(
       Darklang.LanguageTools.Permissions.HttpRule
@@ -45,7 +44,7 @@ module PermissionsGrammar =
           pathPrefix = Darklang.LanguageTools.Permissions.Scope.All
           query = Darklang.LanguageTools.Permissions.Scope.All })
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.Permissions.Rule'"
   let process (exe: String) (args: List<String>) : Darklang.LanguageTools.Permissions.Rule =
     Darklang.LanguageTools.Permissions.Rule.Process(
       Darklang.LanguageTools.Permissions.ProcessRule

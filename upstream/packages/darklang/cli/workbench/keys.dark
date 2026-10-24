@@ -7,7 +7,7 @@
 module Darklang.Cli.Workbench
 
 /// Editor mode. Ctrl+S saves; other Ctrl combos are swallowed so they can't insert control characters.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleEditorKey
   (state: State)
   (es: EditingState)
@@ -60,7 +60,7 @@ let handleEditorKey
 /// Home/End, and a paste arriving as one chunk) come from the widget. What's left here is what's specific
 /// to this bar: Enter runs the action, Escape closes it, and Tab and the vertical arrows drive the command
 /// completion dropdown.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleInputKey
   (state: State)
   (inp: InputState)
@@ -146,7 +146,7 @@ let handleInputKey
 
 
 /// The full-screen reader (docs, source, ops, captured command output).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleReaderKey
   (state: State)
   (content: String)
@@ -186,7 +186,7 @@ let handleReaderKey
 
 
 /// The search-results list, which owns the keyboard until you jump or close it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleSearchResultsKey
   (state: State)
   (key: Stdlib.Cli.Stdin.Key.Key)

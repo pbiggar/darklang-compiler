@@ -4,7 +4,6 @@ module Darklang.Stdlib.Cli.UI.Layout
 // --- Types ---
 
 /// What a component wants.
-// @compiler blocked: missing-implementation
 type SizeRequest =
   { minRows: Int
     minCols: Int
@@ -12,7 +11,6 @@ type SizeRequest =
     preferredCols: Int }
 
 /// What a component gets.
-// @compiler blocked: missing-implementation
 type Region =
   { top: Int
     left: Int
@@ -20,7 +18,6 @@ type Region =
     cols: Int }
 
 /// Text to place at a zero-based terminal position. `Canvas` paints these onto a grid of rows.
-// @compiler blocked: missing-implementation
 type Span =
   { row: Int
     col: Int
@@ -30,7 +27,6 @@ type Span =
 ///
 /// `render` returns spans rather than printing. That's what lets a frame be compared against the previous
 /// one and drawn as a handful of row rewrites instead of a clear plus a few hundred writes.
-// @compiler blocked: missing-implementation
 type Component =
   { sizeRequest: Unit -> SizeRequest
     render: Region -> List<Span> }
@@ -45,7 +41,6 @@ type Component =
 /// wide-glyph row is measured correctly. The old `printAt` used `String.length`, which counts grapheme
 /// clusters, not columns: `界` and a ZWJ emoji each count 1 but occupy 2, so CJK or emoji content pushed the
 /// rest of its row sideways.
-// @compiler blocked: missing-implementation
 let at (region: Region) (row: Int) (col: Int) (text: String) : List<Span> =
   if row >= 0 && row < region.rows && col >= 0 && col < region.cols then
     [ Span
@@ -61,7 +56,6 @@ let at (region: Region) (row: Int) (col: Int) (text: String) : List<Span> =
 
 
 /// Fill a row with a repeated character, within the region.
-// @compiler blocked: missing-implementation
 let fillRow (region: Region) (row: Int) (ch: String) : List<Span> =
   at region row 0 (Stdlib.String.repeat ch region.cols)
 
@@ -69,7 +63,6 @@ let fillRow (region: Region) (row: Int) (ch: String) : List<Span> =
 ///
 /// Still emits spaces rather than nothing: a composed frame starts blank, but a region drawn *over* other
 /// content (an overlay) has to actually erase what's under it.
-// @compiler blocked: missing-implementation
 let clearRegion (region: Region) : List<Span> =
   (Stdlib.List.range 0 (region.rows - 1))
   |> Stdlib.List.map (fun row -> fillRow region row " ")
@@ -80,7 +73,6 @@ let clearRegion (region: Region) : List<Span> =
 
 /// Distribute `totalRows` among components based on their size requests.
 /// Each gets at least min, then remaining space is split toward preferred.
-// @compiler blocked: missing-implementation
 let distributeRows (totalRows: Int) (requests: List<SizeRequest>) : List<Int> =
   let count = Stdlib.List.length requests
   if count == 0 then
@@ -113,7 +105,6 @@ let distributeRows (totalRows: Int) (requests: List<SizeRequest>) : List<Int> =
 
 /// Stack components vertically within a region.
 /// Negotiates row distribution based on size requests.
-// @compiler blocked: missing-implementation
 let vstack (region: Region) (components: List<Component>) : List<Span> =
   let requests = Stdlib.List.map components (fun c -> c.sizeRequest ())
   let rowAllocs = distributeRows region.rows requests
@@ -142,7 +133,6 @@ let vstack (region: Region) (components: List<Component>) : List<Span> =
   chunks |> Stdlib.List.reverse |> Stdlib.List.flatten
 
 /// A fixed-height component: always requests exactly N rows.
-// @compiler blocked: missing-implementation
 let fixedSize (n: Int) (renderFn: Region -> List<Span>) : Component =
   Component
     { sizeRequest = fun () ->
@@ -150,7 +140,6 @@ let fixedSize (n: Int) (renderFn: Region -> List<Span>) : Component =
       render = renderFn }
 
 /// A flexible component: needs at least `min` rows, prefers `preferred`.
-// @compiler blocked: missing-implementation
 let flex (min: Int) (preferred: Int) (renderFn: Region -> List<Span>) : Component =
   Component
     { sizeRequest = fun () ->
@@ -158,7 +147,6 @@ let flex (min: Int) (preferred: Int) (renderFn: Region -> List<Span>) : Componen
       render = renderFn }
 
 /// A greedy component: wants all available space, min 1 row.
-// @compiler blocked: missing-implementation
 let greedy (renderFn: Region -> List<Span>) : Component =
   Component
     { sizeRequest = fun () ->
@@ -170,7 +158,6 @@ let greedy (renderFn: Region -> List<Span>) : Component =
 
 /// Distribute `totalCols` among components based on their size requests.
 /// Each gets at least min, then remaining space is split toward preferred.
-// @compiler blocked: missing-implementation
 let distributeCols (totalCols: Int) (requests: List<SizeRequest>) : List<Int> =
   let count = Stdlib.List.length requests
   if count == 0 then
@@ -198,7 +185,6 @@ let distributeCols (totalCols: Int) (requests: List<SizeRequest>) : List<Int> =
 
 /// Place components side by side within a region.
 /// Negotiates column distribution based on size requests.
-// @compiler blocked: missing-implementation
 let hstack (region: Region) (components: List<Component>) : List<Span> =
   let requests = Stdlib.List.map components (fun c -> c.sizeRequest ())
   let colAllocs = distributeCols region.cols requests
@@ -222,7 +208,6 @@ let hstack (region: Region) (components: List<Component>) : List<Span> =
   chunks |> Stdlib.List.reverse |> Stdlib.List.flatten
 
 /// A fixed-width component: always requests exactly N cols; fills the region's height.
-// @compiler blocked: missing-implementation
 let fixedWidth (n: Int) (renderFn: Region -> List<Span>) : Component =
   Component
     { sizeRequest = fun () ->
@@ -230,7 +215,6 @@ let fixedWidth (n: Int) (renderFn: Region -> List<Span>) : Component =
       render = renderFn }
 
 /// A flexible-width component: needs at least `min` cols, prefers `preferred`.
-// @compiler blocked: missing-implementation
 let flexWidth (min: Int) (preferred: Int) (renderFn: Region -> List<Span>) : Component =
   Component
     { sizeRequest = fun () ->
@@ -238,7 +222,6 @@ let flexWidth (min: Int) (preferred: Int) (renderFn: Region -> List<Span>) : Com
       render = renderFn }
 
 /// A greedy-width component: wants all available width, min 1 col.
-// @compiler blocked: missing-implementation
 let greedyWidth (renderFn: Region -> List<Span>) : Component =
   Component
     { sizeRequest = fun () ->

@@ -5,7 +5,6 @@
 module Darklang.LanguageTools.Perf
 
 /// The fields this reads out of <fn InterpreterStats.get>'s JSON; the parser ignores the rest.
-// @compiler blocked: missing-implementation
 type Counters =
   { instructions: Int64
     builtinCalls: Int64
@@ -16,7 +15,6 @@ type Counters =
 
 
 /// What one thunk cost.
-// @compiler blocked: missing-implementation
 type Measurement =
   { allocBytes: Int64
     ms: Int
@@ -34,7 +32,6 @@ type Measurement =
     statSets: Int64 }
 
 
-// @compiler blocked: missing-implementation
 let noCounters () : Counters =
   Counters
     { instructions = 0L
@@ -46,7 +43,7 @@ let noCounters () : Counters =
 
 
 /// The interpreter's counters as they stand now.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Perf.counters: Unknown function or value 'InterpreterStats.get'"
 let counters () : Counters =
   match Stdlib.Json.parse<Counters> (InterpreterStats.get ()) with
   | Ok c -> c
@@ -57,7 +54,7 @@ let counters () : Counters =
 ///
 /// Includes this function's own cost, which is not small: see <fn floor>, and take it off with
 /// <fn minus>. The reset is process-wide, so measurements cannot nest.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Perf.measure: Unknown function or value 'InterpreterStats.reset'"
 let measure (f: Unit -> 'a) : (Measurement * 'a) =
   let _reset = InterpreterStats.reset ()
   let allocBefore = InterpreterStats.allocatedBytes ()
@@ -86,7 +83,7 @@ let measure (f: Unit -> 'a) : (Measurement * 'a) =
 /// Measured on a debug build: 1,400 instructions, 239 builtin calls, 89 frame pushes and about
 /// 76 KB, the counters exactly constant run to run. The first measurement in a process allocates
 /// about four times that, which is why this warms up before the reading it returns.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Perf.floor: Unknown function or value 'measure'"
 let floor () : Measurement =
   let (_warm, _) = measure (fun () -> ())
   let (f, _) = measure (fun () -> ())
@@ -94,7 +91,6 @@ let floor () : Measurement =
 
 
 /// <param m> with the harness floor taken off, clamped so a cheap thunk cannot report a negative.
-// @compiler blocked: missing-implementation
 let minus (m: Measurement) (f: Measurement) : Measurement =
   let atLeastZero64 (n: Int64) : Int64 = if n < 0L then 0L else n
   let atLeastZero (n: Int) : Int = if n < 0 then 0 else n
@@ -109,7 +105,6 @@ let minus (m: Measurement) (f: Measurement) : Measurement =
 
 
 /// A measurement as a block of lines, for a terminal.
-// @compiler blocked: missing-implementation
 let render (m: Measurement) : String =
   let lines =
     [ $"  build           {m.buildMode}"

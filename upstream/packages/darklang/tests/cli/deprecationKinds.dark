@@ -8,7 +8,6 @@ module Darklang.Cli.Tests.DeprecationKinds
 // `parseKind` is where that belongs, because it is the one place all three kinds meet the item kind.
 
 module Kinds =
-  // @compiler blocked: upstream-dependency
   let parse
     (item: Darklang.LanguageTools.ProgramTypes.ItemKind)
     (kind: String)
@@ -19,7 +18,6 @@ module Kinds =
 
   /// passed for "harmful is fn-only" and "no such kind" alike.
 
-  // @compiler blocked: upstream-dependency
   let refusalText
     (item: Darklang.LanguageTools.ProgramTypes.ItemKind)
     (kind: String)
@@ -29,7 +27,6 @@ module Kinds =
     | Ok _ -> ""
 
 // Harmful is fn-only.
-// @compiler xfail compile: "Unknown function or value 'Kinds.parse'" class=missing-support reason=upstream-dependency
 test harmfulIsFnOnly =
   Stdlib.Test.all
     [ Kinds.parse Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "harmful"
@@ -41,7 +38,6 @@ test harmfulIsFnOnly =
       |> Stdlib.Test.equal true ]
 
 // Obsolete is the kind that DOES apply to all three, and is what the refusal points at.
-// @compiler xfail compile: "Unknown function or value 'Kinds.parse'" class=missing-support reason=upstream-dependency
 test obsoleteAppliesToAll =
   Stdlib.Test.all
     [ Kinds.parse Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "obsolete"
@@ -55,13 +51,11 @@ test obsoleteAppliesToAll =
         (Stdlib.Result.Result.Ok Darklang.LanguageTools.ProgramTypes.DeprecationKind.Obsolete) ]
 
 // superseded-by needs a replacement, whatever the item kind.
-// @compiler xfail compile: "Unknown function or value 'Kinds.refusalText'" class=missing-support reason=upstream-dependency
 test supersededByNeedsReplacement =
   Stdlib.String.contains (Kinds.refusalText Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "superseded-by") "requires --replacement"
   |> Stdlib.Test.equal true
 
 // An unknown kind is still an unknown kind, not a harmful-shaped refusal.
-// @compiler xfail compile: "Unknown function or value 'Kinds.refusalText'" class=missing-support reason=upstream-dependency
 test unknownKind =
   Stdlib.String.contains (Kinds.refusalText Darklang.LanguageTools.ProgramTypes.ItemKind.Fn "not-a-kind") "Unknown kind"
   |> Stdlib.Test.equal true

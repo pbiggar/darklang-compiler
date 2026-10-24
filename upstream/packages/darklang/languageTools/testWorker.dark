@@ -2,15 +2,14 @@
 module Darklang.LanguageTools.PackageManager.Test.Worker
 
 /// F# executes exact hashes and transports runtime values without losing their types.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.Worker.execute: Unknown function or value 'Builtin.pmTestWorkerExecute'"
 let execute (request: Blob) (access: Blob) : (Blob * Int) =
   Builtin.pmTestWorkerExecute request access
 
-// @compiler blocked: missing-implementation
 let read (path: String) : Blob =
   Builtin.unwrap (Stdlib.Cli.FileSystem.readFile path)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.Worker.main: Unknown function or value 'Darklang.SCM.PackageOps.currentBranch'"
 let main (args: List<String>) : Int =
   match args with
   | [ requestPath, resultPath ] ->

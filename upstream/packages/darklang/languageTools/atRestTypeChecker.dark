@@ -1,7 +1,7 @@
 /// Structured results from checking serialized ProgramTypes before persistence.
 module Darklang.LanguageTools.AtRestTypeChecker
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 1324: Darklang.LanguageTools.RuntimeTypes.TypeReference.TFloat, Darklang.LanguageTools.RuntimeTypes.TypeReference.TStream"
 type StaticType =
   | TUnit
   | TBool
@@ -31,13 +31,12 @@ type StaticType =
   | TRigidVariable of String
   | TInferenceVariable of Int
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 201: Darklang.LanguageTools.AtRestTypeChecker.Verdict.Incomplete, Darklang.LanguageTools.WrittenTypes.LetPattern.LPVariable"
 type Verdict =
   | Checked
   | Failed
   | Incomplete
 
-// @compiler blocked: missing-implementation
 type IssueCode =
   | TypeMismatch
   | OccursCheckFailed
@@ -85,7 +84,6 @@ type IssueCode =
   | UnsupportedConstruct
 
 /// A function or value the checker names in an issue.
-// @compiler blocked: missing-implementation
 type NameRef =
   | Builtin of String * Int64
   | Package of LanguageTools.ProgramTypes.Hash
@@ -93,7 +91,6 @@ type NameRef =
   | TraitMethod of LanguageTools.ProgramTypes.Hash * String
 
 /// Where in the item the checker was working when it found something.
-// @compiler blocked: missing-implementation
 type Site =
   | LambdaReturnValue
   /// An impl's method fn against the trait method's signature at the self type
@@ -126,7 +123,6 @@ type Site =
   | PipelineNumericOperator
 
 /// Which of several same-coded places a name was declared twice.
-// @compiler blocked: missing-implementation
 type DuplicateSite =
   | InTypeDeclaration
   | InFunctionSignature
@@ -135,7 +131,6 @@ type DuplicateSite =
   | InPattern
 
 /// What the checker could not pin down when it reports an ambiguous type.
-// @compiler blocked: missing-implementation
 type AmbiguousSubject =
   | NumericOperand
   | PipelineNumericOperand
@@ -150,7 +145,6 @@ type AmbiguousSubject =
   | ConstrainedType
 
 /// Why a builtin's declared signature is not something the checker can check against.
-// @compiler blocked: missing-implementation
 type UntrustedBuiltin =
   | ResultTypeUnconstrained
   | UnwrapArgumentUnknown
@@ -163,7 +157,6 @@ type UntrustedBuiltin =
 /// why a name here is a hash rather than a rendered string: the checker has no name
 /// resolver and could only ever say `Type #a1b2c3d4`, while `contextToStringWith` can
 /// look the hash up and say what the author called it.
-// @compiler blocked: missing-implementation
 type Context =
   | NoDetail
   | At of Site
@@ -206,7 +199,7 @@ type Context =
   | BitwiseNotOperandNotInteger
   | CheckerUnavailable of String
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Issue: Unknown type 'StaticType'"
 type Issue =
   { code: IssueCode
     nodeId: Stdlib.Option.Option<UInt64>
@@ -214,7 +207,7 @@ type Issue =
     actual: Stdlib.Option.Option<StaticType>
     context: Context }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.ItemReport: Unknown type 'Verdict'"
 type ItemReport =
   { item: LanguageTools.ProgramTypes.Reference
     verdict: Verdict
@@ -230,7 +223,7 @@ type ItemReport =
     /// item it came from.
     resolutions: List<Model.Resolution> }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Report: Unknown type 'Verdict'"
 type Report =
   { verdict: Verdict
     items: List<ItemReport>
@@ -239,7 +232,6 @@ type Report =
 
 /// An error encountered while running the checker itself.
 /// Makes the check Incomplete because the checker could not finish.
-// @compiler blocked: missing-implementation
 type CheckFailure =
   /// Nesting deep enough to exhaust the native stack.
   | TooDeep
@@ -247,7 +239,7 @@ type CheckFailure =
   | Failed of message: String
 
 /// The report for nothing: no items, so trivially Checked.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let emptyReport () : Report =
   Report { verdict = Verdict.Checked, items = [], diagnostics = [], warnings = [] }
 
@@ -255,7 +247,7 @@ let emptyReport () : Report =
 ///
 /// Run the checker with error handling around the entire batch.
 /// If a checker error escapes the per-declaration handlers, return Incomplete.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let checkPackageOps
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
   : Report =
@@ -266,7 +258,7 @@ let checkPackageOps
 /// What authoring uses, and what save-time pinning reads: a call is pinned to the
 /// implementation that is live on the branch being saved to, so the branch is not optional
 /// there the way it is for an editor buffer.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let checkPackageOpsOn
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -274,18 +266,18 @@ let checkPackageOpsOn
   guarded (fun (b, o) -> Run.checkPackageOpsOn b o) ((branchId, ops))
 
 /// Type-check all declarations visible on the selected branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let checkBranch (branchId: Uuid) : Report = guarded Run.checkBranch branchId
 
 /// Type-check just the declarations under <param modules>, and everything below them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let checkModule (branchId: Uuid) (modules: List<String>) : Report =
   guarded (fun (b, m) -> Run.checkModule b m) ((branchId, modules))
 
 /// Return an Incomplete report if shared work for the batch fails.
 /// Run and Items catch errors for individual declarations separately, preserving
 /// the results of the other declarations.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let guarded (check: 'a -> Report) (input: 'a) : Report =
   match guard check input with
   | Ok report -> report
@@ -309,12 +301,12 @@ let guarded (check: 'a -> Report) (input: 'a) : Report =
 
 /// Use an F# builtin to run the check and catch runtime errors.
 /// Return Ok with the check's result, or Error if the checker itself fails.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.guard: Unknown function or value 'Builtin.atRestCheckGuarded'"
 let guard (check: 'a -> 'b) (input: 'a) : Stdlib.Result.Result<'b, CheckFailure> =
   Builtin.atRestCheckGuarded check input
 
 /// Turn a checker failure into an Incomplete warning.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Issue'"
 let failureIssue
   (nodeId: Stdlib.Option.Option<UInt64>)
   (failure: CheckFailure)
@@ -331,7 +323,7 @@ let failureIssue
       actual = Stdlib.Option.Option.None
       context = context }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'StaticType'"
 let staticTypeToStringWith
   (customTypeName:
     LanguageTools.ProgramTypes.Hash -> Stdlib.Option.Option<String>)
@@ -388,11 +380,10 @@ let staticTypeToStringWith
   | TRigidVariable name -> "'" + name
   | TInferenceVariable _ -> "_"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'StaticType'"
 let staticTypeToString (typ: StaticType) : String =
   staticTypeToStringWith (fun _ -> Stdlib.Option.Option.None) typ
 
-// @compiler blocked: missing-implementation
 let issueCodeToString (code: IssueCode) : String =
   match code with
   | TypeMismatch -> "TypeMismatch"
@@ -433,7 +424,6 @@ let issueCodeToString (code: IssueCode) : String =
   | NonExhaustiveMatch -> "NonExhaustiveMatch"
   | UnsupportedConstruct -> "UnsupportedConstruct"
 
-// @compiler blocked: missing-implementation
 let nameRefToStringWith
   (resolve: LanguageTools.ProgramTypes.Hash -> Stdlib.Option.Option<String>)
   (name: NameRef)
@@ -461,7 +451,6 @@ let nameRefToStringWith
     $"{traitName}.{method}"
 
 
-// @compiler blocked: missing-implementation
 let siteToString (site: Site) : String =
   match site with
   | LambdaReturnValue -> "the lambda's return value"
@@ -496,7 +485,6 @@ let siteToString (site: Site) : String =
   | PipelineNumericOperator -> "a pipeline numeric operator"
 
 
-// @compiler blocked: missing-implementation
 let duplicateSiteToString (site: DuplicateSite) : String =
   match site with
   | InTypeDeclaration -> "declared"
@@ -506,7 +494,6 @@ let duplicateSiteToString (site: DuplicateSite) : String =
   | InPattern -> "bound"
 
 
-// @compiler blocked: missing-implementation
 let ambiguousSubjectToString (subject: AmbiguousSubject) : String =
   match subject with
   | NumericOperand -> "the numeric operand type"
@@ -521,7 +508,6 @@ let ambiguousSubjectToString (subject: AmbiguousSubject) : String =
   | ConstrainedType -> "which type a bounded type parameter becomes"
 
 
-// @compiler blocked: missing-implementation
 let untrustedBuiltinToString (reason: UntrustedBuiltin) : String =
   match reason with
   | ResultTypeUnconstrained ->
@@ -542,7 +528,6 @@ let untrustedBuiltinToString (reason: UntrustedBuiltin) : String =
 /// <param customTypeName> resolves a content hash to whatever the reader calls it;
 /// pass one that knows the current branch and the messages name types and functions
 /// the way the author wrote them.
-// @compiler blocked: missing-implementation
 let contextToStringWith
   (customTypeName:
     LanguageTools.ProgramTypes.Hash -> Stdlib.Option.Option<String>)
@@ -702,7 +687,7 @@ let contextToStringWith
     | _ -> $"Needs an implementation of {traitName}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Issue'"
 let issueToStringWith
   (customTypeName:
     LanguageTools.ProgramTypes.Hash -> Stdlib.Option.Option<String>)
@@ -726,6 +711,6 @@ let issueToStringWith
     | None -> Stdlib.Option.Option.None
   (contextToStringWith customTypeName actualName issue.code issue.context) + detail
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Issue'"
 let issueToString (issue: Issue) : String =
   issueToStringWith (fun _ -> Stdlib.Option.Option.None) issue

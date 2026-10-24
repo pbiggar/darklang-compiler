@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Stdlib
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Stdlib (Darklang.Stdlib)
 

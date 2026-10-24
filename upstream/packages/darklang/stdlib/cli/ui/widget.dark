@@ -33,14 +33,12 @@ module Darklang.Stdlib.Cli.UI.Widget
 ///
 /// The loop hands key, modifiers and character around as three separate arguments; every widget signature
 /// that passes them along got three parameters wider for no reason. One record threads through instead.
-// @compiler blocked: missing-implementation
 type KeyPress =
   { key: Stdlib.Cli.Stdin.Key.Key
     modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers
     char: Stdlib.Option.Option<String> }
 
 /// What a widget did with a key.
-// @compiler blocked: missing-implementation
 type Outcome<'s, 'msg> =
   /// Not mine. The parent (or its parent) should have a look.
   | Ignored
@@ -51,7 +49,6 @@ type Outcome<'s, 'msg> =
 
 // --- Keys ---
 
-// @compiler blocked: missing-implementation
 let press
   (key: Stdlib.Cli.Stdin.Key.Key)
   (modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers)
@@ -60,6 +57,5 @@ let press
   KeyPress { key = key, modifiers = modifiers, char = char }
 
 /// Did this keypress type `c`?
-// @compiler blocked: missing-implementation
 let isChar (kp: KeyPress) (c: String) : Bool =
   kp.char == (Stdlib.Option.Option.Some c)

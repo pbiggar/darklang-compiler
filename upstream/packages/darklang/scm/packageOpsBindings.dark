@@ -12,7 +12,7 @@ module Darklang.SCM.PackageOps
 ///
 /// What an unreadable op MEANS belongs to `SCM.StoreHealth`, which counts them. Not to whichever
 /// reader touches one first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let tryDecodeOp
   (id: Uuid)
   (blob: Blob)
@@ -25,7 +25,7 @@ let tryDecodeOp
 /// Worth having only because of what it saves: an import decodes every arriving op to learn which names
 /// moved, and content ops (the `Add*` family, which are whole ASTs and so the expensive ones) move none.
 /// Asking first turns most of that decoding into a byte comparison.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.opBindsAName: Unknown function or value 'Builtin.packageOpBindsAName'"
 let opBindsAName (blob: Blob) : Bool = Builtin.packageOpBindsAName blob
 
 
@@ -33,7 +33,7 @@ let opBindsAName (blob: Blob) : Bool = Builtin.packageOpBindsAName blob
 /// op-log read. A row whose id won't parse or whose blob this build can't read is
 /// skipped; a row without a `ts` column reads as "". The QUERY is Dark; only the
 /// per-row blob decode is a builtin, so there's no read builtin at all.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let decodeOpRowEntries
   (rows: List<Dict<String, Stdlib.Sqlite.Value>>)
   : List<(String * String * LanguageTools.ProgramTypes.PackageOp)> =
@@ -52,7 +52,7 @@ let decodeOpRowEntries
 
 
 /// Decode op-log rows (id, op_blob) into fully-decoded PackageOps.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let decodeOpRows
   (rows: List<Dict<String, Stdlib.Sqlite.Value>>)
   : List<LanguageTools.ProgramTypes.PackageOp> =
@@ -70,7 +70,7 @@ let decodeOpRows
 /// The override must be included. The F# fold (`PackageOpPlayback.applySetNameFrom`) and the in-memory
 /// overlay (`PackageManager.createInMemoryOver`) both treat it as a binding; omitting it here makes Dark
 /// report the last SetName while execution runs the override.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let bindingFromOp
   (op: LanguageTools.ProgramTypes.PackageOp)
   (ts: String)
@@ -113,7 +113,6 @@ let bindingFromOp
 
 /// A run of ops' last word on one name: `binding` is what the name ends up bound to, or None for a name
 /// left unbound, which hides whatever is underneath.
-// @compiler blocked: missing-implementation
 type NameWord =
   { owner: String
     modules: String
@@ -130,7 +129,6 @@ type NameWord =
 ///
 /// One string rather than a tuple: the stamp is fixed-width ISO, so lexical is chronological and the
 /// rank and hash follow it.
-// @compiler blocked: missing-implementation
 let bindingSortKey (ts: String) (isBinding: Bool) (hash: String) : String =
   let rank = if isBinding then "1" else "0"
   $"{ts}|{rank}|{hash}"
@@ -140,7 +138,7 @@ let bindingSortKey (ts: String) (isBinding: Bool) (hash: String) : String =
 ///
 /// Sorted by <fn bindingSortKey> first, so the answer is the same whatever order the rows arrived in.
 /// An `Unbind` is the name's latest word too: it takes the name out, until a later op binds it again.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.bindingEntriesFromOpRows: Unknown function or value 'tryDecodeOp'"
 let bindingEntriesFromOpRows
   (rows: List<Dict<String, Stdlib.Sqlite.Value>>)
   : List<NameWord> =
@@ -194,7 +192,7 @@ let bindingEntriesFromOpRows
 
 
 /// <fn bindingEntriesFromOpRows>, keeping only the names that end up bound.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.bindingsFromOpRows: Unknown function or value 'bindingEntriesFromOpRows'"
 let bindingsFromOpRows (rows: List<Dict<String, Stdlib.Sqlite.Value>>) : List<Conflicts.Binding> =
   bindingEntriesFromOpRows rows |> Stdlib.List.filterMap (fun w -> w.binding)
 
@@ -207,7 +205,7 @@ let bindingsFromOpRows (rows: List<Dict<String, Stdlib.Sqlite.Value>>) : List<Co
 /// SQL is where it drifts unnoticed, because no type checker reads a string: against a store whose
 /// `parent_id` holds main's uuid, comparing to `'main'` is true for every row and the recursion walks
 /// past main instead of stopping at it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.chainBindingEntries: Unknown function or value 'bindingEntriesFromOpRows'"
 let chainBindingEntries (branchId: Uuid) : List<NameWord> =
   bindingEntriesFromOpRows (chainOpRows branchId)
 
@@ -215,7 +213,6 @@ let chainBindingEntries (branchId: Uuid) : List<NameWord> =
 /// The parent-chain walk: @p0 = the branch, @p1 = main's id. Spliced into each chain
 /// statement (`chainOpRows`, `visibleWhere`, `parentCommitFor`), never edited in
 /// place -- the one copy of the walk every chain query shares.
-// @compiler blocked: missing-implementation
 val chainCteSql =
   "WITH RECURSIVE chain(bid) AS (
      SELECT @p0
@@ -227,7 +224,7 @@ val chainCteSql =
 
 /// The chain's op rows (the chain CTE plus the id/op_blob/ts SELECT), oldest first --
 /// the one query behind <fn chainBindingEntries> and `branchHashHistoryFor`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.chainOpRows: Unknown function or value 'Stdlib.Sqlite.rowsOrEmptyP'"
 let chainOpRows (branchId: Uuid) : List<Dict<String, Stdlib.Sqlite.Value>> =
   Stdlib.Sqlite.rowsOrEmptyP
     (localDb ())
@@ -241,7 +238,7 @@ let chainOpRows (branchId: Uuid) : List<Dict<String, Stdlib.Sqlite.Value>> =
 
 
 /// <fn chainBindingEntries>, keeping only the names the chain leaves bound.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.chainBindings: Unknown function or value 'chainBindingEntries'"
 let chainBindings (branchId: Uuid) : List<Conflicts.Binding> =
   chainBindingEntries branchId |> Stdlib.List.filterMap (fun w -> w.binding)
 
@@ -257,7 +254,7 @@ let chainBindings (branchId: Uuid) : List<Conflicts.Binding> =
 /// Its own three-key query rather than `Conflicts.localBindingsFor`, which matches on bare name across
 /// owners. A caller asking about N names builds `chainBindings` once and looks up, the way
 /// `Deps.branchOverlayBindings` does; this is the one-name form.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.liveBindingFor: Unknown function or value 'chainBindingEntries'"
 let liveBindingFor
   (branchId: Uuid)
   (loc: LanguageTools.ProgramTypes.PackageLocation)
@@ -315,7 +312,7 @@ let liveBindingFor
 ///
 /// Same two layers, asked once each: the chain decoded once, then main in one query for the names
 /// the chain says nothing about. Asked per name, a branch re-decodes its whole chain every time.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.liveBindingsFor: Unknown function or value 'chainBindingEntries'"
 let liveBindingsFor
   (branchId: Uuid)
   (locs: List<LanguageTools.ProgramTypes.PackageLocation>)
@@ -326,7 +323,7 @@ let liveBindingsFor
 
 /// <fn liveBindingsFor> for a caller that has already read <param chain>, the
 /// `chainBindingEntries` of <param branchId>, and should not pay for it twice.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.liveBindingsOver: Unknown function or value 'Stdlib.Sqlite.rowsOrEmptyP'"
 let liveBindingsOver
   (branchId: Uuid)
   (chain: List<NameWord>)
@@ -395,7 +392,7 @@ let liveBindingsOver
 
 
 /// <fn liveBindingFor> on the branch this process stands on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.liveBindingAt: Unknown function or value 'liveBindingFor'"
 let liveBindingAt
   (loc: LanguageTools.ProgramTypes.PackageLocation)
   : Stdlib.Option.Option<Conflicts.Binding> =

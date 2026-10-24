@@ -8,7 +8,7 @@ module Darklang.Cli.Status
 // waiting on you. If it can't be said in a line or two, it belongs in `dark commit`, not here.
 
 /// The full structured view. `dark status` prints a line of it; `--json` hands over all of it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let statusJson (state: AppState) : ScmJson.StatusJson =
   let p = SCM.Draft.read ()
 
@@ -31,7 +31,7 @@ let statusJson (state: AppState) : ScmJson.StatusJson =
 
 /// Where you are, always, before what you have: a draft summary that doesn't name its branch reads the
 /// same on main as on a branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let branchLine (state: AppState) : Unit =
   match state.currentBranchId with
   | id when SCM.Branch.isMain id ->
@@ -46,7 +46,7 @@ let branchLine (state: AppState) : Unit =
 
     Stdlib.printLine (Stdlib.Cli.UI.Colors.hint $"On branch {handle}")
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executePretty (state: AppState) : AppState =
   // `SCM.Draft.counts`, not a `Picture`: this runs on every invocation and only ever prints numbers.
   //
@@ -163,7 +163,7 @@ let executePretty (state: AppState) : AppState =
 
   state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   if ScmJson.wantsJson args then
     Stdlib.printLine (ScmJson.statusJson (statusJson state))
@@ -171,7 +171,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
   else
     executePretty state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ ""
     "Editing is live and silent: an edit takes effect immediately, and"
@@ -193,7 +193,7 @@ let help (_state: AppState) : String =
     "  --json           the same data, typed, for an agent" ]
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete
   (_state: AppState)
   (_args: List<String>)

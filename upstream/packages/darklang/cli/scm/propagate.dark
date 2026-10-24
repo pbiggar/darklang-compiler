@@ -2,14 +2,13 @@ module Darklang.Cli.PropagateCmd
 
 // Shared helpers for restoring a version and updating its callers.
 
-// @compiler blocked: missing-implementation
 let dotted (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
   let mods = SCM.Propagation.modulesOf loc
   if mods == "" then $"{loc.owner}.{loc.name}" else $"{loc.owner}.{mods}.{loc.name}"
 
 
 /// Turn what a human typed into a location, resolved relative to where they are.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let resolve
   (state: AppState)
   (arg: String)
@@ -18,7 +17,7 @@ let resolve
 
 
 /// Restore callers and report any failure to the command.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let cascadeAndForce
   (state: AppState)
   (loc: LanguageTools.ProgramTypes.PackageLocation)

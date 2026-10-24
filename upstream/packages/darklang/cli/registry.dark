@@ -4,7 +4,7 @@
 module Darklang.Cli
 
 module Registry =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.CommandHandler: Unknown type 'AppState'"
   type CommandHandler =
     { name: String
       description: String
@@ -21,132 +21,74 @@ module Registry =
   // What each command takes on the command line, one function per command, referenced by its row in
   // `allCommands` the way `execute`, `help` and `complete` are. Functions rather than values, because
   // every start builds the table and only the command being run should pay for its declaration.
-  // @compiler blocked: missing-implementation
   let acceptsQuit () : Accepts.Accepts = Accepts.nothing ()
-  // @compiler blocked: missing-implementation
   let acceptsHelp () : Accepts.Accepts = Accepts.textBetween 0 1
-  // @compiler blocked: missing-implementation
   let acceptsConfig () : Accepts.Accepts = (Accepts.subcommands [ ("get", Accepts.between 1 1 []), ("set", Accepts.textBetween 2 2), ("list", Accepts.nothing ()) ] (Accepts.nothing ()))
-  // @compiler blocked: missing-implementation
   let acceptsInstall () : Accepts.Accepts = Accepts.flagsOnly [ "-y", "--yes", "--uninstall-if-installed" ]
-  // @compiler blocked: missing-implementation
   let acceptsUpdate () : Accepts.Accepts = (Accepts.withValues [ "--to" ] (Accepts.flagsOnly [ "-y", "--yes" ]))
-  // @compiler blocked: missing-implementation
   let acceptsUninstall () : Accepts.Accepts = Accepts.flagsOnly [ "-y", "--yes" ]
-  // @compiler blocked: missing-implementation
   let acceptsInstallStatus () : Accepts.Accepts = Accepts.nothing ()
-  // @compiler blocked: missing-implementation
   let acceptsVersion () : Accepts.Accepts = Accepts.flagsOnly [ "--local" ]
-  // @compiler blocked: missing-implementation
   let acceptsNav () : Accepts.Accepts = Accepts.upTo 1 []
-  // @compiler blocked: missing-implementation
   let acceptsLs () : Accepts.Accepts = Accepts.upTo 1 [ "--include-deprecated", "--versions" ]
-  // @compiler blocked: missing-implementation
   let acceptsBack () : Accepts.Accepts = Accepts.nothing ()
-  // @compiler blocked: missing-implementation
   let acceptsClear () : Accepts.Accepts = Accepts.nothing ()
-  // @compiler blocked: missing-implementation
   let acceptsRunScript () : Accepts.Accepts = Accepts.text 1
-  // @compiler blocked: missing-implementation
   let acceptsEval () : Accepts.Accepts = Accepts.text 1
-  // @compiler blocked: missing-implementation
   let acceptsView () : Accepts.Accepts = Accepts.upTo 1 [ "--raw", "--ast", "--instructions", "--instrs", "--include-tests" ]
-  // @compiler blocked: missing-implementation
   let acceptsTree () : Accepts.Accepts = (Accepts.withValues [ "--depth" ] (Accepts.upTo 1 [ "--toc", "--include-deprecated" ]))
-  // @compiler blocked: missing-implementation
   let acceptsSearch () : Accepts.Accepts = Accepts.freeText 0 [ "--type", "--fn", "--function", "--val", "--value", "--trait", "--impl", "--test", "--include-tests", "--batch", "--exact", "--shallow", "--with-docs", "--include-deprecated", "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsTypecheck () : Accepts.Accepts = Accepts.upTo 1 [ "--failed", "--incomplete", "--all", "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsTest () : Accepts.Accepts = Accepts.subcommands [ ("run", Accepts.withValues [ "--jobs" ] (Accepts.freeText 0 [ "--force" ])), ("add", Accepts.text 2) ] (Accepts.nothing ())
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.acceptsDeps: Unknown function or value 'Accepts.everywhere'"
   let acceptsDeps () : Accepts.Accepts = (Accepts.everywhere [ "--json", "--deep", "--all" ] [] ((Accepts.subcommands [ ("uses", Accepts.between 1 1 []), ("usedby", Accepts.between 1 1 []) ] (Accepts.between 1 1 []))))
-  // @compiler blocked: missing-implementation
   let acceptsVal () : Accepts.Accepts = Accepts.text 2
-  // @compiler blocked: missing-implementation
   let acceptsFn () : Accepts.Accepts = Accepts.text 2
-  // @compiler blocked: missing-implementation
   let acceptsType () : Accepts.Accepts = Accepts.text 2
-  // @compiler blocked: missing-implementation
   let acceptsTrait () : Accepts.Accepts = Accepts.text 2
-  // @compiler blocked: missing-implementation
   let acceptsImpl () : Accepts.Accepts = Accepts.text 2
-  // @compiler blocked: missing-implementation
   let acceptsModule () : Accepts.Accepts = Accepts.between 2 2 []
-  // @compiler blocked: missing-implementation
   let acceptsEdit () : Accepts.Accepts = Accepts.between 1 2 []
-  // @compiler blocked: missing-implementation
   let acceptsRename () : Accepts.Accepts = Accepts.between 2 2 []
-  // @compiler blocked: missing-implementation
   let acceptsHash () : Accepts.Accepts = Accepts.between 1 1 [ "--long", "--full" ]
-  // @compiler blocked: missing-implementation
   let acceptsStatus () : Accepts.Accepts = Accepts.flagsOnly [ "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsCommits () : Accepts.Accepts = Accepts.upTo 1 [ "--json", "--detailed", "--all" ]
-  // @compiler blocked: missing-implementation
   let acceptsCommit () : Accepts.Accepts = (Accepts.withValues [ "--include" ] (Accepts.freeText 0 [ "-y", "--yes", "-m", "--message", "--allow-unresolved", "--allow-type-errors", "--json" ]))
-  // @compiler blocked: missing-implementation
   let acceptsDiscard () : Accepts.Accepts = Accepts.upTo 1 [ "-y", "--yes" ]
-  // @compiler blocked: missing-implementation
   let acceptsShow () : Accepts.Accepts = Accepts.between 1 1 []
-  // @compiler blocked: missing-implementation
   let acceptsBranch () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.flagsOnly [ "--all" ]), ("current", Accepts.nothing ()), ("switch", Accepts.between 1 1 []), ("new", Accepts.between 1 1 []), ("create", Accepts.between 1 1 []), ("archive", Accepts.between 1 1 [ "-y", "--yes" ]), ("rename", Accepts.between 2 2 []), ("diff", Accepts.between 1 1 [ "--source" ]), ("log", Accepts.between 1 1 []), ("merge", Accepts.between 1 1 [ "-y", "--yes", "--allow-type-errors", "--dry-run" ]), ("rebase", Accepts.between 1 1 []), ("resolve", Accepts.between 3 3 []) ] (Accepts.upTo 1 []))
-  // @compiler blocked: missing-implementation
   let acceptsRebase () : Accepts.Accepts = Accepts.upTo 1 [ "--dry-run" ]
-  // @compiler blocked: missing-implementation
   let acceptsMerge () : Accepts.Accepts = Accepts.upTo 1 [ "-y", "--yes", "--allow-type-errors", "--dry-run" ]
-  // @compiler blocked: missing-implementation
   let acceptsBranches () : Accepts.Accepts = Accepts.flagsOnly [ "--all", "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsSwitch () : Accepts.Accepts = Accepts.upTo 1 []
-  // @compiler blocked: missing-implementation
   let acceptsDiff () : Accepts.Accepts = Accepts.upTo 1 [ "--source", "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsLog () : Accepts.Accepts = Accepts.upTo 1 [ "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsResolve () : Accepts.Accepts = Accepts.between 3 3 []
-  // @compiler blocked: missing-implementation
   let acceptsConstraints () : Accepts.Accepts = (Accepts.subcommands [ ("resolve", (Accepts.withValues [ "--as" ] (Accepts.freeText 0 [ "--all", "--why" ]))), ("ack", Accepts.freeText 0 [ "--all", "--why" ]) ] ((Accepts.withValues [ "--kind" ] (Accepts.flagsOnly [ "--json" ]))))
-  // @compiler blocked: missing-implementation
   let acceptsAck () : Accepts.Accepts = Accepts.freeText 0 [ "--all", "--why" ]
-  // @compiler blocked: missing-implementation
   let acceptsUndeprecate () : Accepts.Accepts = Accepts.between 1 1 [ "-y", "--yes" ]
-  // @compiler blocked: missing-implementation
   let acceptsBackups () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.nothing ()), ("now", Accepts.nothing ()), ("prune", Accepts.between 1 1 [ "-y", "--yes" ]), ("restore", Accepts.between 1 1 [ "-y", "--yes" ]) ] (Accepts.nothing ()))
-  // @compiler blocked: missing-implementation
   let acceptsBuiltins () : Accepts.Accepts = Accepts.upTo 1 [ "--with-sigs", "--with-purity" ]
-  // @compiler blocked: missing-implementation
   let acceptsFindValues () : Accepts.Accepts = Accepts.between 1 2 []
-  // @compiler blocked: missing-implementation
   let acceptsImpls () : Accepts.Accepts = Accepts.between 1 1 [ "--json" ]
-  // @compiler blocked: missing-implementation
   let acceptsServe () : Accepts.Accepts = (Accepts.withValues [ "--port", "--max-body-bytes" ] (Accepts.between 1 1 [ "--live", "--no-live", "--dev" ]))
-  // @compiler blocked: missing-implementation
   let acceptsDocs () : Accepts.Accepts = (Accepts.subcommands [ ("signatures", (Accepts.withValues [ "--module" ] (Accepts.upTo 1 [ "--types", "--include-deprecated", "--all" ]))), ("sigs", (Accepts.withValues [ "--module" ] (Accepts.upTo 1 [ "--types", "--include-deprecated", "--all" ]))), ("api", (Accepts.withValues [ "--module" ] (Accepts.upTo 1 [ "--types", "--include-deprecated", "--all" ]))), ("stdlib", Accepts.nothing ()), ("lib", Accepts.nothing ()) ] (Accepts.upTo 1 []))
-  // @compiler blocked: missing-implementation
   let acceptsUndo () : Accepts.Accepts = Accepts.between 1 1 []
-  // @compiler blocked: missing-implementation
   let acceptsDeprecate () : Accepts.Accepts = (Accepts.withValues [ "--kind", "--replacement", "--message", "-m" ] (Accepts.between 1 2 [ "-y", "--yes", "--dry-run" ]))
-  // @compiler blocked: missing-implementation
   let acceptsDelete () : Accepts.Accepts = (Accepts.withValues [ "--message", "-m" ] (Accepts.between 1 2 [ "-y", "--yes", "--ignore-dependents", "--force", "--dry-run" ]))
-  // @compiler blocked: missing-implementation
   let acceptsOutliner () : Accepts.Accepts = (Accepts.subcommands [ ("ls", Accepts.nothing ()), ("show", Accepts.between 1 1 []), ("add", Accepts.text 2) ] (Accepts.nothing ()))
-  // @compiler blocked: missing-implementation
   let acceptsExportSeed () : Accepts.Accepts = Accepts.upTo 1 []
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.acceptsTraces: Unknown function or value 'Accepts.everywhere'"
   let acceptsTraces () : Accepts.Accepts = (Accepts.everywhere [ "-y", "--yes", "--json", "--inspect", "--full" ] [ "--iteration" ] ((Accepts.subcommands [ ("list", (Accepts.withValues [ "--fn", "--route" ] (Accepts.upTo 1 []))), ("follow", (Accepts.withValues [ "--route" ] (Accepts.nothing ()))), ("stats", Accepts.upTo 1 []), ("tail", (Accepts.withValues [ "--route" ] (Accepts.upTo 1 []))), ("find", Accepts.text 1), ("fns", Accepts.upTo 1 [ "--all" ]), ("hotspots", Accepts.upTo 1 []), ("view", Accepts.between 1 2 [ "--watch" ]), ("details", (Accepts.withValues [ "--filter", "--exclude", "--slow-ms", "--depth" ] (Accepts.between 1 1 [ "--all", "--slow", "-d", "--no-builtins", "--no-stdlib" ]))), ("log", Accepts.text 0), ("record", Accepts.upTo 1 []), ("inspect", (Accepts.withValues [ "--filter", "--exclude", "--slow-ms", "--depth" ] (Accepts.between 1 1 [ "--all", "--slow", "-d", "--no-builtins", "--no-stdlib" ]))), ("resume", Accepts.between 1 1 []), ("fork", (Accepts.withValues [ "--at" ] (Accepts.between 1 1 []))), ("pin", Accepts.between 1 1 []), ("unpin", Accepts.between 1 1 []), ("calls", Accepts.between 1 1 []), ("show", Accepts.between 1 2 [ "--watch" ]), ("values", Accepts.text 0), ("rerun", Accepts.between 1 1 []), ("delete", (Accepts.withValues [ "--keep", "--before" ] (Accepts.upTo 1 [ "--all" ]))) ] (Accepts.nothing ()))))
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.acceptsConflicts: Unknown function or value 'Accepts.everywhere'"
   let acceptsConflicts () : Accepts.Accepts = (Accepts.everywhere [ "--json" ] [] ((Accepts.subcommands [ ("list", Accepts.nothing ()), ("walk", Accepts.nothing ()), ("show", Accepts.between 1 1 []), ("ack", Accepts.freeText 1 []), ("override", Accepts.between 2 2 []), ("branch", Accepts.between 1 1 []) ] (Accepts.nothing ()))))
-  // @compiler blocked: missing-implementation
   let acceptsPermissions () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.nothing ()), ("profile", Accepts.upTo 2 [ "-y", "--yes" ]), ("allow", Accepts.text 1), ("deny", Accepts.text 1), ("remove", Accepts.text 1), ("clear", Accepts.nothing ()), ("set", Accepts.text 1), ("approve", Accepts.text 1), ("update", Accepts.text 1), ("unapprove", Accepts.between 1 1 []), ("requirements", Accepts.between 1 1 []), ("show", Accepts.between 1 1 []), ("revoke-package", Accepts.between 1 1 []), ("approved", Accepts.nothing ()), ("approvals", Accepts.nothing ()) ] (Accepts.nothing ()))
-  // @compiler blocked: missing-implementation
   let acceptsOps () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.upTo 1 []), ("show", Accepts.between 1 1 []) ] (Accepts.upTo 1 []))
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.acceptsPs: Unknown function or value 'Accepts.everywhere'"
   let acceptsPs () : Accepts.Accepts = (Accepts.everywhere [ "--json" ] [] ((Accepts.subcommands [ ("show", Accepts.between 1 1 [ "--full" ]), ("cancel", Accepts.between 1 1 []), ("kill", Accepts.between 1 1 []) ] (Accepts.flagsOnly [ "--watch" ]))))
-  // @compiler blocked: missing-implementation
   let acceptsWorkbench () : Accepts.Accepts = Accepts.flagsOnly [ "--live" ]
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'CommandHandler'"
   let allCommands () : List<CommandHandler> =
     [ ("quit", "Exit the CLI", [ "exit", "q" ], acceptsQuit, Quit.execute, Quit.help, Quit.complete)
       ("help", "Show help for commands", [ "commands", "?", "--help", "-h" ], acceptsHelp, Help.execute, Help.help, Help.complete)
@@ -228,7 +170,7 @@ module Registry =
       )
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'CommandHandler'"
   let findCommandIn (commands: List<CommandHandler>) (name: String) : CommandHandler =
 
     let allMatches = // CLEANUP use a Set?
@@ -260,7 +202,7 @@ module Registry =
           help = fun _state -> $"No help available for command: {name}"
           complete = fun _state _args -> [] }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let executeCommand (name: String) (state: AppState) (args: List<String>) : AppState =
     let handler = findCommandIn state.allCommandsCache name
 
@@ -296,7 +238,7 @@ module Registry =
         let ex = handler.execute
         ex state args
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let executeCommandHelp (name: String) (state: AppState) : AppState =
     let handler = findCommandIn state.allCommandsCache name
     let helpFn = handler.help
@@ -338,7 +280,6 @@ module Registry =
   // rendering accident rather than a category, and `getCompactCommandList` -- the welcome
   // screen -- does not show it at all. `tests/cli/commandGroups.dark` fails when a newly
   // registered command is in no group, and when a group names a command that is not.
-  // @compiler blocked: missing-implementation
   let commandGroups () : List<(String * List<String>)> =
     [ ("Packages", [ "nav", "ls", "view", "tree", "back", "search", "typecheck", "test", "find-values", "deps", "val", "fn", "type", "trait", "impl", "impls", "module", "edit", "rename", "hash", "deprecate", "delete", "undeprecate" ])
       ("Changes",
@@ -350,7 +291,7 @@ module Registry =
       ("Utilities",
        [ "clear", "help", "docs", "quit", "builtins", "export-seed", "workbench", "outliner", "backups", "config" ]) ]
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'CommandHandler'"
   let formatCommandGroup (groupName: String) (commandNames: List<String>) (commands: List<CommandHandler>) : String =
     let formattedCommands =
       commandNames
@@ -366,13 +307,12 @@ module Registry =
     let commandLines = Stdlib.String.join formattedCommands "\n"
     $"{groupName}:\n{commandLines}"
 
-  // @compiler blocked: missing-implementation
   let formatCompactGroup (groupName: String) (cmdNames: List<String>) : String =
     let namesList = Stdlib.String.join cmdNames ", "
     $"{groupName}: {namesList}"
 
   // Compact command list for welcome screen (with logo, minimal text)
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.getCompactCommandList: Unknown function or value 'Logo.logo'"
   let getCompactCommandList () : String =
     let groups = commandGroups ()
 
@@ -393,7 +333,7 @@ module Registry =
     Logo.combineLogoAndText Logo.logo allLines Stdlib.Cli.UI.Colors.logoColor
 
   // Detailed command list for help command (no logo, full details)
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Registry.getDetailedCommandList: Unknown function or value 'allCommands'"
   let getDetailedCommandList () : String =
     let commands = allCommands ()
     let groups = commandGroups ()
@@ -446,7 +386,6 @@ module Registry =
   /// `loc` is the caller's already-formatted location string. It's part of the key because `nav`/`ls`
   /// complete against wherever you are, so the same command with the same completed args means something
   /// different after a `cd`. Taken as a parameter rather than recomputed, because the loop already has it.
-  // @compiler blocked: missing-implementation
   let completionContextKey (loc: String) (input: String) : String =
     let parsed = Completion.parseInput input
     if parsed.isCompletingCommand then
@@ -467,7 +406,7 @@ module Registry =
   /// that means a package DB query, which is far too expensive to repeat per keystroke -- and a cache keyed
   /// on the whole prompt text misses on every character of a word. The partial token filters this result
   /// afterwards, and filtering a list is cheap.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let getCompletionsForContext
     (state: AppState)
     (input: String)
@@ -483,7 +422,7 @@ module Registry =
         | None -> []
       handler.complete state completedArgs
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let getCompletions (state: AppState) (input: String) : List<Completion.CompletionItem> =
     let parsed = Completion.parseInput input
 
@@ -531,7 +470,6 @@ module Registry =
         | _ :: _ -> filtered
         | [] -> completeFunc state parsed.args
 
-  // @compiler blocked: missing-implementation
   let hintFromCompletions
     (input: String)
     (completions: List<Completion.CompletionItem>)
@@ -558,7 +496,7 @@ module Registry =
   ///
   /// Parses `input` once and does both halves rather than composing a context lookup with
   /// `hintFromCompletions`, which each re-parse; this runs on every keystroke.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let getCompletionHintFromContext
     (state: AppState)
     (input: String)
@@ -617,7 +555,7 @@ module Registry =
             handler.complete state parsed.args
         (hintOf fallback, "", [])
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let getCompletionHint (state: AppState) (input: String) : String =
     hintFromCompletions input (getCompletions state input)
 
@@ -628,7 +566,6 @@ module Registry =
   /// running one of these captured leaves a person answering a prompt they cannot see; the bar
   /// hands the terminal off instead (inline, vim-`:!` style) and returns on exit. An entry is a
   /// canonical command name, or name + first argument where only one verb prompts.
-  // @compiler blocked: missing-implementation
   val promptsForInput =
     [ "install"
       "uninstall"
@@ -648,12 +585,11 @@ module Registry =
   /// Full-screen TUIs. Capturing one dumps its alternate-screen escapes into a pane, so the bar
   /// launches it as a page instead. Canonical names; aliases resolve before matching. `apps` is
   /// handled in `takesScreen` because it is a TUI only when bare.
-  // @compiler blocked: missing-implementation
   val screenCommands = [ "outliner" ]
 
   /// Should the workbench run this command line on the real terminal instead of captured?
   /// `-y`/`--yes` is the universal "don't ask", so a line carrying it never needs the handoff.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'CommandHandler'"
   let needsTerminal (commands: List<CommandHandler>) (cmd: String) (args: List<String>) : Bool =
     if (Stdlib.List.contains args "-y") || (Stdlib.List.contains args "--yes") then
       false
@@ -667,13 +603,13 @@ module Registry =
       || (Stdlib.List.contains promptsForInput withFirst)
 
   /// Does this command line own the whole screen (a full-screen TUI)?
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'CommandHandler'"
   let takesScreen (commands: List<CommandHandler>) (cmd: String) (args: List<String>) : Bool =
     let canonical = (findCommandIn commands cmd).name
     Stdlib.List.contains screenCommands canonical
 
 module Commands =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
   let parseAndExecute (state: AppState) (input: String) : AppState =
     let trimmed = Stdlib.String.trim input
     let parts =

@@ -17,7 +17,7 @@ module Darklang.Cli.Run
 /// <param sessionAllow> are rules the user allowed for this run only ("allow
 /// once" at the prompt): they widen the instance layer in memory and are
 /// never saved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Rule'"
 let parseAndExecute
   (accountID: Stdlib.Option.Option<Uuid>)
   (branchId: Uuid)
@@ -44,7 +44,6 @@ let parseAndExecute
 
 
 /// Format permission warnings for the terminal; return [] when there are none.
-// @compiler blocked: missing-implementation
 let permissionWarningLines
   (violations: List<(String * String * Stdlib.Option.Option<String>)>)
   : List<String> =
@@ -67,7 +66,7 @@ let permissionWarningLines
 //
 // For calling package fns, use `eval` instead.
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let allowHarmful =
     Stdlib.List.contains args "--allow-harmful"
@@ -100,13 +99,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
 
 // Recognize a dotted package name so `run` can suggest `eval` instead of
 // reporting an unhelpful "script not found" error.
-// @compiler blocked: missing-implementation
 let looksLikePackageName (path: String) : Bool =
   (Stdlib.String.contains path ".")
   && (Stdlib.String.contains path "/" |> Stdlib.Bool.not)
   && (Stdlib.String.endsWith path ".dark" |> Stdlib.Bool.not)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeScript
   (state: AppState)
   (scriptPath: String)
@@ -147,14 +145,11 @@ let executeScript
       8
 
 
-// @compiler blocked: missing-implementation
 let allowOnce () : String = "Allow once (this run only)"
-// @compiler blocked: missing-implementation
 let allowAlways () : String = "Allow always (save to the instance policy)"
-// @compiler blocked: missing-implementation
 let denyChoice () : String = "Deny"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let printScriptError (state: AppState) (e: ExecutionError.ExecutionError) : AppState =
   match e with
   | Denied denied ->
@@ -170,7 +165,7 @@ let printScriptError (state: AppState) (e: ExecutionError.ExecutionError) : AppS
 /// Run the script and, at an interactive terminal, offer to retry an
 /// instance-policy denial. "Once" is temporary; "always" saves the rule.
 /// Sandbox, warning mode, and non-interactive runs never prompt.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let runScript
   (state: AppState)
   (scriptPath: String)
@@ -255,7 +250,7 @@ let runScript
   | Error e -> printScriptError state e
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (args: List<String>) : List<Completion.CompletionItem> =
   match args with
   | [] ->
@@ -279,7 +274,7 @@ let complete (_state: AppState) (args: List<String>) : List<Completion.Completio
   | _ -> []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ "Usage: run-script <path> [args...]"
     "Execute a Dark script file."

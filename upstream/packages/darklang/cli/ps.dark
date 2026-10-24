@@ -16,20 +16,17 @@ module Darklang.Cli.Ps
 
 
 /// What `ps --json` hands back: the same two groups the two tables print.
-// @compiler blocked: missing-implementation
 type PsSnapshot =
   { thisInstance: List<Stdlib.Exec.Summary>
     machine: List<Stdlib.Exec.MachineProcess> }
 
 
-// @compiler blocked: missing-implementation
 let entryText (branchId: Uuid) (entry: Stdlib.Exec.Entry) : String =
   match entry with
   | Function name -> PrettyPrinter.RuntimeTypes.fnName branchId name
   | Expr -> "an eval expression"
 
 
-// @compiler blocked: missing-implementation
 let eventSpecText (spec: Stdlib.Host.EventSpec) : String =
   match spec with
   | Key -> "a key"
@@ -40,7 +37,7 @@ let eventSpecText (spec: Stdlib.Host.EventSpec) : String =
   | StdinBytes n -> $"{Stdlib.toString n} bytes of input"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.parkedText: Unknown function or value 'PrettyPrinter.RuntimeTypes.FQFnName.package'"
 let parkedText (branchId: Uuid) (parked: Stdlib.Exec.ParkedOn) : String =
   match parked with
   | Host op -> op
@@ -53,7 +50,7 @@ let parkedText (branchId: Uuid) (parked: Stdlib.Exec.ParkedOn) : String =
   | Process id -> $"process {Cli.Text.shortId id}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.statusText: Unknown function or value 'parkedText'"
 let statusText (branchId: Uuid) (status: Stdlib.Exec.Status) : String =
   match status with
   | Runnable -> "running"
@@ -70,7 +67,7 @@ let statusText (branchId: Uuid) (status: Stdlib.Exec.Status) : String =
 
 /// One row of the process tree. No `parent` column: the indentation is the parent, and
 /// `Table.print` pads to the widest cell, so a column that repeats the shape costs every row.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.row: Unknown function or value 'statusText'"
 let row (branchId: Uuid) (depth: Int) (p: Stdlib.Exec.Summary) : List<String> =
   let indent = Stdlib.String.repeat "  " depth
   [ Cli.Text.shortId p.id
@@ -82,7 +79,7 @@ let row (branchId: Uuid) (depth: Int) (p: Stdlib.Exec.Summary) : List<String> =
 /// The rows as a tree, each with its process id: each process under the one that spawned it,
 /// oldest first at every level. A process whose parent is not in the list (it finished and was
 /// forgotten) is a root.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Ps.treeRowsWithIds: Field access requires a record value"
 let treeRowsWithIds (branchId: Uuid) (all: List<Stdlib.Exec.Summary>) : List<(Uuid * List<String>)> =
   let ids = all |> Stdlib.List.map (fun p -> p.id)
   let isRoot (p: Stdlib.Exec.Summary) : Bool =
@@ -97,12 +94,11 @@ let treeRowsWithIds (branchId: Uuid) (all: List<Stdlib.Exec.Summary>) : List<(Uu
       (children |> Stdlib.List.map (fun c -> under (depth + 1) c) |> Stdlib.List.flatten)
   all |> Stdlib.List.filter isRoot |> Stdlib.List.map (fun p -> under 0 p) |> Stdlib.List.flatten
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.treeRows: Unknown function or value 'treeRowsWithIds'"
 let treeRows (branchId: Uuid) (all: List<Stdlib.Exec.Summary>) : List<List<String>> =
   treeRowsWithIds branchId all |> Stdlib.List.map (fun (_, cells) -> cells)
 
 
-// @compiler blocked: missing-implementation
 let executionPointText (branchId: Uuid) (ep: Stdlib.Exec.ExecutionPoint) : String =
   match ep with
   | Source -> "(the entry point)"
@@ -111,7 +107,7 @@ let executionPointText (branchId: Uuid) (ep: Stdlib.Exec.ExecutionPoint) : Strin
 
 
 /// The process whose id starts with `prefix`, when exactly one does.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.find: Unknown function or value 'Stdlib.Exec.list'"
 let find (prefix: String) : Stdlib.Result.Result<Stdlib.Exec.Summary, String> =
   // Every id starts with "", so an empty prefix would quietly take whichever process came first.
   // A shell variable that came back empty is how a person meets this.
@@ -130,7 +126,6 @@ let find (prefix: String) : Stdlib.Result.Result<Stdlib.Exec.Summary, String> =
 
 /// "0.3 s ago", "12 s ago", "4 min ago": how long something has been running, at a glance. Past
 /// an hour it is `Cli.RelativeTime.ago`'s "3 hours ago" / "2 days ago".
-// @compiler blocked: missing-implementation
 let startedAgoText (started: DateTime) : String =
   let ms = Stdlib.DateTime.subtractMs (Stdlib.DateTime.now ()) started
 
@@ -148,7 +143,7 @@ let startedAgoText (started: DateTime) : String =
 /// The other Dark processes on this machine (a serve, a daemon, another terminal), oldest
 /// first, as (pid, the cells of its row); this process is left out, since its own table is
 /// printed above. The full command line is in `ps show`: it is longer than a terminal.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.machineEntries: Unknown function or value 'Stdlib.Exec.machineList'"
 let machineEntries () : List<(Int * List<String>)> =
   let me = Stdlib.Cli.Sys.currentPid ()
   Stdlib.Exec.machineList ()
@@ -160,22 +155,20 @@ let machineEntries () : List<(Int * List<String>)> =
        (if m.branch == "" then "main" else m.branch)
        startedAgoText m.started ]))
 
-// @compiler blocked: missing-implementation
 val machineColumns = [ "pid", "what it runs", "branch", "started" ]
 
 /// `id` is the short id `ps show|cancel|kill` take. `what it runs` is the function it was
 /// started on, or `an eval expression`. `steps` is how many instructions it has retired, which
 /// is what the budget counts: it says whether something is spinning.
-// @compiler blocked: missing-implementation
 val localColumns = [ "id", "what it runs", "status", "steps" ]
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.machineRows: Unknown function or value 'machineEntries'"
 let machineRows () : List<List<String>> =
   machineEntries () |> Stdlib.List.map (fun (_, cells) -> cells)
 
 /// Both sections always print, with `(none)` under an empty one: a heading that appears one
 /// time and not the next reads as a bug.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.printMachine: Unknown function or value 'machineRows'"
 let printMachine () : Unit =
   Stdlib.printLine ""
   Stdlib.printLine
@@ -186,7 +179,7 @@ let printMachine () : Unit =
 
 /// This instance first: it is the one the reader is standing in, and the one whose rows the
 /// other verbs take. The machine follows, as context.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.printList: Unknown function or value 'treeRows'"
 let printList (branchId: Uuid) : Unit =
   let me = Stdlib.toString (Stdlib.Cli.Sys.currentPid ())
   Stdlib.printLine (Stdlib.Cli.UI.Colors.dimText $"this instance (pid {me})")
@@ -199,7 +192,7 @@ let printList (branchId: Uuid) : Unit =
 /// One process in full; <param full> prints the whole uuid rather than the short id. `false`
 /// when it said why it could not, so the caller can exit non-zero: naming a process that is not
 /// there is a refusal, and a shell has only the code to read.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.printShowWith: Unknown function or value 'find'"
 let printShowWith (branchId: Uuid) (prefix: String) (full: Bool) : Bool =
   match find prefix with
   | Error e ->
@@ -235,13 +228,13 @@ let printShowWith (branchId: Uuid) (prefix: String) (full: Bool) : Bool =
           Stdlib.printLine $"    {executionPointText branchId ep}")
       true
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.printShow: Unknown function or value 'printShowWith'"
 let printShow (branchId: Uuid) (prefix: String) : Bool = printShowWith branchId prefix false
 
 /// The Dark process on this machine with pid <param target>, if it is one. A
 /// target no registered pid matches is left to the id prefix, since a short id
 /// can be all digits too.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.machineByPid: Unknown function or value 'Stdlib.Exec.machineList'"
 let machineByPid
   (target: String)
   : Stdlib.Option.Option<Stdlib.Exec.MachineProcess> =
@@ -255,7 +248,7 @@ let machineByPid
 /// Another Dark process in full, from the registry: the whole command line the
 /// table cuts. Its own processes and stacks live in it, so this is what can be
 /// known from outside.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.printMachineShow: Unknown function or value 'machineByPid'"
 let printMachineShow (target: String) (json: Bool) : Bool =
   match machineByPid target with
   | Some m ->
@@ -273,12 +266,12 @@ let printMachineShow (target: String) (json: Bool) : Bool =
 
 /// The escape hatch, not the stdlib verb: a process stuck in a host call is ended without waiting
 /// for the call, so this is the one place the builtin is called by id.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.killById: Unknown function or value 'Builtin.execKill'"
 let killById (id: Uuid) : Bool = Builtin.execKill id
 
 /// Signal another Dark process on this machine. `cancel` is INT, the Ctrl-C path: a traced run
 /// is suspended (`dark traces` keeps it), a daemon or a serve ends. `kill` is KILL.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.signalMachine: Unknown function or value 'Stdlib.Exec.machineList'"
 let signalMachine
   (pid: Int)
   (hard: Bool)
@@ -299,7 +292,7 @@ let signalMachine
       Stdlib.Result.Result.Error $"could not signal pid {pidText}"
 
 /// Stop a process in this instance by id prefix: `cancel` at its next turn, `kill` now.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.stopLocal: Unknown function or value 'find'"
 let stopLocal
   (prefix: String)
   (hard: Bool)
@@ -320,7 +313,7 @@ let stopLocal
         $"{Cli.Text.shortId p.id} finished while you were asking -- `dark ps` for what is left"
 
 /// A pid names another Dark process on this machine; anything else is an id prefix in this one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.stop: Unknown function or value 'signalMachine'"
 let stop (target: String) (hard: Bool) : Stdlib.Result.Result<String, String> =
   match Stdlib.Int.parse target with
   | Ok pid -> signalMachine pid hard
@@ -328,7 +321,7 @@ let stop (target: String) (hard: Bool) : Stdlib.Result.Result<String, String> =
 
 /// Everything `ps` knows, as JSON, for something that is not a person: this instance's
 /// processes and the machine's other Dark processes, in the same two groups the tables print.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.printJson: Unknown function or value 'Stdlib.Exec.list'"
 let printJson () : Unit =
   let processes = Stdlib.Exec.list ()
   // Self is filtered out, the same way the table does it: the process answering the question is
@@ -342,7 +335,7 @@ let printJson () : Unit =
       (PsSnapshot { thisInstance = processes, machine = machine }))
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   // `--json` on anything `ps` prints: the flag is pulled out first so it can sit anywhere.
   let wantsJson = Stdlib.List.contains args "--json"
@@ -423,7 +416,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
     state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (args: List<String>) : List<Completion.CompletionItem> =
   match args with
   | [] -> [ "show", "cancel", "kill", "--watch" ] |> Stdlib.List.map Completion.simple
@@ -432,7 +425,7 @@ let complete (_state: AppState) (args: List<String>) : List<Completion.Completio
   | _ -> []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ "Usage: ps                what is running: this instance's processes as a tree,"
     "                         then the other Dark processes on this machine"
@@ -453,24 +446,22 @@ let help (_state: AppState) : String =
 /// repainted every half second, with a cursor. Up and down move it, `c` cancels the row under
 /// it, `k` kills it, Escape leaves.
 module Watch =
-  // @compiler blocked: missing-implementation
   type Row =
     /// Another Dark process on this machine, by pid.
     | Machine of pid: Int * cells: List<String>
     /// A process in this instance, by id.
     | Local of id: Uuid * cells: List<String>
 
-  // @compiler blocked: missing-implementation
   type Model =
     { rows: List<Row>
       cursor: Int
       /// What the last `c`/`k` said, shown under the tables until the next key.
       note: String }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: constructor-identity diagnostic="Constructor identity collision 2963: Darklang.Cli.Ps.Watch.Msg.Refresh, Darklang.Stdlib.Uuid.ParseError.BadFormat"
   type Msg = | Refresh
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.Watch.gather: Unknown function or value 'SCM.PackageOps.currentBranch'"
   let gather () : List<Row> =
     let branchId = SCM.PackageOps.currentBranch ()
     let machine =
@@ -483,10 +474,9 @@ module Watch =
     // walks the rows in the order they are drawn.
     Stdlib.List.append local machine
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.Watch.init: Unknown function or value 'gather'"
   let init () : Model = Model { rows = gather (), cursor = 0, note = "" }
 
-  // @compiler blocked: missing-implementation
   let clamp (m: Model) : Model =
     let n = Stdlib.List.length m.rows
     { m with cursor = Stdlib.max 0 (Stdlib.min m.cursor (n - 1)) }
@@ -494,13 +484,12 @@ module Watch =
   /// The panel shows one line either way, so a refusal becomes the note in the colour it
   /// used to be printed in. `cancel` and `kill` on the command line exit non-zero instead;
   /// a panel has no exit code to carry it.
-  // @compiler blocked: missing-implementation
   let noteOf (r: Stdlib.Result.Result<String, String>) : String =
     match r with
     | Ok msg -> msg
     | Error e -> Stdlib.Cli.UI.Colors.error e
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.Watch.act: Unknown function or value 'signalMachine'"
   let act (m: Model) (hard: Bool) : Model =
     match Stdlib.List.getAt m.rows m.cursor with
     | None -> m
@@ -508,7 +497,7 @@ module Watch =
     | Some(Local(id, _)) ->
       { m with note = noteOf (stopLocal (Cli.Text.shortId id) hard) }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Ps.Watch.update: Unknown constructor 'Darklang.Cli.Msg.Refresh' in pattern"
   let update (m: Model) (event: LiveView.Host.Event<Msg>) : Model =
     match event with
     | Tick | Msg Refresh -> clamp { m with rows = gather () }
@@ -522,7 +511,7 @@ module Watch =
         | Some "k" -> act m true
         | _ -> { m with note = "" }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Stdlib.Cli.UI.Node.Node'"
   let render (m: Model) : Stdlib.Cli.UI.Node.Node<Msg> =
     let mark (i: Int) (cells: List<String>) : List<String> =
       match cells with

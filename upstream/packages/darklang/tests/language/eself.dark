@@ -31,7 +31,7 @@ module ShadowingTest =
         n * ((ShadowingTest.factorialWithShadowing (n - 1)) |> Stdlib.Tuple2.second)
       (factorialWithShadowing , result)
 
-  // @compiler blocked: compiler-gap
+  // @compiler blocked: compiler-gap diagnostic="Darklang.Language.Tests.ESelf.ShadowingTest.factorialWithShadowingError: Expression is not callable"
   let factorialWithShadowingError (n: Int): (String * Int) =
     if (n <= 1) then
       ("base_case", 1)
@@ -68,7 +68,7 @@ module ShadowingTest =
         tupleMatchWithShadowing v
     | (a, tupleMatchWithShadowing) -> a + tupleMatchWithShadowing
 
-  // @compiler blocked: compiler-gap
+  // @compiler blocked: compiler-gap diagnostic="Darklang.Language.Tests.ESelf.ShadowingTest.letBindingShadowing: Lambda requires an expected function type"
   let letBindingShadowing (x: Int) : List<Int> =
     let letBindingShadowing = (fun v -> v * 3)
     let letBindingShadowing = [ 10, letBindingShadowing x ]

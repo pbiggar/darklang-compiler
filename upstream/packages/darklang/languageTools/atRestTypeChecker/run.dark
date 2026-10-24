@@ -4,7 +4,7 @@ module Darklang.LanguageTools.AtRestTypeChecker.Run
 
 /// Declarations requested for checking, grouped by kind and keyed by content hash.
 /// Repeated operations for the same declaration share one entry.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Run.Candidates: Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
 type Candidates =
   { types: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.PackageType.PackageType>
     values: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.PackageValue.PackageValue>
@@ -17,7 +17,7 @@ type Candidates =
 /// Collect declarations from AddType, AddValue, AddFn, AddTrait, AddTraitImpl and AddTest
 /// operations.
 /// Ignore operations that do not supply a declaration to check.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let candidatesFromOps
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
   : Candidates =
@@ -51,7 +51,7 @@ let candidatesFromOps
 
 /// Report only the declarations requested by the caller. Dependency values may
 /// also have been checked to infer their types; omit their results from this report.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Items.Outcome'"
 let reportCandidates
   (candidates: List<LanguageTools.ProgramTypes.Reference>)
   (results: List<(LanguageTools.ProgramTypes.Reference * Items.Outcome)>)
@@ -75,7 +75,7 @@ let reportCandidates
 
 /// Combine the individual reports. Any Failed item makes the batch Failed;
 /// otherwise, any Incomplete item makes it Incomplete. An empty batch is Checked.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ItemReport'"
 let reportItems (items: List<ItemReport>) : Report =
   let hasVerdict (verdict: Verdict) : Bool =
     Stdlib.List.any items (fun item -> item.verdict == verdict)
@@ -96,7 +96,7 @@ let reportItems (items: List<ItemReport>) : Report =
 /// Catch errors separately for each item and continue inspecting the rest.
 /// Return the successfully inspected items, the references found in them, and
 /// Incomplete results for items whose inspection failed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Items.Outcome'"
 let collectItemReferences
   (items: List<'a>)
   (referenceTo: 'a -> LanguageTools.ProgramTypes.Reference)
@@ -121,7 +121,7 @@ let collectItemReferences
 
 /// What a query's pieces share: an environment with the pool's declarations registered and
 /// prepared, built once (`baseFor`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Run.Base: Unknown type 'Model.Environment'"
 type Base =
   { env: Model.Environment
     /// When true, the pool is closed (every type, fn signature and value in it refers only to
@@ -140,7 +140,7 @@ type Base =
 /// The branch matters only for implementations: everything else the checker loads is
 /// content-addressed. A caller that has no branch in hand goes through `checkPackageOps`
 /// below, which answers about main.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let checkPackageOpsOn
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -150,7 +150,7 @@ let checkPackageOpsOn
 /// `checkPackageOpsOn`, taking dependencies from <param pool> before the store (see
 /// `Environment.loadClosureFrom`), and starting from <param base> instead of the builtins when
 /// one is given: an environment that already holds and has prepared the pool's declarations.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Environment.Closure'"
 let checkPackageOpsFrom
   (pool: Environment.Closure)
   (base: Stdlib.Option.Option<Base>)
@@ -358,7 +358,7 @@ let checkPackageOpsFrom
 /// Load a declaration by hash and wrap it in a package operation for checking.
 /// Loading also converts its stored syntax tree into Dark values. The caller
 /// must catch conversion errors for each declaration before assembling the batch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let loadCandidate
   (reference: LanguageTools.ProgramTypes.Reference)
   : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageOp> =
@@ -393,7 +393,7 @@ let loadCandidate
 /// answer this gave before it could see implementations at all. Anything that PINS a call
 /// passes its branch explicitly through `checkPackageOpsOn`, because pinning against the wrong
 /// branch's implementations would store the wrong answer.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let checkPackageOps (ops: List<LanguageTools.ProgramTypes.PackageOp>) : Report =
   checkPackageOpsOn Darklang.SCM.Branch.mainBranchId ops
 
@@ -401,7 +401,7 @@ let checkPackageOps (ops: List<LanguageTools.ProgramTypes.PackageOp>) : Report =
 /// Load and check each distinct declaration reference. A missing declaration or
 /// a load error produces an Incomplete result for that item; successfully loaded
 /// declarations are checked together and keep their individual results.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let checkReferences
   (branchId: Uuid)
   (load: LanguageTools.ProgramTypes.Reference -> Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageOp>)
@@ -411,7 +411,7 @@ let checkReferences
 
 /// `checkReferences`, taking dependencies from <param pool> before the store and starting from
 /// <param base>; see `checkPackageOpsFrom`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Environment.Closure'"
 let checkReferencesFrom
   (pool: Environment.Closure)
   (base: Stdlib.Option.Option<Base>)
@@ -444,7 +444,7 @@ let checkReferencesFrom
 /// Check the declarations a search query selects. Fetch their hashes before loading their
 /// syntax trees, so checkReferences can catch each loading or conversion error separately
 /// and continue checking the other declarations.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let checkQuery
   (branchId: Uuid)
   (query: LanguageTools.ProgramTypes.Search.SearchQuery)
@@ -515,7 +515,7 @@ let checkQuery
 /// None when a pool type references a type that is not in the pool. Closed (see `Base`) when the
 /// pool's fn signatures and values also refer only to things in it, which a whole-branch query's
 /// pool does; its values are then checked here once.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Environment.Closure'"
 let baseFor (branchId: Uuid) (pool: Environment.Closure) : Stdlib.Option.Option<Base> =
   let inPool (r: LanguageTools.ProgramTypes.Reference) : Bool =
     match r with
@@ -554,7 +554,7 @@ let baseFor (branchId: Uuid) (pool: Environment.Closure) : Stdlib.Option.Option<
     Stdlib.Option.Option.None
 
 /// Load these types, values, and fns by signature, into a closure for `checkReferencesFrom`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Environment.Closure'"
 let poolFor
   (typeHashes: List<LanguageTools.ProgramTypes.Hash>)
   (fnHashes: List<LanguageTools.ProgramTypes.Hash>)
@@ -581,7 +581,6 @@ let poolFor
   Environment.Closure { types = types, values = values, fns = fns }
 
 /// A query that selects everything on the branch.
-// @compiler blocked: missing-implementation
 let everything () : LanguageTools.ProgramTypes.Search.SearchQuery =
   LanguageTools.ProgramTypes.Search.SearchQuery
     { currentModule = []
@@ -591,12 +590,12 @@ let everything () : LanguageTools.ProgramTypes.Search.SearchQuery =
       exactMatch = false }
 
 /// Every declaration visible on the selected branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let checkBranch (branchId: Uuid) : Report = checkQuery branchId (everything ())
 
 /// Just the declarations under <param modules>, and everything below them: for a caller
 /// that wants an answer about one module rather than about the whole branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Report'"
 let checkModule (branchId: Uuid) (modules: List<String>) : Report =
   checkQuery
     branchId

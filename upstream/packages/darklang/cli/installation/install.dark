@@ -2,12 +2,11 @@ module Darklang.Cli.Installation.Install
 
 
 /// Check if a flag is present in args (supports both --flag and -f forms)
-// @compiler blocked: missing-implementation
 let hasFlag (args: List<String>) (longFlag: String) (shortFlag: String) : Bool =
   (Stdlib.List.contains args longFlag) || (Stdlib.List.contains args shortFlag)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let host = (Stdlib.Cli.Host.getRuntimeHost ()) |> Builtin.unwrap
   let currentMode = Installation.System.getInstallationMode ()
@@ -94,12 +93,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
           { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
   []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ "Usage: install [--yes|-y] [--uninstall-if-installed]"
     "Install Darklang CLI globally for system-wide access."

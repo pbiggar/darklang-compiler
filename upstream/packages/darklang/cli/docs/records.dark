@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Records
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Records
 

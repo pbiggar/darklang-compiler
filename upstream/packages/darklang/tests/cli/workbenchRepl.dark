@@ -5,7 +5,6 @@ module Darklang.Cli.Tests.WorkbenchRepl
 // directly. The value-capture half needs a running evaluator and lives in the CLI suite instead.
 //
 // --- what binds ---
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test letBinding =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.parseLetBinding "let x = 1"
@@ -16,25 +15,21 @@ test letBinding =
       |> Stdlib.Test.equal (Stdlib.Option.Option.Some(("_priv", "3"))) ]
 
 // the right-hand side keeps its own `=`, so a record literal or a named argument survives
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test rhsKeepsEquals =
   Darklang.Cli.Repl.parseLetBinding "let r = f (a = 1)"
   |> Stdlib.Test.equal (Stdlib.Option.Option.Some(("r", "f (a = 1)")))
 
 // --- what deliberately doesn't, and falls through to being evaluated ---
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test nonBindingsFallThrough =
   Darklang.Cli.Repl.parseLetBinding "1 + 1"
   |> Stdlib.Test.equal Stdlib.Option.Option.None
 
 // a comparison typo, not a binding
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test comparisonTypo =
   Darklang.Cli.Repl.parseLetBinding "let x == 3"
   |> Stdlib.Test.equal Stdlib.Option.Option.None
 
 // a pattern binding can't be re-injected by name
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test patternBindingRejected =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.parseLetBinding "let (a, b) = t"
@@ -47,7 +42,6 @@ test patternBindingRejected =
       |> Stdlib.Test.equal Stdlib.Option.Option.None ]
 
 // --- when ⏎ moves down a line instead of running ---
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.openBracketDepth'" class=missing-support reason=upstream-dependency
 test openBrackets =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.openBracketDepth "Stdlib.List.map xs (fun x -> x"
@@ -58,7 +52,6 @@ test openBrackets =
       Darklang.Cli.Repl.openBracketDepth "1 + 1" |> Stdlib.Test.equal 0 ]
 
 // Brackets inside a string literal aren't brackets.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.openBracketDepth'" class=missing-support reason=upstream-dependency
 test stringBrackets =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.openBracketDepth "Stdlib.String.contains s \"(\""
@@ -66,7 +59,6 @@ test stringBrackets =
       Darklang.Cli.Repl.openBracketDepth "\"a\\\"(\"" |> Stdlib.Test.equal 0 ]
 
 // An open bracket, or a line that ends in something nothing can follow.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.wantsAnotherLine'" class=missing-support reason=upstream-dependency
 test wantsAnotherLine =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.wantsAnotherLine "Stdlib.List.map xs (fun x ->"
@@ -78,7 +70,6 @@ test wantsAnotherLine =
       Darklang.Cli.Repl.wantsAnotherLine "match x with" |> Stdlib.Test.equal true ]
 
 // A finished statement runs.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.wantsAnotherLine'" class=missing-support reason=upstream-dependency
 test finishedStatementRuns =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.wantsAnotherLine "1 + 1" |> Stdlib.Test.equal false
@@ -88,13 +79,11 @@ test finishedStatementRuns =
       Darklang.Cli.Repl.wantsAnotherLine "" |> Stdlib.Test.equal false ]
 
 // Judged over the whole statement so far, not just the last line: this closes what the first line opened.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.wantsAnotherLine'" class=missing-support reason=upstream-dependency
 test wholeStatementJudged =
   Darklang.Cli.Repl.wantsAnotherLine "Stdlib.List.map xs\n  (fun x -> x * 2L)"
   |> Stdlib.Test.equal false
 
 // A keyword only counts as the whole last token, so a name that merely ends in one isn't mistaken for it.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.wantsAnotherLine'" class=missing-support reason=upstream-dependency
 test keywordAsWholeToken =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.wantsAnotherLine "outlet" |> Stdlib.Test.equal false
@@ -102,7 +91,6 @@ test keywordAsWholeToken =
 
 // --- the chain that re-establishes a session ---
 // An empty session evaluates exactly what you typed.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.withBindings'" class=missing-support reason=upstream-dependency
 test emptySession =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.withBindings [] "x + 1" |> Stdlib.Test.equal "x + 1"
@@ -112,7 +100,6 @@ test emptySession =
       |> Stdlib.Test.equal "let x = 42\nx + 1" ]
 
 // Order is load-bearing: a later binding may refer to an earlier one.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.withBindings'" class=missing-support reason=upstream-dependency
 test bindingOrder =
   Darklang.Cli.Repl.withBindings
     [ Darklang.Cli.Repl.Binding { name = "x", source = "42", value = "42", captured = true }
@@ -121,7 +108,6 @@ test bindingOrder =
   |> Stdlib.Test.equal "let x = 42\nlet y = x + 1\ny * 2"
 
 // Which is why a rebind keeps its position rather than moving to the end.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.upsert'" class=missing-support reason=upstream-dependency
 test rebindKeepsPosition =
   (Darklang.Cli.Repl.upsert
     [ Darklang.Cli.Repl.Binding { name = "x", source = "1", value = "1", captured = true }
@@ -131,13 +117,11 @@ test rebindKeepsPosition =
   |> Stdlib.Test.equal [ "x=99", "y=x + 1" ]
 
 // --- reading `captureValue` back ---
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.readCaptured'" class=missing-support reason=upstream-dependency
 test readCaptured =
   Darklang.Cli.Repl.readCaptured "ok:[1L, 2L]"
   |> Stdlib.Test.equal (Stdlib.Option.Option.Some "[1L, 2L]")
 
 // anything that isn't `ok:` means "hold the expression instead"
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.readCaptured'" class=missing-support reason=upstream-dependency
 test nonOkHoldsExpression =
   Stdlib.Test.all
     [ Darklang.Cli.Repl.readCaptured "err:no literal form"

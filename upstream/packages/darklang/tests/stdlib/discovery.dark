@@ -1,14 +1,13 @@
 module Darklang.Stdlib.ValueSearch.Tests
 
 // pmFindValuesByValueType returns empty list for unknown type
-// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.PackageManager.Value.findByValueType'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "missing function name for identity" class=missing-support reason=compiler-gap
 test unknownValueTypeFindsNoValues =
   Darklang.LanguageTools.PackageManager.Value.findByValueType
     Darklang.LanguageTools.RuntimeTypes.ValueType.Unknown
   |> Stdlib.Test.equal []
 
 // pmEvaluateValue returns None for unknown value
-// @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.ValueSearch.evaluate'" class=missing-support reason=upstream-dependency
 test missingValueEvaluatesToNone =
   Darklang.Stdlib.ValueSearch.evaluate
     (Darklang.LanguageTools.ProgramTypes.Hash.Hash

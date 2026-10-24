@@ -7,41 +7,28 @@ module Darklang.Language.Tests.Traits
 module Shapes =
   type Point = { x: Int, y: Int }
 
-  // @compiler blocked: container-adaptation
   trait Show<'a> =
-    // @compiler blocked: container-adaptation
     let show (value: 'a) : String
 
-  // @compiler blocked: container-adaptation
   impl Show for Point =
-    // @compiler blocked: container-adaptation
     let show (p: Point) : String =
       $"({Stdlib.toString p.x}, {Stdlib.toString p.y})"
 
-  // @compiler blocked: container-adaptation
   impl Show for Int =
-    // @compiler blocked: container-adaptation
     let show (n: Int) : String = Stdlib.toString n
 
-  // @compiler blocked: container-adaptation
   impl Show for Bool =
-    // @compiler blocked: container-adaptation
     let show (b: Bool) : String = if b then "yes" else "no"
 
-  // @compiler blocked: container-adaptation
   impl<'a: Show> Show for List<'a> =
-    // @compiler blocked: container-adaptation
     let show (xs: List<'a>) : String =
       "[" + (xs |> Stdlib.List.map (fun x -> Show.show x) |> Stdlib.String.join ", ") + "]"
 
-  // @compiler blocked: upstream-dependency
   let display<'a: Show> (v: 'a) : String = "value: " + Show.show v
 
-  // @compiler blocked: upstream-dependency
   let neverCalls<'a: Show> (v: 'a) : String = if false then Show.show v else "never"
 
   // The impl's method is an ordinary fn under <Type>.<Trait>
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Point.Show.show'" class=missing-support reason=upstream-dependency
   test implMethodIsFn =
     Shapes.Point.Show.show (Shapes.Point { x = 1, y = 2 })
     |> Stdlib.Test.equal "(1, 2)"
@@ -50,7 +37,6 @@ module Shapes =
   // beneath it
   //
   // Dispatch by the argument's type
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" class=missing-support reason=upstream-dependency
   test dispatchByArgType =
     Stdlib.Test.all
       [ Shapes.Show.show (Shapes.Point { x = 5, y = 6 })
@@ -59,7 +45,6 @@ module Shapes =
         Shapes.Show.show true |> Stdlib.Test.equal "yes" ]
 
   // Inside a bounded generic fn
-  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" class=missing-support reason=upstream-dependency
   test boundedGenericFn =
     Stdlib.Test.all
       [ Shapes.display (Shapes.Point { x = 1, y = 2 })
@@ -67,7 +52,6 @@ module Shapes =
         Shapes.display 5 |> Stdlib.Test.equal "value: 5" ]
 
   // Conditional impls dispatch on the head, then on the elements lazily
-  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" class=missing-support reason=upstream-dependency
   test conditionalImpls =
     Stdlib.Test.all
       [ Shapes.display [ 1, 2, 3 ] |> Stdlib.Test.equal "value: [1, 2, 3]"
@@ -76,7 +60,6 @@ module Shapes =
         |> Stdlib.Test.equal "value: [(1, 2)]" ]
 
   // As a function value, and piped
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" class=missing-support reason=upstream-dependency
   test functionValueAndPipe =
     Stdlib.Test.all
       [ ([ 1, 2 ] |> Stdlib.List.map Shapes.Show.show)
@@ -85,7 +68,6 @@ module Shapes =
         |> Stdlib.Test.equal "(7, 8)" ]
 
   // Receiver calls: `x.method` is the whole call for a one-argument method
-  // @compiler xfail compile: "Unknown field 'show' on Darklang.Language.Tests.Traits.Shapes.Point" class=missing-support reason=compiler-gap
   test receiverCalls =
     Stdlib.Test.all
       [ (Shapes.Point { x = 1, y = 2 }).show |> Stdlib.Test.equal "(1, 2)"
@@ -96,18 +78,17 @@ module Shapes =
     (Shapes.Point { x = 1, y = 2 }).x |> Stdlib.Test.equal 1
 
   // A direct call reports the missing implementation at the method call.
-  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" class=missing-support reason=upstream-dependency
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Language.Tests.Traits.Shapes.Show'" class=aot-rejection reason=aot-type-error
   test noImplForDirectCallRaises =
     Shapes.Show.show 3.5
     => raises
       "Float has no implementation of Darklang.Language.Tests.Traits.Shapes.Show. Write `impl Show for Float = ...`, or run `dark impls Show` to see which types do"
 
   // No impl: at the CALL of a bounded fn, before its body runs
-  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" class=missing-support reason=upstream-dependency
   test boundedCallWithImpl =
     Shapes.neverCalls 5 |> Stdlib.Test.equal "never"
 
-  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" class=missing-support reason=upstream-dependency
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Language.Tests.Traits.Shapes.Show'" class=aot-rejection reason=aot-type-error
   test noImplForBoundedCallRaises =
     Shapes.neverCalls 3.5
     => raises
@@ -118,14 +99,11 @@ module Multi =
 
   // The operators are the stdlib traits: `+` is `Stdlib.Add.add`. A user impl
   // makes `Vec + Vec` an ordinary expression.
-  // @compiler blocked: container-adaptation
   impl Stdlib.Add for Vec =
-    // @compiler blocked: container-adaptation
     let add (a: Vec) (b: Vec) : Vec = Vec { dx = a.dx + b.dx, dy = a.dy + b.dy }
 
   let sum<'a: Stdlib.Add> (a: 'a) (b: 'a) (c: 'a) : 'a = a + b + c
 
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" class=missing-support reason=compiler-gap
   test operatorTraits =
     Stdlib.Test.all
       [ (Multi.Vec { dx = 1, dy = 2 } + Multi.Vec { dx = 10, dy = 20 })
@@ -154,7 +132,6 @@ module Multi =
   // would be a second impl for Int and every `1 + 2` an ambiguity.
   //
   // Receiver call on a two-argument method is a partial application
-  // @compiler xfail compile: "Unknown field 'add' on Darklang.Language.Tests.Traits.Multi.Vec" class=missing-support reason=compiler-gap
   test receiverPartialApplication =
     Stdlib.Test.all
       [ ((Multi.Vec { dx = 1, dy = 2 }).add (Multi.Vec { dx = 1, dy = 1 }))
@@ -166,39 +143,28 @@ module Ambiguity =
   // Two traits with the same method name. Their SHAPES differ (Describe has a
   // second method): a trait is content-addressed, so two identically shaped
   // traits are one trait, however they are named.
-  // @compiler blocked: container-adaptation
   trait Describe<'a> =
-    // @compiler blocked: container-adaptation
     let describe (v: 'a) : String
-    // @compiler blocked: container-adaptation
     let short (v: 'a) : String
 
-  // @compiler blocked: container-adaptation
   trait Label<'a> =
-    // @compiler blocked: container-adaptation
     let describe (v: 'a) : String
 
-  // @compiler blocked: container-adaptation
   impl Describe for Int =
-    // @compiler blocked: container-adaptation
     let describe (n: Int) : String = "described"
-    // @compiler blocked: container-adaptation
     let short (n: Int) : String = "d"
 
-  // @compiler blocked: container-adaptation
   impl Label for Int =
-    // @compiler blocked: container-adaptation
     let describe (n: Int) : String = "labelled"
 
   // Naming the trait disambiguates
-  // @compiler xfail compile: "Unknown function or value 'Ambiguity.Describe.describe'" class=missing-support reason=upstream-dependency
   test namedTraitDisambiguates =
     Stdlib.Test.all
       [ Ambiguity.Describe.describe 1 |> Stdlib.Test.equal "described"
         Ambiguity.Label.describe 1 |> Stdlib.Test.equal "labelled" ]
 
   // A receiver call cannot pick between two traits with the same method name
-  // @compiler xfail compile: "Field access requires a record value" class=missing-support reason=compiler-gap
+  // @compiler xfail compile: "Ambiguous receiver method 'describe'" class=aot-rejection reason=aot-name-error
   test ambiguousReceiverRaises =
     (1).describe
     => raises
@@ -210,14 +176,10 @@ module MethodBounds =
   // has no body of its own to check them in.
   type Box = { n: Int64 }
 
-  // @compiler blocked: container-adaptation
   trait Pair<'a> =
-    // @compiler blocked: container-adaptation
     let pair<'b: Stdlib.Compare> (v: 'a) (w: 'b) (x: 'b) : Bool
 
-  // @compiler blocked: container-adaptation
   impl Pair for Box =
-    // @compiler blocked: container-adaptation
     let pair<'b: Stdlib.Compare> (v: Box) (w: 'b) (x: 'b) : Bool = w < x
 
   // Two values rather than one compared with itself, and both polarities asserted.
@@ -225,7 +187,6 @@ module MethodBounds =
   // constant `false`, so a test built on it passes whether or not the bound is
   // discharged against the right trait. These four cannot: a swap turns the first
   // two red, and no constant satisfies both.
-  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" class=missing-support reason=upstream-dependency
   test methodBounds =
     Stdlib.Test.all
       [ MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) 1L 2L
@@ -235,7 +196,7 @@ module MethodBounds =
         MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) "a" "b"
         |> Stdlib.Test.equal true ]
 
-  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" class=missing-support reason=upstream-dependency
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" class=aot-rejection reason=aot-type-error
   test methodBoundOnBoolRaises =
     MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) true true
     => raises
@@ -402,7 +363,6 @@ module Identities =
         Identities.zeroOf 2.5 |> Stdlib.Test.equal 2.5 ]
 
   // `sum` and `product` take a seed, so `[]` never has to ask
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" class=missing-support reason=compiler-gap
   test seededSumAndProduct =
     Stdlib.Test.all
       [ Stdlib.sum 0L [ 1L, 2L, 3L ] |> Stdlib.Test.equal 6L
@@ -417,13 +377,10 @@ module Rendering =
   // `ToString` is the trait behind every builtin type's `toString`
   type Point = { x: Int64, y: Int64 }
 
-  // @compiler blocked: container-adaptation
   impl Stdlib.ToString for Point =
-    // @compiler blocked: container-adaptation
     let toString (p: Point) : String =
       $"({Stdlib.toString p.x}, {Stdlib.toString p.y})"
 
-  // @compiler xfail compile: "Unknown field 'toString' on Darklang.Language.Tests.Traits.Rendering.Point" class=missing-support reason=compiler-gap
   test toStringTrait =
     Stdlib.Test.all
       [ (Rendering.Point { x = 1L, y = 2L }).toString |> Stdlib.Test.equal "(1, 2)"

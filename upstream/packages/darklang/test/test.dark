@@ -1,99 +1,65 @@
 module Darklang.Test
 
 
-// @compiler blocked: missing-implementation
 let stringFn (key: String) : String = key + " appended string"
 
-// @compiler blocked: missing-implementation
 let fnWithTypeArgAndOneParam<'a> (arg: 'a) : 'a = arg
 
-// @compiler blocked: missing-implementation
 let twoStringFn (str1: String) (str2: String) : String =
   str1 + " appended " + str2
 
-// @compiler blocked: missing-implementation
 let returnsInt () : Int = 5
 
-// @compiler blocked: missing-implementation
 let returnsString () : String = "string"
 
-// @compiler blocked: missing-implementation
 let returnsOptionSome () : Stdlib.Option.Option<Int> =
   Stdlib.Option.Option.Some 5
 
-// @compiler blocked: missing-implementation
 let returnsOptionNone () : Stdlib.Option.Option<'a> = Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
 let returnsResultOk () : Stdlib.Result.Result<Int, String> =
   Stdlib.Result.Result.Ok 5
 
-// @compiler blocked: missing-implementation
 let returnsResultError () : Stdlib.Result.Result<Char, Bool> =
   Stdlib.Result.Result.Error false
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Test.throwsException: Unknown function or value 'Builtin.testRaiseException'"
 let throwsException () : DateTime =
   Builtin.testRaiseException "throwsException message"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Test.derrorFn: Unknown function or value 'Builtin.testRuntimeError'"
 let derrorFn (msg: String) : String =
   msg + (Builtin.testRuntimeError msg)
 
-// @compiler blocked: missing-implementation
 type X<'a> =
   | A of Int
   | B of 'a
 
-// @compiler blocked: missing-implementation
 let polyFn (a: X<'a>) : X<'a> = a
-// @compiler blocked: missing-implementation
 let strFn (a: X<String>) : X<String> = a
-// @compiler blocked: missing-implementation
 let definedPolyFn<'a> (a: X<'a>) : X<'a> = a
 
 module Values =
-  // @compiler blocked: missing-implementation
   val stringValue = "test"
-  // @compiler blocked: missing-implementation
   val int128Value = 5Q
-  // @compiler blocked: missing-implementation
   val uint128Value = 5Z
-  // @compiler blocked: missing-implementation
   val intValue = 5
-  // @compiler blocked: missing-implementation
   val int64Value = 5L
-  // @compiler blocked: missing-implementation
   val uint64Value = 5UL
-  // @compiler blocked: missing-implementation
   val int32Value = 5l
-  // @compiler blocked: missing-implementation
   val uint32Value = 5ul
-  // @compiler blocked: missing-implementation
   val int16Value = 5s
-  // @compiler blocked: missing-implementation
   val uint16Value = 5us
-  // @compiler blocked: missing-implementation
   val int8Value = 5y
-  // @compiler blocked: missing-implementation
   val uint8Value = 5uy
-  // @compiler blocked: missing-implementation
   val floatValue = 5.6
-  // @compiler blocked: missing-implementation
   val boolValue = true
-  // @compiler blocked: missing-implementation
   val tupleValue = (1L, 2L, 3L)
-  // @compiler blocked: missing-implementation
   val charValue = 'c'
-  // @compiler blocked: missing-implementation
   val unitValue = ()
-  // @compiler blocked: missing-implementation
   val enumValue = Stdlib.Option.Option.Some 5L
-  // @compiler blocked: missing-implementation
   val listValue = [ 1L, 2L, 3L ]
-  // @compiler blocked: missing-implementation
   val dictValue = Dict { "a": 1L, "b": 2L, "c": 3L }
-  // @compiler blocked: missing-implementation
   val recordValue = Stdlib.Cli.Host.Host {
     os = Stdlib.Cli.OS.OS.Linux
     arch = Stdlib.Cli.Architecture.Architecture.X86_64

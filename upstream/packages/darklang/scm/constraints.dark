@@ -18,7 +18,6 @@ module Darklang.SCM.Constraints
 /// The type is here so the next kind is a case rather than a new command: an item left with no inbound
 /// references after a propagation, and a newly-bound fn shadowing an existing one with an identical
 /// signature, both want this same detect / record / ack lifecycle.
-// @compiler blocked: missing-implementation
 type Kind =
   | StaleUsage
   /// The name moved to a different KIND of item, and this usage is still on the old one.
@@ -46,7 +45,6 @@ type Kind =
   /// implementation usually arrives by sync while nobody is looking. Deprecate one to settle it.
   | RivalImplementations
 
-// @compiler blocked: missing-implementation
 let kindToString (k: Kind) : String =
   match k with
   | StaleUsage -> "stale-usage"
@@ -55,7 +53,6 @@ let kindToString (k: Kind) : String =
   | RivalImplementations -> "rival-implementations"
 
 /// The other direction, for reading a kind back out of storage or a CLI argument.
-// @compiler blocked: missing-implementation
 let kindFromString (s: String) : Stdlib.Option.Option<Kind> =
   match s with
   | "stale-usage" -> Stdlib.Option.Option.Some(Kind.StaleUsage)
@@ -69,7 +66,6 @@ let kindFromString (s: String) : Stdlib.Option.Option<Kind> =
 /// Acking is uniform across kinds -- "leave it, I've seen it" is the same answer whatever the finding is --
 /// so it can be a bulk verb. Resolving is not: it means something different per kind, so `dark constraints
 /// resolve` checks this list before doing anything.
-// @compiler blocked: missing-implementation
 let resolutionsFor (k: Kind) : List<String> =
   match k with
   | StaleUsage -> [ "repoint" ]
@@ -87,13 +83,11 @@ let resolutionsFor (k: Kind) : List<String> =
   | RivalImplementations -> []
 
 /// Is <param choice> a resolution this kind offers?
-// @compiler blocked: missing-implementation
 let offersResolution (k: Kind) (choice: String) : Bool =
   Stdlib.List.contains (resolutionsFor k) choice
 
 
 /// Which of two implementations of one trait for one type a call runs.
-// @compiler blocked: missing-implementation
 type RivalChoice =
   /// The finding's own implementation (`usage`): it was written later.
   | Mine
@@ -108,7 +102,6 @@ type RivalChoice =
 ///
 /// A DU rather than two hash fields every kind has to fill: a replaced propagation choice has no hashes
 /// to put in them, and the alternative is a case carrying fields it cannot honour.
-// @compiler blocked: missing-implementation
 type FindingDetail =
   /// A usage still on an old version: what it references, and what that name means now.
   | Versions of
@@ -126,7 +119,6 @@ type FindingDetail =
 
 /// One finding: which kind it is, the usage it is about, the dependency involved, and whatever that kind
 /// needs to say beyond that.
-// @compiler blocked: missing-implementation
 type Finding =
   { kind: Kind
     /// stable across re-detection, so an ack sticks
@@ -138,7 +130,6 @@ type Finding =
     detail: FindingDetail }
 
 
-// @compiler blocked: missing-implementation
 let fqnOf (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
   let mods = Stdlib.String.join loc.modules "."
   if mods == "" then $"{loc.owner}.{loc.name}" else $"{loc.owner}.{mods}.{loc.name}"
@@ -153,7 +144,6 @@ let fqnOf (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
 /// <param discriminator> is whatever makes this finding a DIFFERENT one from the next: the version a
 /// usage is on, or another kind-specific discriminator. Kept as text so a kind with no hashes can key on
 /// something else and still get a stable id.
-// @compiler blocked: missing-implementation
 let findingId
   (usage: LanguageTools.ProgramTypes.PackageLocation)
   (dependency: LanguageTools.ProgramTypes.PackageLocation)
@@ -173,7 +163,7 @@ let findingId
 ///
 /// main-scoped, on purpose: this is a property of the STORE, of what main's log binds and depends on,
 /// not of the branch the process stands on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.detectOutdatedUsages: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let detectOutdatedUsages () : List<Finding> =
   // Stale (name, version) pairs first, then the edges and live usages behind them. The obvious
   // join, from each live usage to its edges, looks every edge's name up: one lookup per edge in
@@ -258,7 +248,7 @@ let detectOutdatedUsages () : List<Finding> =
 ///
 /// Deliberately NOT scoped to a branch: a constraint is a property of the STORE, so a branch filter would
 /// make an ack given on main stop counting the moment you switched.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.ackedIds: Unknown function or value 'Stdlib.Sqlite.column'"
 let ackedIds () : List<String> =
   Stdlib.Sqlite.column
     (localDb ())
@@ -277,7 +267,7 @@ let ackedIds () : List<String> =
 /// The `Finding` fields are the stale-usage ones reused: `dependency` is the location ITSELF, because the
 /// thing whose version moved is this name rather than something it calls. That is the one field here that
 /// reads oddly, and it is why `line` in the CLI prints this kind separately.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.detectSupersededDecisions: Unknown function or value 'SCM.PackageOps.supersededOverrides'"
 let detectSupersededDecisions () : Stdlib.Result.Result<List<Finding>, String> =
   SCM.PackageOps.supersededOverrides ()
   |> Stdlib.Result.map (fun entries ->
@@ -324,7 +314,6 @@ let detectSupersededDecisions () : Stdlib.Result.Result<List<Finding>, String> =
 /// spellings of one type (`Point`, `Tests.Tr.Point`) are then equal, and so is their printed
 /// form: the printer only falls back to the written name when a hash is bound to several
 /// names, which content addressing makes common (any two types of one shape share a hash).
-// @compiler blocked: missing-implementation
 let withoutWrittenNames
   (t: LanguageTools.RuntimeTypes.TypeReference)
   : LanguageTools.RuntimeTypes.TypeReference =
@@ -351,7 +340,7 @@ let withoutWrittenNames
     )
   | other -> other
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.detectRivalImplementations: Unknown function or value 'LanguageTools.PackageManager.Search.search'"
 let detectRivalImplementations (branchId: Uuid) : List<Finding> =
   let query =
     LanguageTools.ProgramTypes.Search.SearchQuery
@@ -431,7 +420,7 @@ let detectRivalImplementations (branchId: Uuid) : List<Finding> =
 /// Three reads whatever the branch holds: the chain, every edge out of what it binds, and what
 /// each dependency means now. Asked per binding and per edge, a branch re-decoded its whole chain
 /// once for every edge.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.detectOutdatedUsagesOn: Unknown function or value 'PackageOps.chainBindingEntries'"
 let detectOutdatedUsagesOn (branchId: Uuid) : List<Finding> =
   if SCM.Branch.isMain branchId then
     []
@@ -509,13 +498,12 @@ let detectOutdatedUsagesOn (branchId: Uuid) : List<Finding> =
 ///
 /// Two of these detectors read the op log, and a failed read used to come back empty. A caller that
 /// prints "no constraints" has to be able to tell that from "nothing found".
-// @compiler blocked: missing-implementation
 type Detection =
   { findings: List<Finding>
     /// One sentence per detector that could not run. Empty is the normal case.
     blocked: List<String> }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.detectAll: Unknown function or value 'detectSupersededDecisions'"
 let detectAll () : Detection =
   // Detection and acknowledgement are independent of dependency upgrades.
   let (decisions, decisionsBlocked) =
@@ -534,7 +522,7 @@ let detectAll () : Detection =
 
 
 /// Findings that have not been acknowledged.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.pending: Unknown function or value 'ackedIds'"
 let pending () : Detection =
   let ackedSet =
     ackedIds ()
@@ -561,7 +549,7 @@ let pending () : Detection =
 /// machine you typed it on re-reports forever everywhere else, and differently on each of them.
 ///
 /// The fold writes the `conflicts` row, so that table is derived rather than a second source of truth.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Constraints.ack: Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let ack
   (branchId: Uuid)
   (s: Finding)

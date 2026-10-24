@@ -1,7 +1,6 @@
 module Darklang.Cli.Prompt
 
 /// Is stdin a terminal? Both confirmations need it, and a builtin gets one wrapper.
-// @compiler blocked: missing-implementation
 let interactive () : Bool = Stdlib.Cli.Stdin.isInteractive ()
 
 /// Ask a yes/no question. `-y` and an empty answer proceed; a stdin nobody is holding does not.
@@ -14,7 +13,7 @@ let interactive () : Bool = Stdlib.Cli.Stdin.isInteractive ()
 /// Every caller exits 1 on a no, including the no that nobody gave. The action did not happen, and a
 /// script, a CI step or an agent reads exit 0 as "done". Don't turn a declined confirm back into a
 /// polite exit 0.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Prompt.confirm: Unknown function or value 'Stdlib.printErrorLine'"
 let confirm (autoConfirm: Bool) (question: String) : Bool =
   if autoConfirm then
     true
@@ -27,7 +26,7 @@ let confirm (autoConfirm: Bool) (question: String) : Bool =
 
 /// Like <fn confirm>, but an empty answer and non-interactive stdin both mean no. For
 /// commands that throw work away, where a stray Return should not be a yes.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Prompt.confirmExplicit: Unknown function or value 'Stdlib.printErrorLine'"
 let confirmExplicit (autoConfirm: Bool) (question: String) : Bool =
   if autoConfirm then
     true
@@ -40,7 +39,6 @@ let confirmExplicit (autoConfirm: Bool) (question: String) : Bool =
 
 
 /// State for prompt-specific fields (text, cursor, history)
-// @compiler blocked: missing-implementation
 type State =
   { text: String
     cursorPosition: Int
@@ -48,7 +46,6 @@ type State =
     historyIndex: Int
     savedPrompt: String }
 
-// @compiler blocked: missing-implementation
 let initState () : State =
   State
     { text = ""
@@ -60,7 +57,6 @@ let initState () : State =
 
 module Editing =
   /// Insert text at cursor position
-  // @compiler blocked: missing-implementation
   let insertAtCursor (state: State) (char: String) : State =
     let beforeCursor = Stdlib.String.slice state.text 0 state.cursorPosition
     let afterCursor = Stdlib.String.dropFirst state.text state.cursorPosition
@@ -72,7 +68,6 @@ module Editing =
         savedPrompt = "" }
 
   /// Delete character before cursor (backspace)
-  // @compiler blocked: missing-implementation
   let deleteBeforeCursor (state: State) : State =
     if state.cursorPosition > 0 then
       let beforeCursor = Stdlib.String.slice state.text 0 (state.cursorPosition - 1)
@@ -86,7 +81,6 @@ module Editing =
       state
 
   /// Delete character at cursor (delete key)
-  // @compiler blocked: missing-implementation
   let deleteAtCursor (state: State) : State =
     let textLength = Stdlib.String.length state.text
 
@@ -99,31 +93,26 @@ module Editing =
       state
 
   /// Move cursor left
-  // @compiler blocked: missing-implementation
   let moveCursorLeft (state: State) : State =
     let newCursorPos = Stdlib.max 0 (state.cursorPosition - 1)
     { state with cursorPosition = newCursorPos }
 
   /// Move cursor right
-  // @compiler blocked: missing-implementation
   let moveCursorRight (state: State) : State =
     let textLength = Stdlib.String.length state.text
     let newCursorPos = Stdlib.min textLength (state.cursorPosition + 1)
     { state with cursorPosition = newCursorPos }
 
   /// Move cursor to start of line
-  // @compiler blocked: missing-implementation
   let moveCursorHome (state: State) : State =
     { state with cursorPosition = 0 }
 
   /// Move cursor to end of line
-  // @compiler blocked: missing-implementation
   let moveCursorEnd (state: State) : State =
     let textLength = Stdlib.String.length state.text
     { state with cursorPosition = textLength }
 
   /// Clear the prompt text
-  // @compiler blocked: missing-implementation
   let clear (state: State) : State =
     { state with
         text = ""
@@ -131,7 +120,6 @@ module Editing =
         historyIndex = -1 }
 
   /// Set the prompt text and move cursor to end
-  // @compiler blocked: missing-implementation
   let setText (state: State) (text: String) : State =
     let textLength = Stdlib.String.length text
     { state with text = text, cursorPosition = textLength }
@@ -139,7 +127,6 @@ module Editing =
 
 module History =
   /// Add command to history (avoiding duplicates at the front)
-  // @compiler blocked: missing-implementation
   let addCommand (state: State) (command: String) : State =
     let updatedHistory =
       if Stdlib.List.isEmpty state.commandHistory || Stdlib.List.head state.commandHistory != Stdlib.Option.Option.Some command then
@@ -151,7 +138,6 @@ module History =
         historyIndex = -1 }
 
   /// Navigate to previous command in history
-  // @compiler blocked: missing-implementation
   let navigatePrevious (state: State) : State =
     if Stdlib.Bool.not (Stdlib.List.isEmpty state.commandHistory) then
       let historyLength = Stdlib.List.length state.commandHistory
@@ -182,7 +168,6 @@ module History =
       state
 
   /// Navigate to next command in history
-  // @compiler blocked: missing-implementation
   let navigateNext (state: State) : State =
     if Stdlib.Bool.not (Stdlib.List.isEmpty state.commandHistory) && state.historyIndex >= 0 then
       let newIndex =
@@ -211,14 +196,12 @@ module History =
 
 
 module Display =
-  // @compiler blocked: missing-implementation
   let plainPrefix (locationStr: String) : String =
     if Stdlib.String.isEmpty locationStr then
       "> "
     else
       locationStr + " > "
 
-  // @compiler blocked: missing-implementation
   let styledPrefix (locationStr: String) : String =
     if Stdlib.String.isEmpty locationStr then
       "> "
@@ -226,7 +209,6 @@ module Display =
       Stdlib.Cli.UI.Colors.dimText $"{locationStr} " + "> "
 
   /// Format the complete prompt with input and optional hint
-  // @compiler blocked: missing-implementation
   let formatPromptWithInput
     (locationStr: String)
     (text: String)
@@ -238,7 +220,7 @@ module Display =
       styledPrefix locationStr + text + (Stdlib.Cli.UI.Colors.hint hint)
 
   /// Build the complete prompt region and Unicode-correct logical cursor.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Prompt.Display.viewAtSize: Unknown function or value 'Stdlib.Cli.Tui.Text.positionAfter'"
   let viewAtSize
     (state: State)
     (locationStr: String)

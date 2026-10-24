@@ -7,7 +7,7 @@ module Darklang.Cli.Workbench
 
 /// Render Tree items as aligned name/description rows with selection state,
 /// WIP and deprecation badges, and a scrollable viewport.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderTreeList (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   if Stdlib.List.isEmpty state.items then
     Stdlib.Cli.UI.Layout.at region 1 2 (Stdlib.Cli.UI.Colors.dimText "(no items here)")
@@ -93,7 +93,6 @@ let renderTreeList (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<S
 /// (green), scoped effects a rule can name (cyan), and the ones a policy can
 /// only hand over whole -- native, process -- in orange. The callback caveat
 /// is a caveat, so it stays dim.
-// @compiler blocked: missing-implementation
 let effectsText (effects: String) : String =
   let paint (part: String) : String =
     if part == "effect-free" then Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.green part
@@ -105,24 +104,20 @@ let effectsText (effects: String) : String =
   Stdlib.String.join parts (Stdlib.Cli.UI.Colors.dimText ", ")
 
 /// `effectsText` in brackets, for a row description beside a signature.
-// @compiler blocked: missing-implementation
 let effectsBadge (effects: String) : String =
   (Stdlib.Cli.UI.Colors.dimText "[") + (effectsText effects) + (Stdlib.Cli.UI.Colors.dimText "]")
 
 /// A section heading on the item page: one word, bold cyan, no rules. Cyan
 /// so it cannot be mistaken for the frame's purple focus title.
-// @compiler blocked: missing-implementation
 let sectionHeading (label: String) : String =
   Stdlib.Cli.UI.Colors.colorize (Stdlib.Cli.UI.Colors.bold + Stdlib.Cli.UI.Colors.cyan) label
 
 /// A `label   value` row under a section heading: the label dim in a fixed
 /// column, the value as it came.
-// @compiler blocked: missing-implementation
 let factRow (label: String) (value: String) : String =
   "  " + (Stdlib.Cli.UI.Colors.dimText (Stdlib.String.padEndToWidth label 11)) + value
 
 /// A dim note under a fact row, aligned with its value.
-// @compiler blocked: missing-implementation
 let factNote (note: String) : String =
   "  " + (Stdlib.String.repeat " " 11) + (Stdlib.Cli.UI.Colors.dimText note)
 
@@ -134,10 +129,9 @@ let factNote (note: String) : String =
 /// policy and call-time resource checks describe the runtime rather than
 /// this fn, so none of that earns a line here.
 /// The line the access block opens with; `inspectPageLines` splits on it.
-// @compiler blocked: missing-implementation
 val accessHeading = sectionHeading "access"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let accessSummaryLines (state: State) (hash: String) : List<String> =
   let facts = Permissions.Command.accessFacts state.accountId hash
   let requires =
@@ -181,7 +175,7 @@ let accessSummaryLines (state: State) (hash: String) : List<String> =
 /// value's literal, a fn's signature with its requirements badge. One flat
 /// run of 25 `name  desc` rows read as a dump; the kinds are how a person
 /// scans a module, so they are how it is laid out.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let modulePreviewLines (state: State) (item: BodyItem) : List<String> =
   let path = Stdlib.List.append (Packages.modulePathOf state.location) [ item.name ]
   let location = Packages.PackageLocation.Module path
@@ -259,13 +253,12 @@ let modulePreviewLines (state: State) (item: BodyItem) : List<String> =
       [ Stdlib.Cli.UI.Colors.dimText "⏎ enter" ] ]
 
 /// A test row's description ("passed", "failed", ...) in its colour.
-// @compiler blocked: missing-implementation
 let testStatusText (status: String) : String =
   if status == "passed" then Stdlib.Cli.UI.Colors.success status
   else if (status == "failed") || (status == "error") then Stdlib.Cli.UI.Colors.error status
   else Stdlib.Cli.UI.Colors.dimText status
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.testOutcomeLines: Unknown function or value 'Packages.Test.lastOutcome'"
 let testOutcomeLines
   (branchId: Uuid)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -284,7 +277,7 @@ let testOutcomeLines
 
 /// Tests that exercise the selected function. Kept separate from `detailLines`
 /// so the Inspect page can put the action after source, access, and references.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let selectedFunctionTestRows (state: State) : List<String> =
   match Stdlib.List.getAt state.items state.selected with
   | Some item when item.kind == "fn" ->
@@ -304,7 +297,7 @@ let selectedFunctionTestRows (state: State) : List<String> =
   | _ -> []
 
 /// The source/detail of the currently-selected item, as lines for the Inspect pane.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let detailLines (state: State) : List<String> =
   // The flat lenses carry FULL paths (owner.mod.name), so they look up by full path rather than
   // leaf-in-location the way the tree does. Values renders one kind; Changed renders whichever kind the
@@ -324,7 +317,7 @@ let detailLines (state: State) : List<String> =
       itemLines state item (Packages.Query.searchExactMatch state.branchId modulePath item.name)
 
 /// An item's source and access block, from the lookup the caller already made for it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let itemLines
   (state: State)
   (item: BodyItem)
@@ -396,7 +389,7 @@ let itemLines
 /// The row list is filterable (`f`), so `selected` indexes the FILTERED items and not `allTopics`. Indexing
 /// straight into `allTopics` meant a narrowed Docs list previewed and opened whatever topic happened to sit at
 /// that position in the full list: filter to `terminal-ui`, get `for-ai`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let selectedDocTopic (state: State) : Stdlib.Option.Option<Docs.Command.Topics.DocTopic> =
   match Stdlib.List.getAt state.items state.selected with
   | None -> Stdlib.Option.Option.None
@@ -410,7 +403,7 @@ let selectedDocTopic (state: State) : Stdlib.Option.Option<Docs.Command.Topics.D
     |> Stdlib.List.findFirst (fun t -> t.name == leaf)
 
 /// The Docs topic content for the selected row.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let docContent (state: State) : String =
   match selectedDocTopic state with
   | Some t -> t.content ()
@@ -418,7 +411,7 @@ let docContent (state: State) : String =
 
 /// A recorded divergence's detail for the Conflicts preview. It resolves by
 /// location because the section is filterable, like `selectedBranch`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let conflictDetail (state: State) : String =
   match selectedConflict state with
   | Some c ->
@@ -464,7 +457,7 @@ let conflictDetail (state: State) : String =
 
 /// The selected run: where it stands, what it was given, and what it did to the world. The same
 /// answer `dark traces inspect <id>` gives, because it is the same row.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let traceDetail (state: State) : String =
   match Stdlib.List.getAt state.items state.selected with
   | None ->
@@ -521,7 +514,7 @@ let traceDetail (state: State) : String =
 /// The item page's first line: the kind with its glyph, the short content
 /// hash, and a deprecation mark only when it is deprecated. Nothing that is
 /// true of every item earns a word here.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let itemMeta
   (state: State)
   (item: BodyItem)
@@ -559,7 +552,7 @@ let itemMeta
 /// The traces that called the selected fn, for the `x` reader: one row per
 /// trace, newest first, or a line saying nothing has called it yet and how to
 /// change that.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let tracesText (state: State) : String =
   match Stdlib.List.getAt state.items state.selected with
   | None -> "(nothing selected)"
@@ -588,7 +581,7 @@ let tracesText (state: State) : String =
           [ "", Stdlib.Cli.UI.Colors.dimText "  6 › Traces lists every trace" ] ])
       "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let inspectPageLines (state: State) : List<String> =
   match Stdlib.List.getAt state.items state.selected with
   | None -> [ Stdlib.Cli.UI.Colors.dimText "(nothing selected - browse the tree)" ]
@@ -638,7 +631,7 @@ let inspectPageLines (state: State) : List<String> =
           tests ]
 
 /// The key the Code view's item page is built against; see `PreviewKey`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let previewKey (state: State) : PreviewKey =
   PreviewKey
     { view = state.activeView
@@ -653,7 +646,7 @@ let previewKey (state: State) : PreviewKey =
       width = previewInnerWidth state
       draftOps = state.scmStatus.ops }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let matterPageLines (state: State) : List<String> =
   if (state.matter.lens == Lens.ValuesOnly) || (state.matter.lens == Lens.Changed) then
     detailLines state
@@ -662,7 +655,7 @@ let matterPageLines (state: State) : List<String> =
 
 /// Build the item page when the Code view is showing one it was not built for. Kept on the
 /// state, so the frames in between draw it rather than reading the store again.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let refreshPreview (next: State) : State =
   if next.activeView != vMatter then
     { next with preview = Stdlib.Option.Option.None }
@@ -676,7 +669,7 @@ let refreshPreview (next: State) : State =
 
 /// The preview content for the selected item in the current view. One function so the preview pane, its
 /// scroll bounds, and the full-screen reader all agree. SCM previews depend on the active section.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let previewLines (state: State) : List<String> =
   if state.activeView == vHome then []
   else if state.activeView == vSCM then

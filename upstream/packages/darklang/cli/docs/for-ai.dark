@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.ForAI
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Darklang AI Quick Reference
 

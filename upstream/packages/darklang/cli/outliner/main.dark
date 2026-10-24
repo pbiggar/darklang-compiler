@@ -6,18 +6,15 @@
 module Darklang.Cli.Outliner.Main
 
 /// An action waiting on a yes/no.
-// @compiler blocked: missing-implementation
 type Pending =
   | DeleteDocument of Int
   | DeleteNode of Int
 
-// @compiler blocked: missing-implementation
 type Screen =
   | DocPicker of Stdlib.Cli.UI.Picker.State
   | DocRenaming of docId: Int * Stdlib.Cli.UI.Picker.State * Stdlib.Cli.UI.TextField.State
   | Editing of Editor.State
 
-// @compiler blocked: missing-implementation
 type State =
   { documents: List<Document>
     activeDocId: Int
@@ -34,7 +31,6 @@ type State =
     /// else has been in since.
     savedStamp: Stdlib.Option.Option<Store.Stamp> }
 
-// @compiler blocked: missing-implementation
 type KeyResult =
   | Continue of State
   | Save of State
@@ -43,7 +39,6 @@ type KeyResult =
 
 // --- Documents ---
 
-// @compiler blocked: missing-implementation
 let activeDoc (state: State) : Document =
   let fallback = Document { id = 0, title = "Untitled", outline = emptyOutline () }
 
@@ -51,7 +46,6 @@ let activeDoc (state: State) : Document =
   |> Stdlib.List.findFirst (fun d -> d.id == state.activeDocId)
   |> Stdlib.Option.withDefault fallback
 
-// @compiler blocked: missing-implementation
 let updateDoc (state: State) (docId: Int) (updated: Outline) : State =
   { state with
       documents =
@@ -61,7 +55,6 @@ let updateDoc (state: State) (docId: Int) (updated: Outline) : State =
 /// "Tasks  (12 lines, 3 done)" - a count of what's in the document, not of its top level.
 ///
 /// The old label counted `rootChildren`, so a nine-line document read "(3 items)".
-// @compiler blocked: missing-implementation
 let docLabel (doc: Document) : String =
   let all = descendants doc.outline doc.outline.rootChildren
   let total = Stdlib.List.length all
@@ -83,11 +76,9 @@ let docLabel (doc: Document) : String =
 
   $"{doc.title}  ({suffix})"
 
-// @compiler blocked: missing-implementation
 let docLabels (state: State) : List<String> =
   Stdlib.List.map state.documents docLabel
 
-// @compiler blocked: missing-implementation
 let makeDocPicker (state: State) : Stdlib.Cli.UI.Picker.State =
   let picker = Stdlib.Cli.UI.Picker.make (docLabels state)
 
@@ -98,41 +89,34 @@ let makeDocPicker (state: State) : Stdlib.Cli.UI.Picker.State =
 
   Stdlib.Cli.UI.Picker.moveTo picker index
 
-// @compiler blocked: missing-implementation
 let docAt (state: State) (index: Int) : Stdlib.Option.Option<Document> =
   Stdlib.List.getAt state.documents index
 
 
 // --- Status line ---
 
-// @compiler blocked: missing-implementation
 let say (state: State) (message: String) : State =
   { state with message = message, messageIsError = false }
 
-// @compiler blocked: missing-implementation
 let complain (state: State) (message: String) : State =
   { state with message = message, messageIsError = true }
 
 /// Clear the last message, so it belongs to one action rather than lingering.
-// @compiler blocked: missing-implementation
 let quiet (state: State) : State =
   { state with message = "", messageIsError = false }
 
 
 // --- Screen transitions ---
 
-// @compiler blocked: missing-implementation
 let openDocument (state: State) (doc: Document) : State =
   { (quiet state) with
       activeDocId = doc.id
       screen = Screen.Editing(Editor.fromOutline doc.outline) }
 
 /// Back to the document list, keeping the outline the editor was holding.
-// @compiler blocked: missing-implementation
 let backToPicker (state: State) : State =
   { (quiet state) with screen = Screen.DocPicker(makeDocPicker state) }
 
-// @compiler blocked: missing-implementation
 let createDocument (state: State) : State =
   let doc =
     Document { id = state.nextDocId, title = "Untitled", outline = emptyOutline () }
@@ -148,7 +132,6 @@ let createDocument (state: State) : State =
   { (say withDoc "new document") with
       screen = Screen.Editing(Editor.insertAfter (Editor.fromOutline doc.outline)) }
 
-// @compiler blocked: missing-implementation
 let deleteDocument (state: State) (docId: Int) : State =
   if (Stdlib.List.length state.documents) <= 1 then
     complain state "that's the only document"
@@ -169,7 +152,6 @@ let deleteDocument (state: State) (docId: Int) : State =
 
 // --- Keys: the document picker ---
 
-// @compiler blocked: missing-implementation
 let onPickerKey
   (state: State)
   (picker: Stdlib.Cli.UI.Picker.State)
@@ -218,7 +200,6 @@ let onPickerKey
 
 // --- Keys: renaming ---
 
-// @compiler blocked: missing-implementation
 let onRenameKey
   (state: State)
   (docId: Int)
@@ -252,7 +233,6 @@ let onRenameKey
 
 // --- Keys: the editor ---
 
-// @compiler blocked: missing-implementation
 let onEditorKey
   (state: State)
   (editor: Editor.State)
@@ -292,7 +272,6 @@ let onEditorKey
 
 // --- Keys: the confirmation, when one is open ---
 
-// @compiler blocked: missing-implementation
 let onConfirmKey
   (state: State)
   (question: Stdlib.Cli.UI.Confirm.State)
@@ -323,7 +302,6 @@ let onConfirmKey
   | Ignored -> KeyResult.Continue state
 
 
-// @compiler blocked: missing-implementation
 let handleKey
   (state: State)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -346,7 +324,6 @@ let handleKey
 // --- Rendering ---
 
 /// The rename screen: the document list with one row replaced by the text field.
-// @compiler blocked: missing-implementation
 let renameRows
   (state: State)
   (docId: Int)
@@ -365,7 +342,6 @@ let renameRows
   Stdlib.Cli.UI.Picker.view (Stdlib.Cli.UI.Picker.withLabels picker labels) region
 
 /// Title, badge and hints for the screen in front.
-// @compiler blocked: missing-implementation
 let chromeFor (state: State) : Stdlib.Cli.UI.Chrome.Frame =
   match state.screen with
   | DocPicker _ ->
@@ -402,7 +378,6 @@ let chromeFor (state: State) : Stdlib.Cli.UI.Chrome.Frame =
           badge
           "Enter: edit   o: line   Tab: indent   x: task   Space: fold   /: find   u: undo   g: docs   Esc: back"
 
-// @compiler blocked: missing-implementation
 let bodyFor
   (state: State)
   (region: Stdlib.Cli.UI.Layout.Region)
@@ -413,7 +388,7 @@ let bodyFor
   | Editing editor -> Editor.view editor region
 
 /// Build the whole view. Pure: no terminal, no reads.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Outliner.Main.viewAtSize: Unknown function or value 'Stdlib.Cli.UI.Chrome.view'"
 let viewAtSize (state: State) (size: Stdlib.Cli.Tui.Size) : Stdlib.Cli.Tui.View =
   let base_ = chromeFor state
 
@@ -437,7 +412,6 @@ let viewAtSize (state: State) (size: Stdlib.Cli.Tui.Size) : Stdlib.Cli.Tui.View 
 
 // --- Loading and saving ---
 
-// @compiler blocked: missing-implementation
 let fromData (data: Store.PersistedData) : State =
   let state =
     State
@@ -453,7 +427,6 @@ let fromData (data: Store.PersistedData) : State =
 
   { state with screen = Screen.DocPicker(makeDocPicker state) }
 
-// @compiler blocked: missing-implementation
 let load () : State =
   match Store.load () with
   | Loaded data -> fromData data
@@ -466,7 +439,6 @@ let load () : State =
         screen = Screen.DocPicker(Stdlib.Cli.UI.Picker.make [])
         loadError = Stdlib.Option.Option.Some $"{path} ({reason})" }
 
-// @compiler blocked: missing-implementation
 let save (state: State) : State =
   match state.loadError with
   | Some _ -> state

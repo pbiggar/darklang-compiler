@@ -8,14 +8,13 @@ module Darklang.LanguageTools.NameResolver
 /// - or something else, like a value or fn.
 /// During these times, and others, we wantto allow errors, so we can
 ///  parse it as a variable as a fallback if nothing is found under that name.
-// @compiler blocked: missing-implementation
 type OnMissing =
   | ThrowError
   | Allow
 
 /// Context for name resolution — bundles the 5 parameters that were
 /// previously threaded individually through every function.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.NameResolver.NRContext: Unknown type 'ProgramTypes.PackageManager.PackageManager'"
 type NRContext =
   { onMissing: OnMissing
     pm: ProgramTypes.PackageManager.PackageManager
@@ -26,7 +25,6 @@ type NRContext =
 // CLEANUP no-op: both arms return `err`, so OnMissing.ThrowError is never
 // honored — this (tooling) resolver never throws. Either implement ThrowError
 // to match the F# resolver, or drop the OnMissing plumbing as always-allow.
-// @compiler blocked: missing-implementation
 let throwIfRelevant
   (onMissing: OnMissing)
   (result: ProgramTypes.NameResolution<'a>)
@@ -40,7 +38,6 @@ let throwIfRelevant
           | Allow -> err) }
 
 
-// @compiler blocked: missing-implementation
 type GenericName =
   { modules: List<String>
     name: String
@@ -54,7 +51,6 @@ type GenericName =
 /// - Darklang.Option.Option
 /// - Option.Option
 /// , in that order (most specific first).
-// @compiler blocked: missing-implementation
 let namesToTry
   (owner: String)
   (currentModule: List<String>)
@@ -82,7 +78,6 @@ let namesToTry
 
 // TODO we can do this without a helper function,
 // by removing the recursion and using a fold.
-// @compiler blocked: missing-implementation
 let namesToTryHelper
   (modulesToPrepend: List<String>)
   (given: GenericName)
@@ -105,7 +100,7 @@ let namesToTryHelper
 /// returned `ResolvedName.location` inside the Ok branch, so dep-edge
 /// inserts can populate location columns directly without a post-hoc
 /// lookup.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'NRContext'"
 let resolveGenericName
   (ctx: NRContext)
   (name: WrittenTypes.Name)
@@ -208,7 +203,7 @@ let resolveGenericName
 
 
 module TypeName =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageManager.PackageManager'"
   let tryResolve
     (pm: ProgramTypes.PackageManager.PackageManager)
     (branchId: ProgramTypes.BranchID)
@@ -232,7 +227,7 @@ module TypeName =
       | None -> Stdlib.Result.Result.Error()
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'NRContext'"
   let resolve
     (ctx: NRContext)
     (name: WrittenTypes.Name)
@@ -242,7 +237,7 @@ module TypeName =
 
 
 module TraitName =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageManager.PackageManager'"
   let tryResolve
     (pm: ProgramTypes.PackageManager.PackageManager)
     (branchId: ProgramTypes.BranchID)
@@ -268,7 +263,7 @@ module TraitName =
   /// Like a type name, then, for a bare name, as a stdlib trait: `impl Add for
   /// Point` anywhere means `Stdlib.Add` unless something closer is called Add.
   /// Same rule as the F# `resolveTraitName`.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'NRContext'"
   let resolve
     (ctx: NRContext)
     (name: WrittenTypes.Name)
@@ -290,7 +285,7 @@ module TraitName =
 
 
 module ValueName =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.NameResolver.ValueName.builtinThingExists: Unknown function or value 'LanguageTools.allBuiltinValues'"
   let builtinThingExists (name: String) : Bool =
     (LanguageTools.allBuiltinValues ())
     // `f.name` is an FQValueName.Builtin record, not a String — compare its
@@ -299,7 +294,7 @@ module ValueName =
     |> Stdlib.List.findFirst (fun f -> f.name.name == name)
     |> Stdlib.Option.isSome
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageManager.PackageManager'"
   let tryResolve
     (pm: ProgramTypes.PackageManager.PackageManager)
     (branchId: ProgramTypes.BranchID)
@@ -334,7 +329,7 @@ module ValueName =
         | None -> Stdlib.Result.Result.Error()
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'NRContext'"
   let resolve
     (ctx: NRContext)
     (name: WrittenTypes.Name)
@@ -344,7 +339,7 @@ module ValueName =
 
 
 module FnName =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageManager.PackageManager'"
   let tryResolve
     (pm: ProgramTypes.PackageManager.PackageManager)
     (branchId: ProgramTypes.BranchID)
@@ -383,7 +378,7 @@ module FnName =
   /// `Show.show`: the path's last module segment names a trait with a method
   /// `show`; then the name is a trait method, dispatched at runtime.
   /// Mirrors `resolveTraitMethod` in LibParser's NameResolver.fs.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'NRContext'"
   let tryResolveTraitMethod
     (ctx: NRContext)
     (given: List<String>)
@@ -434,7 +429,7 @@ module FnName =
             | None -> Stdlib.Option.Option.None
     | _ -> Stdlib.Option.Option.None
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'NRContext'"
   let resolve
     (ctx: NRContext)
     (name: WrittenTypes.Name)

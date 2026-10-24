@@ -6,7 +6,7 @@ module Darklang.SCM.PackageOps
 
 
 /// Get recent package ops (fully decoded), newest first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let getRecent (limit: Int) : List<LanguageTools.ProgramTypes.PackageOp> =
   decodeOpRows (
     Stdlib.Sqlite.rowsOrEmptyP
@@ -20,7 +20,7 @@ let getRecent (limit: Int) : List<LanguageTools.ProgramTypes.PackageOp> =
 
 /// Ops whose id starts with <param prefix>, fully decoded -- for inspecting op CONTENT. Newest 20: a
 /// prefix short enough to match more than a handful is a typo, not a listing.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let getByIdPrefix
   (prefix: String)
   : List<LanguageTools.ProgramTypes.PackageOp> =
@@ -31,7 +31,7 @@ let getByIdPrefix
       [ prefix ])
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let opsInCommitLimited
   (commitHash: String)
   (limit: Int64)
@@ -52,7 +52,7 @@ let opsInCommitLimited
 ///
 /// `Int` both ways, as the builtin declares. An `Int64` here is a runtime type error at the one call
 /// site, the workbench's commit detail, rather than anything the loader catches.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let getCommitNamedOps
   (commitHash: String)
   (limit: Int)
@@ -61,7 +61,7 @@ let getCommitNamedOps
 
 
 /// How many ops a commit committed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.opCountIn: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let opCountIn (commitHash: String) : Int64 =
   Stdlib.Sqlite.scalarIntP
     (localDb ())
@@ -72,7 +72,7 @@ let opCountIn (commitHash: String) : Int64 =
 
 
 /// How many ops are in the log.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.count: Unknown function or value 'Stdlib.Sqlite.scalarInt'"
 let count () : Int64 =
   Stdlib.Sqlite.scalarInt (localDb ()) "SELECT count(*) AS n FROM package_ops" "n"
   |> Stdlib.Option.withDefault 0L
@@ -82,7 +82,6 @@ let count () : Int64 =
 /// the same table but invisible from here -- that isolation is the point of the overlay.
 ///
 /// Takes the branch id as a bound parameter; there is no caller-supplied predicate.
-// @compiler blocked: missing-implementation
 let visibleWhere (branchId: Uuid) : String =
   if SCM.Branch.isMain branchId then
     "id NOT IN (SELECT op_id FROM op_branches)"
@@ -95,7 +94,6 @@ let visibleWhere (branchId: Uuid) : String =
     + " SELECT bid FROM chain)))"
 
 
-// @compiler blocked: missing-implementation
 let visibleParams (branchId: Uuid) : List<String> =
   if SCM.Branch.isMain branchId then
     []
@@ -109,7 +107,6 @@ let visibleParams (branchId: Uuid) : List<String> =
 /// behind "2 ahead" and behind a branch's own commit list.
 ///
 /// Column names are prefixed `p.`, for queries that join `package_ops p` against something else.
-// @compiler blocked: missing-implementation
 let ownedWhere (branchId: Uuid) : String =
   if SCM.Branch.isMain branchId then
     "p.effective = 1 AND p.id NOT IN (SELECT op_id FROM op_branches)"
@@ -117,13 +114,12 @@ let ownedWhere (branchId: Uuid) : String =
     "p.id IN (SELECT op_id FROM op_branches WHERE branch_id = @p0)"
 
 
-// @compiler blocked: missing-implementation
 let ownedParams (branchId: Uuid) : List<String> =
   if SCM.Branch.isMain branchId then [] else [ Stdlib.toString branchId ]
 
 
 /// How many ops this branch can see.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.countFor: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let countFor (branchId: Uuid) : Int64 =
   Stdlib.Sqlite.scalarIntP
     (localDb ())
@@ -134,7 +130,7 @@ let countFor (branchId: Uuid) : Int64 =
 
 
 /// The <param limit> most recent op summaries this branch can see, newest first by insertion order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'OpSummary'"
 let summariesFor (branchId: Uuid) (limit: Int64) : List<OpSummary> =
   let sql =
     "SELECT id, origin_ts AS ts, length(op_blob) AS sz, op_blob FROM package_ops WHERE "
@@ -192,7 +188,7 @@ let summariesFor (branchId: Uuid) (limit: Int64) : List<OpSummary> =
 /// state, since nothing folds them into main's `locations`) and tagged onto the branch in the same
 /// transaction, so there is no window, and a tagged op is complete the moment it is visible. A
 /// branch watch takes main's ops when applied and its chain's ops when tagged.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.idsLandedSince: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let idsLandedSince (branchId: Uuid) (since: String) (andAtSince: Bool) : List<String> =
   let sinceParam = if SCM.Branch.isMain branchId then "@p0" else "@p2"
   let comparison = if andAtSince then ">=" else ">"
@@ -213,7 +209,7 @@ let idsLandedSince (branchId: Uuid) (since: String) (andAtSince: Bool) : List<St
 
 
 /// The summaries for <param ids>, in the order given. An id the log does not hold is skipped.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'OpSummary'"
 let summariesByIds (ids: List<String>) : List<OpSummary> =
   if Stdlib.List.isEmpty ids then
     []
@@ -261,11 +257,10 @@ let summariesByIds (ids: List<String>) : List<OpSummary> =
 /// own ops are inert, `applied = 0` for good, and tagged in the same transaction they are stored
 /// in). The same rule `idsLandedSince` reports by; a frontier taken by a narrower rule sits behind
 /// every branch op, and a branch watch then re-reports its whole history on every poll.
-// @compiler blocked: missing-implementation
 let landedWhere () : String =
   "(applied = 1 OR id IN (SELECT op_id FROM op_branches))"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.newestInsert: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let newestInsert () : String =
   Stdlib.Sqlite.queryOneP
     (localDb ())
@@ -277,7 +272,7 @@ let newestInsert () : String =
 
 /// The ids of the ops that landed at exactly <param at> (a `created_at`). A watcher that resumes from
 /// `at` while that second may still be filling gets these back, and drops them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.idsInsertedAt: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let idsInsertedAt (at: String) : List<String> =
   Stdlib.Sqlite.rowsP
     (localDb ())
@@ -288,7 +283,7 @@ let idsInsertedAt (at: String) : List<String> =
 
 /// The store's clock, in `created_at` form, so a watcher can tell whether the second it last saw an
 /// insert in is still the current one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.storeNow: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let storeNow () : String =
   Stdlib.Sqlite.queryOneP (localDb ()) "SELECT datetime('now') AS now" []
   |> Stdlib.Option.andThen (fun row -> Stdlib.Sqlite.textField row "now")
@@ -300,7 +295,7 @@ let storeNow () : String =
 /// The same predicate `commitsOnBranch` selects with, counted in SQLite. The listing used to get
 /// this by asking for a hundred thousand commits and taking the length, which decodes every row of
 /// a store's whole history to print one number above twenty lines.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.commitCountOnBranch: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let commitCountOnBranch (branchId: Uuid) : Int64 =
   Stdlib.Sqlite.scalarIntP
     (localDb ())
@@ -318,7 +313,7 @@ let commitCountOnBranch (branchId: Uuid) : Int64 =
 /// goes to the log. For main that is the effective ops no branch has claimed; for a branch it is the ops
 /// tagged to it, which is exactly "what this branch committed that main has not" -- the number Home means
 /// when it says a branch is N ahead.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.commitsOnBranch: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let commitsOnBranch (branchId: Uuid) (limit: Int64) : List<Commits.Commit> =
   // The limit is the LAST parameter, so its placeholder number is however many the predicate bound.
   // Counted rather than written out: main's arm binds none and a branch's binds one, and a second copy
@@ -350,7 +345,7 @@ let commitsOnBranch (branchId: Uuid) (limit: Int64) : List<Commits.Commit> =
 /// was made" is a local question, and insertion order is the local answer.
 ///
 /// Empty means this store has committed nothing yet, which is the only honest answer for a first commit.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.parentCommitFor: Unknown function or value 'Stdlib.Sqlite.scalarTextP'"
 let parentCommitFor (branchId: Uuid) : String =
   // What this branch can SEE, committed: its own ops plus main's, which is why a fresh branch's first
   // commit follows main's latest rather than nothing.
@@ -385,7 +380,7 @@ let parentCommitFor (branchId: Uuid) : String =
 /// default; `--all` shows them. Merge events are never housekeeping: on a peer's machine the
 /// merged work files under the author's commits and the merge commit holds only its event, and
 /// hiding it there would make the same history read differently per machine.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.isHousekeepingCommit: Unknown function or value 'opCountIn'"
 let isHousekeepingCommit (commitHash: String) : Bool =
   if (opCountIn commitHash) > 3L then
     false

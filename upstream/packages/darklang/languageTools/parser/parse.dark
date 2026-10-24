@@ -3,18 +3,18 @@ module Darklang.LanguageTools.Parser.Parse
 
 /// The written-types tree for <param code>, or {{None}} if the tokenizer failed outright. Syntax errors
 /// short of that come back as a tree plus `diagnostics`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ParsedFile'"
 let toWrittenTypes (code: String) : Stdlib.Option.Option<WrittenTypes.ParsedFile> =
   Builtin.parserParseToWrittenTypes code
 
 
 /// The parser's syntax diagnostics for <param code>, as (range, message) pairs. Empty on a clean parse.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.Parse.diagnostics: Unknown function or value 'Builtin.parserParseDiagnostics'"
 let diagnostics (code: String) : List<(Parser.Range * String)> =
   Builtin.parserParseDiagnostics code
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ParsedFile'"
 let initialParse
   (code: String)
   : Stdlib.Result.Result<WrittenTypes.ParsedFile, String> =
@@ -28,7 +28,7 @@ let initialParse
 
 
 // TODO: maybe use a proper type instead of string?
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.Expr'"
 let parsePTExpr
   (code: String)
   : Stdlib.Result.Result<ProgramTypes.Expr, String> =
@@ -44,7 +44,7 @@ let parsePTExpr
 ///
 /// The branch is a PARAMETER, not the process's: the same source must lower the same way whichever
 /// branch a long-lived process (the LSP) happens to sit on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.Expr'"
 let parsePTExprInContext
   (branchId: Uuid)
   (owner: String)
@@ -94,7 +94,7 @@ let parsePTExprInContext
   | Error e -> Stdlib.Result.Result.Error e
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.SourceFile.SourceFile'"
 let parsePTSourceFileWithOps
   (branchId: Uuid)
   (code: String)
@@ -112,7 +112,7 @@ let parsePTSourceFileWithOps
 
 
 /// Parse package declarations into written types, or return syntax diagnostics.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ParsedFile'"
 let packageToWrittenTypes
   (source: String)
   : Stdlib.Result.Result<WrittenTypes.ParsedFile, List<(Parser.Range * String)>> =
@@ -120,7 +120,7 @@ let packageToWrittenTypes
 
 
 /// Convert a top-level declaration to a module member for shared lowering.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.SourceFile.SourceFileDeclaration'"
 let toModuleDeclaration
   (declaration: WrittenTypes.SourceFile.SourceFileDeclaration)
   : WrittenTypes.ModuleDeclaration.Declaration =
@@ -139,7 +139,7 @@ let toModuleDeclaration
 
 /// Lower a module to package operations without storing them. Resolve references
 /// within the module and against <param context>, then stabilize recursive hashes.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'NameResolver.NRContext'"
 let moduleToPackageOps
   (context: NameResolver.NRContext)
   (rootModule: WrittenTypes.ModuleDeclaration.ModuleDeclaration)
@@ -162,7 +162,7 @@ let moduleToPackageOps
 /// Parse package source under <param owner> and <param modules>, resolving against
 /// <param branchId> and the other declarations in the source. Return stabilized
 /// operations, or an error for invalid syntax or unresolved names.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let packageSourceToOps
   (branchId: Uuid)
   (owner: String)

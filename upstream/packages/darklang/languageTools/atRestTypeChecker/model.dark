@@ -6,7 +6,6 @@ module Darklang.LanguageTools.AtRestTypeChecker.Model
 
 /// Distinguish the different unknown types associated with one syntax node.
 /// For example, a lambda needs separate unknowns for its parameters and return type.
-// @compiler blocked: missing-implementation
 type Role =
   /// The type of the value produced or matched by this node.
   | Result
@@ -30,7 +29,6 @@ type Role =
 /// Generate combines a syntax-node ID with a Role: list node 17 always uses
 /// Of(17, Element) for its element type, without needing a shared counter.
 /// Solve uses a separate counter to give each use of a generic type fresh unknowns.
-// @compiler blocked: missing-implementation
 type Var =
   /// An unknown identified by the syntax node that introduced it and its role there.
   | Of of Int64 * Role
@@ -39,7 +37,7 @@ type Var =
 
 /// Types represented inside the checker, including declared type parameters,
 /// types still being inferred, and placeholders for previously reported problems.
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 1564: Darklang.LanguageTools.AtRestTypeChecker.Model.Ty.TChar, Darklang.LanguageTools.RuntimeTypes.TypeReference.TUInt8"
 type Ty =
   | TUnit
   | TBool
@@ -78,7 +76,7 @@ type Ty =
 /// An error or warning collected before the final report is built.
 /// Types.isWarning classifies the issue code. An error that still depends on
 /// unresolved types may also become a warning when Items decides the verdict.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Finding: Unknown type 'Ty'"
 type Finding =
   { code: IssueCode
     /// The syntax-node ID to report, or None for a declaration-wide finding.
@@ -92,7 +90,7 @@ type Finding =
     context: Context }
 
 /// How the checker obtains the type of a local variable when it is used.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Binder: Unknown type 'Ty'"
 type Binder =
   /// Every use shares one type; information learned from one use constrains the others.
   | Mono of Ty
@@ -103,7 +101,7 @@ type Binder =
 /// A requirement generated from syntax for Solve to check.
 /// Order matters: establish a called function's type before checking its arguments,
 /// so a lambda passed as an argument can use the expected parameter types.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Constraint: Unknown type 'Ty'"
 type Constraint =
   /// Process the enclosed requirements in their listed order.
   | All of List<Constraint>
@@ -226,7 +224,7 @@ type Constraint =
 
 /// A reusable inferred type. Each use replaces quantified variables with fresh
 /// unknowns and must satisfy the saved constraints for those new types.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Scheme: Unknown type 'Ty'"
 type Scheme =
   { /// Variables allowed to have a different type at each use.
     quantified: List<Var>
@@ -245,7 +243,6 @@ type Scheme =
 /// item's own type parameters for its caller to decide, and because a call that NAMES a
 /// bounded function also reports what that function's bound turned into, which is itself
 /// either answered or deferred.
-// @compiler blocked: missing-implementation
 type Resolution =
   /// A trait method call: the method, and the implementations that apply to it. One
   /// implementation is the answer; several are an ordering question for the store, which
@@ -277,7 +274,7 @@ type Resolution =
     fromParam: String
 
 /// Whether a named function has a signature the checker can use.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Callable: Unknown type 'Template'"
 type Callable =
   /// A converted signature, ready to be used with this call's type arguments.
   | Declared of Template
@@ -290,7 +287,7 @@ type Callable =
 /// A function signature converted to the checker's Ty representation and cached
 /// for this batch. Type parameters are stored as TRigid names; each use replaces
 /// them with explicit type arguments or fresh unknowns.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Template: Unknown type 'Ty'"
 type Template =
   { typeParams: List<String>
     parameters: List<Ty>
@@ -312,7 +309,7 @@ type Template =
 
 /// A function's parameter and return types before conversion to the checker's Ty
 /// representation. Package and builtin functions both supply signatures in this form.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Signature: Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 type Signature =
   { typeParams: List<String>
     parameters: List<LanguageTools.ProgramTypes.TypeReference>
@@ -325,7 +322,7 @@ type Signature =
 
 /// A type declaration's validation problems and the types it directly references.
 /// Cache this information so other declarations in the batch can reuse it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.DeclarationFacts: Unknown type 'Finding'"
 type DeclarationFacts =
   { /// Store findings without a use-site node ID. When another declaration uses
     /// this type, attach that use's node ID to the findings reported there.
@@ -336,7 +333,7 @@ type DeclarationFacts =
 /// Type information shared while checking a batch of declarations.
 /// It contains loaded types, function signatures, inferred value types, and cached
 /// validation results. Checking returns an updated copy when it learns more.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Environment: Unknown type 'LanguageTools.ProgramTypes.FQFnName.FQFnName'"
 type Environment =
   { /// The branch whose bindings decide which implementations are visible.
     ///

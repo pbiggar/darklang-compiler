@@ -10,7 +10,6 @@ module Darklang.Cli.Tests.TracesRendering
 module IdWidth =
   // The shortest prefix that tells THESE ids apart. Eight unless two of them collide, which is
   // what makes a table narrow without ever being ambiguous.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.idWidth'" class=missing-support reason=upstream-dependency
   test shortestDistinctPrefix =
     Stdlib.Test.all
       [ Darklang.Cli.TraceVerbs.idWidth
@@ -24,21 +23,18 @@ module IdWidth =
         |> Stdlib.Test.equal 16 ]
 
   // One id is unique by definition, and none is not a question.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.idWidth'" class=missing-support reason=upstream-dependency
   test singleOrNoIds =
     Stdlib.Test.all
       [ Darklang.Cli.TraceVerbs.idWidth [ "aaaaaaaaaaaaaaaa" ] |> Stdlib.Test.equal 8
         Darklang.Cli.TraceVerbs.idWidth [] |> Stdlib.Test.equal 8 ]
 
   // Ids that agree past every width in the ladder fall back to the whole uuid.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.idWidth'" class=missing-support reason=upstream-dependency
   test wholeUuidFallback =
     Darklang.Cli.TraceVerbs.idWidth
       [ "aaaaaaaaaaaaaaaaaaaaaaaaa1", "aaaaaaaaaaaaaaaaaaaaaaaaa2" ]
     |> Stdlib.Test.equal 36
 
 module Status =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.statusText'" class=missing-support reason=upstream-dependency
   test statusText =
     Stdlib.Test.all
       [ Darklang.Cli.TraceVerbs.statusText Darklang.Tracing.Status.Running
@@ -51,20 +47,17 @@ module Status =
         |> Stdlib.Test.equal "suspended" ]
 
 module ShortId =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.shortIdText'" class=missing-support reason=upstream-dependency
   test shortId =
     Darklang.Cli.Text.shortIdText "5db5d5be-ebc1-445c-b989-cb964b48e26d"
     |> Stdlib.Test.equal "5db5d5be"
 
   // Shorter than eight is all of it, rather than a raise.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.shortIdText'" class=missing-support reason=upstream-dependency
   test shortIdOfShortText =
     Darklang.Cli.Text.shortIdText "abc" |> Stdlib.Test.equal "abc"
 
 module OneLine =
   // A table cell must not break the row, so a long value is cut with an ellipsis and a newline
   // becomes a space.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.oneLineAt'" class=missing-support reason=upstream-dependency
   test oneLineCell =
     Stdlib.Test.all
       [ Darklang.Cli.Text.oneLineAt 10 "short" |> Stdlib.Test.equal "short"
@@ -73,7 +66,6 @@ module OneLine =
         Darklang.Cli.Text.oneLineAt 20 "two\nlines" |> Stdlib.Test.equal "two lines" ]
 
 module Plural =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.plural'" class=missing-support reason=upstream-dependency
   test plural =
     Stdlib.Test.all
       [ Darklang.Cli.Text.plural 1 "call" |> Stdlib.Test.equal "1 call"
@@ -83,7 +75,6 @@ module Plural =
 module TheLog =
   // A logged call, with everything the renderer reads.
 
-  // @compiler blocked: upstream-dependency
   let call (name: String) (ms: Int) (seq: Int64) : Darklang.Tracing.FnCall =
     Darklang.Tracing.FnCall
       { callId = $"call-{name}"
@@ -95,7 +86,7 @@ module TheLog =
         seq = seq
         ord = seq }
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TracesRendering.TheLog.render: Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'"
   let render (opts: Darklang.Cli.Tracing.ViewOptions) : String =
     Darklang.Cli.Tracing.formatFnCalls
       opts
@@ -157,7 +148,6 @@ module TheLogIsCut =
   // Every call here is the same call: what is under test is how many lines come out, not what
   // is on them.
 
-  // @compiler blocked: missing-implementation
   val one =
     Darklang.Tracing.FnCall
       { callId = "c"
@@ -169,7 +159,7 @@ module TheLogIsCut =
         seq = 0L
         ord = 0L }
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TracesRendering.TheLogIsCut.logOf: Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'"
   let logOf (count: Int) (opts: Darklang.Cli.Tracing.ViewOptions) : Int =
     Stdlib.List.length
       (Stdlib.String.split
@@ -179,7 +169,7 @@ module TheLogIsCut =
           (Stdlib.List.map (Stdlib.List.range 1 count) (fun _ -> one)))
         "\n")
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TracesRendering.TheLogIsCut.textOf: Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'"
   let textOf (count: Int) (opts: Darklang.Cli.Tracing.ViewOptions) : String =
     Darklang.Cli.Tracing.formatFnCalls
       opts
@@ -228,7 +218,6 @@ module TheLogIsCut =
 module ViewFlags =
   // The flags that only meant something for a tree of every call are refused by name, so a
   // script that still passes one is told what changed instead of quietly getting everything.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.parseViewOptions'" class=missing-support reason=upstream-dependency
   test removedFlagsRefused =
     Stdlib.Test.all
       [ (match
@@ -249,7 +238,6 @@ module ViewFlags =
         |> Stdlib.Test.equal true ]
 
   // `--all` turns the cut off.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.parseViewOptions'" class=missing-support reason=upstream-dependency
   test allTurnsCutOff =
     (match
       Darklang.Cli.Tracing.parseViewOptions
@@ -261,7 +249,6 @@ module ViewFlags =
     |> Stdlib.Test.equal true
 
   // The ones that still mean something still work.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.parseViewOptions'" class=missing-support reason=upstream-dependency
   test remainingFlagsWork =
     (match
       Darklang.Cli.Tracing.parseViewOptions
@@ -279,7 +266,6 @@ module WatchCursor =
   val ids = [ "newest", "middle", "oldest" ]
 
   // Following a run: the cursor goes to wherever that run is now.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" class=missing-support reason=upstream-dependency
   test followRun =
     Darklang.Cli.TraceWatch.pickCursor
       ids
@@ -288,7 +274,6 @@ module WatchCursor =
     |> Stdlib.Test.equal 2
 
   // A run that arrived at the top pushes the one being read down, and the cursor goes with it.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" class=missing-support reason=upstream-dependency
   test newRunPushesDown =
     Darklang.Cli.TraceWatch.pickCursor
       [ "brand-new", "newest", "middle", "oldest" ]
@@ -297,7 +282,6 @@ module WatchCursor =
     |> Stdlib.Test.equal 1
 
   // The run being read is gone (retention dropped it): keep the position, clamped.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" class=missing-support reason=upstream-dependency
   test vanishedRunClamps =
     Darklang.Cli.TraceWatch.pickCursor
       ids
@@ -306,7 +290,6 @@ module WatchCursor =
     |> Stdlib.Test.equal 2
 
   // Not following anything -- a key press -- is a plain clamp.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" class=missing-support reason=upstream-dependency
   test plainClamp =
     Stdlib.Test.all
       [ Darklang.Cli.TraceWatch.pickCursor ids 1 Stdlib.Option.Option.None
@@ -317,7 +300,6 @@ module WatchCursor =
         |> Stdlib.Test.equal 0 ]
 
   // No runs at all: there is nowhere to be but zero.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" class=missing-support reason=upstream-dependency
   test noRuns =
     Darklang.Cli.TraceWatch.pickCursor [] 4 Stdlib.Option.Option.None
     |> Stdlib.Test.equal 0

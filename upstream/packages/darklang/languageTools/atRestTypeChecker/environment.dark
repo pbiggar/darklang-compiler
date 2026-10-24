@@ -10,7 +10,7 @@ module Darklang.LanguageTools.AtRestTypeChecker.Environment
 /// Read the package type's hash stored in a record or enum value.
 /// Used to identify the standard Option and Result types from actual values.
 /// Return an empty hash for values that are neither package records nor enums.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Environment.typeHashOf: Unknown function or value 'LanguageTools.RuntimeTypes.reflect'"
 let typeHashOf (value: 'a) : LanguageTools.ProgramTypes.Hash =
   match LanguageTools.RuntimeTypes.reflect value with
   | DEnum(Package hash, _, _, _, _) -> hash
@@ -20,7 +20,7 @@ let typeHashOf (value: 'a) : LanguageTools.ProgramTypes.Hash =
 /// Convert a builtin's runtime type metadata to the type-reference format used
 /// by package declarations. Preserve type arguments, names, and resolution errors;
 /// runtime metadata provides no source location for resolved package types.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let fromRuntimeType
   (typ: LanguageTools.RuntimeTypes.TypeReference)
   : LanguageTools.ProgramTypes.TypeReference =
@@ -89,7 +89,6 @@ let fromRuntimeType
 /// Collect type-variable names from a runtime type, including nested components.
 /// Repeated occurrences remain in the list; builtinCallable removes duplicates
 /// when adding undeclared parameters to the signature.
-// @compiler blocked: missing-implementation
 let runtimeVariables (typ: LanguageTools.RuntimeTypes.TypeReference) : List<String> =
   match typ with
   | TVariable name -> [ name ]
@@ -111,7 +110,7 @@ let runtimeVariables (typ: LanguageTools.RuntimeTypes.TypeReference) : List<Stri
 /// Keep generic parameters as named TRigid types for substitution at each use,
 /// and save validation problems to report at the calls that rely on this signature.
 /// Return any declaration-validation caches populated along the way.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let signatureTemplate
   (env: Model.Environment)
   (signature: Model.Signature)
@@ -139,7 +138,7 @@ let signatureTemplate
 /// A type variable appearing only in the return type needs an explicit type
 /// argument, as in jsonParse<'a>. If it is not declared as a type parameter,
 /// mark the builtin Untrusted because its result type cannot be determined safely.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let builtinCallable
   (env: Model.Environment)
   (fn: LanguageTools.BuiltinFunction)
@@ -184,7 +183,7 @@ let builtinCallable
     (Model.Callable.Untrusted UntrustedBuiltin.ResultTypeUnconstrained, env)
 
 /// The trait behind <param hash>: one this batch declares, else the store's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let traitFor
   (env: Model.Environment)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -197,7 +196,7 @@ let traitFor
 /// Look up a package signature in env or fetch one builtin's metadata, then
 /// convert it for checking. Return Unavailable if the signature cannot be found.
 /// Solve.callableFor caches the result, including unavailable or untrusted signatures.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let resolveCallable
   (env: Model.Environment)
   (fn: LanguageTools.ProgramTypes.FQFnName.FQFnName)
@@ -245,7 +244,7 @@ let resolveCallable
 /// Fetch one builtin value's declared type and convert it to a package-style type
 /// reference. Return None for missing builtins or package values, whose types
 /// must instead be inferred from their bodies.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQValueName.FQValueName'"
 let builtinValueType
   (name: LanguageTools.ProgramTypes.FQValueName.FQValueName)
   : Stdlib.Option.Option<LanguageTools.ProgramTypes.TypeReference> =
@@ -260,7 +259,7 @@ let builtinValueType
 /// Findings are discarded on purpose: a type variable in an implementation's self type
 /// (`impl Add for List<'a>`) has no mapping here and converts to a placeholder, which is
 /// correct, because the only question asked of the result is what its HEAD is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let tyOfRuntimeType (typ: LanguageTools.RuntimeTypes.TypeReference) : Model.Ty =
   let (ty, _) =
     Types.fromReference (Dict {}) (Stdlib.Option.Option.None) (fromRuntimeType typ)
@@ -269,7 +268,6 @@ let tyOfRuntimeType (typ: LanguageTools.RuntimeTypes.TypeReference) : Model.Ty =
 
 /// A cache key for an operator. Spelled out rather than borrowed from the pretty printer,
 /// which the checker has no business depending on.
-// @compiler blocked: missing-implementation
 let infixKey (operation: LanguageTools.ProgramTypes.InfixFnName) : String =
   match operation with
   | ArithmeticPlus -> "+"
@@ -292,7 +290,6 @@ let infixKey (operation: LanguageTools.ProgramTypes.InfixFnName) : String =
   | StringConcat -> "++"
 
 /// Every operator, so the cache below can be filled without waiting to meet one.
-// @compiler blocked: missing-implementation
 let allInfixOperations () : List<LanguageTools.ProgramTypes.InfixFnName> =
   [ LanguageTools.ProgramTypes.InfixFnName.ArithmeticPlus
     LanguageTools.ProgramTypes.InfixFnName.ArithmeticMinus
@@ -317,7 +314,7 @@ let allInfixOperations () : List<LanguageTools.ProgramTypes.InfixFnName> =
 ///
 /// Taken for the whole batch up front. See `Model.Environment.traitImpls` for why that is
 /// the point rather than an optimisation.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let traitImpls (branchId: Uuid) : Dict<String, List<(Model.Ty * LanguageTools.ProgramTypes.Hash)>> =
   let query =
     LanguageTools.ProgramTypes.Search.SearchQuery
@@ -341,7 +338,7 @@ let traitImpls (branchId: Uuid) : Dict<String, List<(Model.Ty * LanguageTools.Pr
 
 /// Which trait and method each operator is. One table, in F#, shared with the lowering, so
 /// the checker and the runtime cannot come to disagree about what `+` means.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Environment.infixTrait: Unknown function or value 'LanguageTools.PackageManager.Trait.forInfix'"
 let infixTrait
   (branchId: Uuid)
   : Dict<String, Stdlib.Option.Option<(LanguageTools.ProgramTypes.Hash * String)>> =
@@ -376,7 +373,7 @@ let infixTrait
        | Some((h, m, _)) -> Stdlib.Option.Option.Some((h, m))))
 
 /// The implementations of <param traitHash> that this batch knows about.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let implsOfTrait
   (env: Model.Environment)
   (traitHash: LanguageTools.ProgramTypes.Hash)
@@ -388,7 +385,7 @@ let implsOfTrait
   | None -> []
 
 /// The trait and method a UNARY operator is, and that trait's implementations.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let unaryImplsFor
   (env: Model.Environment)
   (key: String)
@@ -399,7 +396,7 @@ let unaryImplsFor
   | _ -> Stdlib.Option.Option.None
 
 /// The trait and method an operator is, and that trait's implementations.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let infixImplsFor
   (env: Model.Environment)
   (operation: LanguageTools.ProgramTypes.InfixFnName)
@@ -414,7 +411,7 @@ let infixImplsFor
 /// Create an empty environment with the standard Option and Result type hashes.
 /// Declarations are loaded later; builtin signatures are fetched as needed and
 /// their converted templates are cached when the solver first uses them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let builtins (branchId: Uuid) : Model.Environment =
   Model.Environment
     { branchId = branchId
@@ -441,7 +438,7 @@ let builtins (branchId: Uuid) : Model.Environment =
 /// them: the calls were left to resolve at run time, where a later rival could take them over,
 /// and nothing said so. An implementation already in the store (an identical re-save) is not
 /// added twice, which would make it its own rival.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let withBatch
   (env: Model.Environment)
   (traits: List<LanguageTools.ProgramTypes.Trait.Trait>)
@@ -489,7 +486,7 @@ let withBatch
 /// being replaced, and the report after the save disagreed with the pin. Without it, the check
 /// sees the store as it will be once the batch lands. An implementation also bound somewhere the
 /// batch does not touch stays, and so does one the batch binds itself.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let withoutReplaced
   (env: Model.Environment)
   (branchId: Uuid)
@@ -538,7 +535,6 @@ let withoutReplaced
 
 /// Return the package reference for a resolved type name. Unresolved names add
 /// no dependency here; type checking reports their resolution errors separately.
-// @compiler blocked: missing-implementation
 let typeNameRefs
   (name: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTypeName.FQTypeName>)
   : List<LanguageTools.ProgramTypes.Reference> =
@@ -549,7 +545,7 @@ let typeNameRefs
 /// Find the package declarations needed to check a function reference.
 /// A package function contributes its own reference; a builtin contributes the
 /// package types in its signature, or those required by its special checking rule.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let functionNameRefs
   (env: Model.Environment)
   (name: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQFnName.FQFnName>)
@@ -581,7 +577,7 @@ let functionNameRefs
 
 /// Find the package declarations needed to check a value reference: the value
 /// itself for a package value, or the package types in a builtin value's metadata.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQValueName.FQValueName'"
 let valueNameRefs
   (name: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQValueName.FQValueName>)
   : List<LanguageTools.ProgramTypes.Reference> =
@@ -598,7 +594,7 @@ let valueNameRefs
 /// Collect resolved package-type references throughout a type, including type
 /// arguments and function components. Loading follows these references later;
 /// this walk does not fetch declarations or remove duplicate references.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeRefs (typ: LanguageTools.ProgramTypes.TypeReference) : List<LanguageTools.ProgramTypes.Reference> =
   match typ with
   | TStream inner -> typeRefs inner
@@ -616,7 +612,7 @@ let typeRefs (typ: LanguageTools.ProgramTypes.TypeReference) : List<LanguageTool
   | _ -> []
 
 /// Collect package-type references from all the supplied types into one list.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeListRefs
   (typs: List<LanguageTools.ProgramTypes.TypeReference>)
   : List<LanguageTools.ProgramTypes.Reference> =
@@ -624,7 +620,7 @@ let typeListRefs
 
 /// Collect references from an alias's target, a record's field types, or an enum's
 /// case payload types, so loading can follow the declaration's dependencies.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration'"
 let declarationRefs
   (decl: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
   : List<LanguageTools.ProgramTypes.Reference> =
@@ -633,7 +629,7 @@ let declarationRefs
 /// Walk an expression's syntax to collect package dependencies without evaluating it.
 /// Visit lambda bodies, both sides of conditionals, and every match guard and body,
 /// since checking needs their declarations even when execution might skip them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let exprRefs
   (env: Model.Environment)
   (expr: LanguageTools.ProgramTypes.Expr)
@@ -641,7 +637,6 @@ let exprRefs
   Stdlib.List.reverse (exprRefsInto env expr [])
 
 /// <param refs> pushed onto <param acc>, a reversed accumulator, in order.
-// @compiler blocked: missing-implementation
 let pushRefs
   (refs: List<LanguageTools.ProgramTypes.Reference>)
   (acc: List<LanguageTools.ProgramTypes.Reference>)
@@ -652,7 +647,7 @@ let pushRefs
     Stdlib.List.fold refs acc (fun acc r -> Stdlib.List.push acc r)
 
 /// `exprRefsInto` over <param exprs> in order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let manyRefsInto
   (env: Model.Environment)
   (exprs: List<LanguageTools.ProgramTypes.Expr>)
@@ -664,7 +659,7 @@ let manyRefsInto
 ///
 /// Accumulated rather than returned and joined: joining builds a closure per call, a mapped list
 /// per node with children, and a flattened copy of it at every level.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let exprRefsInto
   (env: Model.Environment)
   (expr: LanguageTools.ProgramTypes.Expr)
@@ -729,7 +724,7 @@ let exprRefsInto
 /// Collect dependencies from a pipeline step, including named functions or enum
 /// constructors and the expressions supplied as arguments. exprRefs handles the
 /// value entering the pipeline separately.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let pipeRefs
   (env: Model.Environment)
   (pipePart: LanguageTools.ProgramTypes.PipeExpr)
@@ -737,7 +732,7 @@ let pipeRefs
   Stdlib.List.reverse (pipeRefsInto env pipePart [])
 
 /// `pipeRefs`, pushed onto <param acc> as `exprRefsInto` does.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let pipeRefsInto
   (env: Model.Environment)
   (pipePart: LanguageTools.ProgramTypes.PipeExpr)
@@ -753,7 +748,7 @@ let pipeRefsInto
 
 /// Collect the types referenced by a function's parameters and return type.
 /// Dependency functions are checked through these signatures, without walking their bodies.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let signatureRefs (fn: LanguageTools.ProgramTypes.PackageFn.PackageFn) : List<LanguageTools.ProgramTypes.Reference> =
   typeListRefs
     (Stdlib.List.push (Stdlib.List.map fn.parameters (fun p -> p.typ)) fn.returnType)
@@ -765,7 +760,7 @@ let signatureRefs (fn: LanguageTools.ProgramTypes.PackageFn.PackageFn) : List<La
 
 /// Successfully loaded dependencies, indexed by content hash. Keep value bodies
 /// for later inference; loaded functions contribute their declared signatures.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Environment.Closure: Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
 type Closure =
   { types: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.PackageType.PackageType>
     values: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.PackageValue.PackageValue>
@@ -775,7 +770,7 @@ type Closure =
 /// candidateRefs identifies declarations already supplied by the caller; skip
 /// loading those again. Follow dependency values' bodies and dependency functions'
 /// signatures, since values need inference but functions have declared types.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let loadClosure
   (env: Model.Environment)
   (candidateRefs: List<LanguageTools.ProgramTypes.Reference>)
@@ -784,7 +779,7 @@ let loadClosure
   loadClosureFrom (emptyClosure ()) env candidateRefs pending
 
 /// A closure with nothing in it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Closure'"
 let emptyClosure () : Closure =
   Closure { types = Dict {}, values = Dict {}, fns = Dict {} }
 
@@ -794,7 +789,7 @@ let emptyClosure () : Closure =
 /// For checking many batches at once: each batch would otherwise load its own copy of what they
 /// all depend on, and with every batch in flight together those copies are what the check holds.
 /// A batch's closure then points at the pool's values rather than at copies of them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Closure'"
 let loadClosureFrom
   (pool: Closure)
   (env: Model.Environment)
@@ -816,7 +811,7 @@ let loadClosureFrom
 /// For a batch starting from an environment built from <param known>: what is in it is already
 /// registered, prepared and (for values) checked there, so it is neither loaded again nor
 /// followed. Anything outside it is loaded and followed as `loadClosure` would.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Closure'"
 let loadClosureBeyond
   (known: Closure)
   (env: Model.Environment)
@@ -846,7 +841,7 @@ let loadClosureBeyond
 /// Process the remaining references, attempting each distinct reference once.
 /// Mark a reference seen before loading it so cycles, duplicates, and failed loads
 /// do not cause repeated attempts. Keep successfully loaded declarations in closure.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Closure'"
 let loadPendingDependencies
   (load: Closure -> LanguageTools.ProgramTypes.Reference -> (List<LanguageTools.ProgramTypes.Reference> * Closure))
   (seen: Dict<LanguageTools.ProgramTypes.Reference, Bool>)
@@ -872,7 +867,7 @@ let loadPendingDependencies
 /// Fetch one declaration by hash, save it, and return the references to visit next.
 /// Missing declarations leave closure unchanged. The caller guards both loading
 /// and traversal so a conversion or syntax-walk failure cannot abort the queue.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Closure'"
 let loadDependency
   (pool: Closure)
   (env: Model.Environment)

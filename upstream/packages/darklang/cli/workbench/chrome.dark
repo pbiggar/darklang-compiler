@@ -4,7 +4,7 @@
 /// Part of `Darklang.Cli.Workbench`.
 module Darklang.Cli.Workbench
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderViewBody (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   if state.activeView == vHome then
     renderHome state region
@@ -58,7 +58,6 @@ let renderViewBody (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<S
 /// The multiline editor, under a title naming what's being written: a spacious authoring surface (not
 /// the bottom prompt bar). The error line (if any) sits just under the title; the buffer renders below
 /// with a reverse-video cursor at (row, col).
-// @compiler blocked: missing-implementation
 let renderEditing (es: EditingState) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let inner = paneContent region
   let title = paneTitle es.nameStr [ es.kind, "^s saves · esc cancels" ] true
@@ -87,7 +86,7 @@ let renderEditing (es: EditingState) (region: Stdlib.Cli.UI.Layout.Region) : Lis
   Stdlib.List.flatten [ frameWithTitles region title "" (0 - 1), errSpans, bodySpans ]
 
 /// The jumpable search-results list. ⏎ navigates to the hit.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderSearchResults (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let title = paneTitle "Search" [ plural (Stdlib.List.length state.search.hits) "result", "⏎ jump · esc close" ] true
   let inner = paneContent region
@@ -102,7 +101,7 @@ let renderSearchResults (state: State) (region: Stdlib.Cli.UI.Layout.Region) : L
       Stdlib.Cli.UI.ListView.render inner lines state.search.selected ]
 
 /// Dispatch the body: the editor, then a reader, then search results, else the active view's body.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderBody (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   match state.editing with
   | Some es -> renderEditing es region
@@ -114,7 +113,7 @@ let renderBody (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdli
     else renderViewBody state region
 
 /// A view's purpose and data caveat. An empty caveat means real data.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.viewBlurb: Unknown function or value 'extensionViewAt'"
 let viewBlurb (idx: Int) : (String * String) =
   if idx == vMatter then ("browse and edit the package tree", "")
   else if idx == vScratch then
@@ -136,7 +135,7 @@ let viewBlurb (idx: Int) : (String * String) =
 /// END, which are `?` (the keymap) and `q` (the way out) -- the two a person needs most when lost. The
 /// row drops whole hints cheapest-first instead: secondary globals, then the view's own actions, and
 /// `?`/`q` never.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let hintsForView (state: State) (width: Int) : String =
   let view = state.activeView
   // Pane movement only applies when a preview exists.
@@ -228,7 +227,6 @@ let hintsForView (state: State) (width: Int) : String =
   Frame.formatHintsFitted (Stdlib.List.append ctx globals) essential width
 
 /// The keymap, grouped, for the `?` overlay - (category, keys).
-// @compiler blocked: missing-implementation
 val helpGroups =
   [ ("Go", "` nav   ←→ walk it   ↓ into the view   ⏎ go   1-8 view   S switch branch   esc one step back, the footer says where (never quits)")
     ("Move", "↑↓ move   home/end top/bottom   ←→ between panes   tab next pane")
@@ -246,7 +244,7 @@ val helpGroups =
     ("Prompt", "p drops to the command prompt, except on Traces where it pins (quit returns here)   : runs one command without leaving") ]
 
 /// A centered, boxed keymap overlay drawn over the frame. The interior is cleared so nothing shows through.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.renderHelpOverlay: Unknown function or value 'Stdlib.Cli.UI.Box.panel'"
 let renderHelpOverlay (screen: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   // Wide enough for the longest group, not a round number. A fixed 70 clipped the Matter row - the single most
   // useful line in the keymap - on a terminal with room to spare. 11 is where the keys column starts, plus the

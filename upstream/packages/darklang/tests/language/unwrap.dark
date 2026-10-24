@@ -134,7 +134,7 @@ test chained =
 
 // Evaluate the operand once. An error skips later effects without undoing earlier ones.
 module EvaluationCounts =
-  // @compiler blocked: test-counter
+  // @compiler blocked: test-counter diagnostic="Darklang.Language.Tests.Unwrap.EvaluationCounts.counted: Unknown function or value 'Stdlib.Test.incrementCounter'"
   let counted
     (value: Stdlib.Result.Result<Int, String>)
     : Stdlib.Result.Result<Int, String> =
@@ -223,7 +223,7 @@ test libraryCallAfterUnwrap =
 
 // This function declares an Option return but unwraps a Result.
 // If run without static checking, `?` rejects both Ok and Error at runtime.
-// @compiler blocked: compiler-gap
+// @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.Unwrap.wrongKind: Expected TSum\n(\"Darklang.Stdlib.Option.Option\",\n [TInferenceVar (\"t$constraint_-31039_0\", \"t$constraint_-31039_0\")]), got TSum (\"Darklang.Stdlib.Result.Result\", [TInt; TString])"
 let wrongKind
   (value: Stdlib.Result.Result<Int, String>)
   : Stdlib.Option.Option<Int> =

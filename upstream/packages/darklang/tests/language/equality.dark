@@ -36,9 +36,9 @@ type EEnum = | E1 | E2 | E3 of Int64
 type EEnum2 = EEnum
 type EEnumUIn64 = | E1 | E2 | E3 of UInt64
 type EEnum2UIn64 = EEnumUIn64
-// @compiler blocked: constructor-identity
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 825: Darklang.Language.Tests.Equality.EEnumInt128.E2, Darklang.Stdlib.Sqlite.Value.Text"
 type EEnumInt128 = | E1 | E2 | E3 of Int128
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Language.Tests.Equality.EEnum2Int128: Unknown type 'EEnumInt128'"
 type EEnum2Int128 = EEnumInt128
 type EEnumUInt128 = | E1 | E2 | E3 of UInt128
 type EEnum2UInt128 = EEnumUInt128

@@ -45,7 +45,7 @@ let asBytes (v: Value) : Stdlib.Option.Option<Blob> =
 /// Like <fn exec> but binds <param params> to @p0..@pN placeholders in <param sql>,
 /// so values are never string-spliced into SQL (injection-safe). The single caller of the exec builtin —
 /// <fn exec> delegates here — so the builtin keeps exactly one package reference.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.execP: Unknown function or value 'Builtin.sqliteExec'"
 let execP (dbPath: String) (sql: String) (params: List<String>) : Stdlib.Result.Result<Int, String> =
   Builtin.sqliteExec dbPath sql params
 
@@ -58,7 +58,7 @@ let execP (dbPath: String) (sql: String) (params: List<String>) : Stdlib.Result.
 /// Returns rows affected per PARAMETER ROW, in order, flattened across statements. Not a total: a
 /// caller has to be able to tell a real insert from an `INSERT OR IGNORE` that deduped, and a sum
 /// cannot express that.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.execBatch: Unknown function or value 'Builtin.sqliteExecBatch'"
 let execBatch
   (dbPath: String)
   (statements: List<(String * List<List<String>>)>)
@@ -66,7 +66,7 @@ let execBatch
   Builtin.sqliteExecBatch dbPath statements
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.exec: Unknown function or value 'execP'"
 let exec (dbPath: String) (sql: String) : Stdlib.Result.Result<Int, String> =
   execP dbPath sql []
 
@@ -79,13 +79,13 @@ let exec (dbPath: String) (sql: String) : Stdlib.Result.Result<Int, String> =
 /// tells you the store and your belief about it have parted ways.
 ///
 /// Use <fn execP> when a failure is a case the caller handles. Use this when it is not.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.mustExec: Unknown function or value 'execP'"
 let mustExec (dbPath: String) (sql: String) (params: List<String>) : Int =
   Builtin.unwrap (execP dbPath sql params)
 
 
 /// <fn execBatch>, raising on failure. Same reasoning as <fn mustExec>.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.mustExecBatch: Unknown function or value 'execBatch'"
 let mustExecBatch
   (dbPath: String)
   (statements: List<(String * List<List<String>>)>)
@@ -94,7 +94,7 @@ let mustExecBatch
 
 /// Like <fn query> but binds <param params> to @p0..@pN placeholders (injection-safe). The single caller of
 /// the query builtin — <fn query> delegates here.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.queryP: Unknown function or value 'Builtin.sqliteQuery'"
 let queryP
   (dbPath: String)
   (sql: String)
@@ -104,7 +104,7 @@ let queryP
 
 /// Run a SELECT against <param dbPath>; returns each row as a dict of column name
 /// to a typed <type Value> (so ints/reals/blobs keep their types).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.query: Unknown function or value 'queryP'"
 let query
   (dbPath: String)
   (sql: String)
@@ -139,14 +139,14 @@ let bytesField (row: Dict<String, Value>) (col: String) : Stdlib.Option.Option<B
   | None -> Stdlib.Option.Option.None
 
 /// The first row of <param sql> (or None if it returned no rows / errored).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.queryOne: Unknown function or value 'query'"
 let queryOne (dbPath: String) (sql: String) : Stdlib.Option.Option<Dict<String, Value>> =
   match query dbPath sql with
   | Ok(row :: _) -> Stdlib.Option.Option.Some row
   | _ -> Stdlib.Option.Option.None
 
 /// Like <fn queryOne> but with injection-safe params.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.queryOneP: Unknown function or value 'queryP'"
 let queryOneP
   (dbPath: String)
   (sql: String)
@@ -157,14 +157,14 @@ let queryOneP
   | _ -> Stdlib.Option.Option.None
 
 /// Column <param col> of every row of <param sql>, as a list of text (non-text/missing cells dropped).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.column: Unknown function or value 'query'"
 let column (dbPath: String) (sql: String) (col: String) : List<String> =
   match query dbPath sql with
   | Ok rows -> Stdlib.List.filterMap rows (fun row -> textField row col)
   | Error _ -> []
 
 /// The Int in column <param col> of the first row of <param sql> — e.g. a `count(*)`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.scalarInt: Unknown function or value 'queryOne'"
 let scalarInt
   (dbPath: String)
   (sql: String)
@@ -175,7 +175,7 @@ let scalarInt
   | None -> Stdlib.Option.Option.None
 
 /// Like <fn scalarInt> but with injection-safe params — e.g. a per-key lookup.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.scalarIntP: Unknown function or value 'queryOneP'"
 let scalarIntP
   (dbPath: String)
   (sql: String)
@@ -191,7 +191,7 @@ let scalarIntP
 /// rows the decoder declines are dropped, and a failed query gives []. The scaffolding
 /// behind most read paths: the SQL, the params and the per-row decode stay at the
 /// call site, the match around them lives here.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.rowsP: Unknown function or value 'queryP'"
 let rowsP
   (dbPath: String)
   (sql: String)
@@ -204,7 +204,7 @@ let rowsP
 
 /// The raw rows of <param sql>, [] on a failed query -- for callers that hand whole
 /// rows to a shared decoder rather than decoding per column at the call site.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.rowsOrEmptyP: Unknown function or value 'queryP'"
 let rowsOrEmptyP
   (dbPath: String)
   (sql: String)
@@ -215,7 +215,7 @@ let rowsOrEmptyP
   | Error _ -> []
 
 /// <fn column> with injection-safe params.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.columnP: Unknown function or value 'rowsP'"
 let columnP
   (dbPath: String)
   (sql: String)
@@ -226,7 +226,7 @@ let columnP
 
 /// <fn scalarIntP>'s text twin: the text in <param col> of the first row, or
 /// <param dflt> when the query fails, returns no rows, or the cell isn't text.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Sqlite.scalarTextP: Unknown function or value 'queryOneP'"
 let scalarTextP
   (dbPath: String)
   (sql: String)
@@ -240,13 +240,11 @@ let scalarTextP
 
 /// <fn textField> with a "" default -- for decoders where a missing/non-text cell
 /// reads as empty rather than as a skipped row.
-// @compiler blocked: missing-implementation
 let textOr (row: Dict<String, Value>) (col: String) : String =
   textField row col |> Stdlib.Option.withDefault ""
 
 /// <fn textField> parsed as a Uuid: None on a missing/non-text cell or an id that
 /// doesn't parse.
-// @compiler blocked: missing-implementation
 let uuidField (row: Dict<String, Value>) (col: String) : Stdlib.Option.Option<Uuid> =
   match textField row col with
   | Some s ->

@@ -5,7 +5,7 @@ module Darklang.Cli.Branch
 
 /// Report what a reconciliation (merge / rebase) auto-resolved. ONE line, never a wall: the point is that
 /// nothing was lost silently, not to dump the divergence here.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Branch.reportConflicts: Unknown function or value 'Cli.printHint'"
 let reportConflicts (conflicts: List<SCM.Conflicts.Conflict>) : Unit =
   match conflicts with
   | [] -> ()
@@ -25,7 +25,7 @@ let reportConflicts (conflicts: List<SCM.Conflicts.Conflict>) : Unit =
 /// <param standalone> is false when this is the preview inside the confirm flow, where the next line is
 /// the question and telling someone to run the thing they are being asked to approve reads as a
 /// non-sequitur.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeMergePreview
   (state: AppState)
   (branchRef: String)
@@ -72,7 +72,7 @@ let executeMergePreview
       state
 
 /// `dark merge <branch> --dry-run`: show what would land and change nothing.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeMergeDryRun (state: AppState) (branchRef: String) : AppState =
   executeMergePreview state branchRef true
 
@@ -93,7 +93,7 @@ let executeMergeDryRun (state: AppState) (branchRef: String) : AppState =
 /// and main got code that does not typecheck with no record of the decision. Same checker, same
 /// verdict rule (only `Failed`; `Incomplete` is not knowing, which is not the same as knowing it
 /// is wrong), same way past: `--allow-type-errors`, typed out.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Branch.mergeRefusal: Unknown function or value 'SCM.PackageOps.authoredDraftOpCountFor'"
 let mergeRefusal
   (branchId: Uuid)
   (branchRef: String)
@@ -133,7 +133,7 @@ let mergeRefusal
 /// somebody's committed work onto main and there is no undo verb for it, and the piped case is the
 /// one that matters -- an unattended run that meant to merge says `-y`, and one that did not gets
 /// told rather than obeyed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeMerge
   (state: AppState)
   (branchRef: String)
@@ -211,7 +211,7 @@ let executeMerge
 /// the query that would find the rest (`LibDB.Branches.nameConflicts`) has no builtin. So this reports
 /// the conflicts -- names BOTH sides moved -- and says plainly that it is not the whole picture, rather
 /// than printing "nothing to worry about" over changes it cannot see.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeRebaseDryRun (state: AppState) (branchRef: String) : AppState =
   match resolveRef branchRef with
   | None -> Cli.exitWith state false
@@ -247,7 +247,7 @@ let executeRebaseDryRun (state: AppState) (branchRef: String) : AppState =
 
 /// Rebase a branch onto its parent: accept the parent's current state, which a merge requires when the
 /// parent moved a name the branch also moved. Reports what moved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeRebase (state: AppState) (branchRef: String) : AppState =
   match resolveRef branchRef with
   | None -> Cli.exitWith state false
@@ -263,7 +263,7 @@ let executeRebase (state: AppState) (branchRef: String) : AppState =
 
 /// Resolve one conflicted name on a branch: `mine` keeps the branch's version (wins on merge),
 /// `theirs` takes the parent's (drops the branch's binding). Anything else is re-authoring on the branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeResolve
   (state: AppState)
   (branchRef: String)
@@ -284,7 +284,7 @@ let executeResolve
 /// `dark merge`'s own page, rather than `dark branch`'s: that one never mentions merging, so the two
 /// questions a person actually has here -- what does this take, and what will it do to a conflict --
 /// would both go unanswered.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let mergeHelp (_state: AppState) : String =
   [ ""
     "  dark merge                 merge the branch you're on, after showing what would land"
@@ -306,7 +306,7 @@ let mergeHelp (_state: AppState) : String =
 /// On main there is no such branch, and the answer is the usage line rather than a guess. `dark diff`
 /// already works this way for the same reason: the commonest form of the question is the one you are
 /// standing in, and making it the only form you cannot type is a papercut you pay every time.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Branch.bareTargetBranch: Unknown function or value 'SCM.PackageOps.currentBranch'"
 let bareTargetBranch
   (verb: String)
   : Stdlib.Result.Result<String, Unit> =
@@ -322,7 +322,7 @@ let bareTargetBranch
 /// `dark discard` does. Naming a branch is already a deliberate act and goes straight through.
 ///
 /// An explicit yes, not a default-yes: a stray Return or a piped stdin must not move work into main.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeMergeBare (state: AppState) (autoConfirm: Bool) (allowTypeErrors: Bool) : AppState =
   match bareTargetBranch "merge" with
   | Error _ -> Cli.exitWith state false
@@ -347,7 +347,7 @@ let executeMergeBare (state: AppState) (autoConfirm: Bool) (allowTypeErrors: Boo
 ///
 /// One parse for every combination, rather than an arm per spelling: the arm list missed
 /// `merge <branch> -y` entirely, so the named form had no way to say yes in advance.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeMergeCmd (state: AppState) (args: List<String>) : AppState =
   let (flags, rest) =
     Stdlib.List.partition args (fun a -> Stdlib.String.startsWith a "-")
@@ -389,7 +389,7 @@ let executeMergeCmd (state: AppState) (args: List<String>) : AppState =
     Cli.exitWith state false
 
 /// `dark rebase <id>`, or bare on the branch you are standing on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeRebaseCmd (state: AppState) (args: List<String>) : AppState =
   match args with
   | [] ->
@@ -409,7 +409,7 @@ let executeRebaseCmd (state: AppState) (args: List<String>) : AppState =
     Cli.exitWith state false
 
 /// `dark resolve <id> <name> mine|theirs`
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeResolveCmd (state: AppState) (args: List<String>) : AppState =
   match args with
   | [ id, name, choice ] -> executeResolve state id name choice

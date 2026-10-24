@@ -6,10 +6,8 @@ module Darklang.Cli.Workbench.Frame
 /// Labels for the built-in view indices, in order. These are internal: what a
 /// number key does is set by position in `Navbar.workspaces`, not by this list,
 /// so adding or removing a view here is not a change anybody types.
-// @compiler blocked: missing-implementation
 val viewNames = [ "Home", "Matter", "REPL", "SCM", "Traces", "Docs" ]
 
-// @compiler blocked: missing-implementation
 let viewName (i: Int) : String =
   Stdlib.List.getAt viewNames i |> Stdlib.Option.withDefault "Home"
 
@@ -17,7 +15,6 @@ let viewName (i: Int) : String =
 /// white, the label dim, pairs separated by a dim `·`. Quiet on purpose - the
 /// help row is a reference, not a call to action - and per the TUI rule "key
 /// emphasized, label muted" so shortcuts still read at a glance.
-// @compiler blocked: missing-implementation
 let formatHints (pairs: List<(String * String)>) : String =
   pairs
   |> Stdlib.List.map (fun pair ->
@@ -32,7 +29,6 @@ let formatHints (pairs: List<(String * String)>) : String =
 /// which is precisely why `?` is the thing that must not drop.
 ///
 /// Dropping stops at the first hint that does not fit, so the order a person learns them in stays put.
-// @compiler blocked: missing-implementation
 let formatHintsFitted
   (droppable: List<(String * String)>)
   (keep: List<(String * String)>)
@@ -68,6 +64,5 @@ let formatHintsFitted
 
 /// Render a one-row, pre-colored key-hint bar at the bottom of the body. The string is already styled
 /// (see `formatHints`), so this just indents + places it.
-// @compiler blocked: missing-implementation
 let renderKeyHints (region: Stdlib.Cli.UI.Layout.Region) (hints: String) : List<Stdlib.Cli.UI.Layout.Span> =
   Stdlib.Cli.UI.Layout.at region 0 0 ("  " + hints)

@@ -7,7 +7,6 @@
 module Darklang.Cli.Outliner.Commands
 
 /// Read the documents, or explain why not.
-// @compiler blocked: missing-implementation
 let documents () : Stdlib.Result.Result<Store.PersistedData, String> =
   match Store.load () with
   | Loaded data -> Stdlib.Result.Result.Ok data
@@ -15,7 +14,6 @@ let documents () : Stdlib.Result.Result<Store.PersistedData, String> =
     Stdlib.Result.Result.Error $"can't read {path}: {reason}"
 
 /// Find a document by number (as printed by `ls`), exact name, or unique prefix.
-// @compiler blocked: missing-implementation
 let findDoc
   (docs: List<Document>)
   (needle: String)
@@ -42,14 +40,12 @@ let findDoc
       let names = many |> Stdlib.List.map (fun d -> d.title) |> Stdlib.String.join ", "
       Stdlib.Result.Result.Error $"\"{needle}\" matches several: {names}"
 
-// @compiler blocked: missing-implementation
 let printError (message: String) : Unit =
   Stdlib.printLine (Stdlib.Cli.UI.Colors.error message)
 
 
 // --- ls ---
 
-// @compiler blocked: missing-implementation
 let ls () : Unit =
   match documents () with
   | Error e -> printError e
@@ -70,7 +66,6 @@ let ls () : Unit =
 // --- show ---
 
 /// The tree as plain text, the way the editor draws it minus the cursor.
-// @compiler blocked: missing-implementation
 let showRows (doc: Document) : List<String> =
   flattenVisible doc.outline
   |> Stdlib.List.map (fun vn ->
@@ -84,7 +79,6 @@ let showRows (doc: Document) : List<String> =
 
     $"{indent}{bullet} {vn.text}")
 
-// @compiler blocked: missing-implementation
 let show (name: String) : Unit =
   match documents () with
   | Error e -> printError e
@@ -100,7 +94,6 @@ let show (name: String) : Unit =
 // --- add ---
 
 /// Append a line to the end of a document's top level. The quickest possible capture.
-// @compiler blocked: missing-implementation
 let add (name: String) (text: String) : Unit =
   match documents () with
   | Error e -> printError e

@@ -21,7 +21,6 @@
 module Darklang.Cli.LiveView.Host
 
 /// What a view's `update` receives.
-// @compiler blocked: missing-implementation
 type Event<'msg> =
   | Key of Stdlib.Cli.UI.Widget.KeyPress
   /// A `Button` was pressed, or an `Input` edited: the message the tree carried.
@@ -30,7 +29,7 @@ type Event<'msg> =
   | Tick
 
 /// One running view.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.Session: Unknown type 'Stdlib.Cli.UI.Node.Node'"
 type Session<'model, 'msg> =
   { branchId: Uuid
     view: Model.View
@@ -59,12 +58,11 @@ type Session<'model, 'msg> =
 
 // --- resolving ---
 
-// @compiler blocked: missing-implementation
 let entryOf (name: String) : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation> =
   Stdlib.Live.locationOfName name
 
 /// The three entries, resolved as they are now. `Error` names the one that does not resolve.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Stdlib.Live.LastGood'"
 let resolveAll
   (branchId: Uuid)
   (view: Model.View)
@@ -94,12 +92,11 @@ let resolveAll
 // --- rendering ---
 
 /// The band's rows at this width: at most two.
-// @compiler blocked: missing-implementation
 let bandRows (band: String) (width: Int) : Int =
   Stdlib.min 2 (Stdlib.List.length (Stdlib.Cli.Tui.Text.wrapAtWords band (Stdlib.max 1 (width - 2))))
 
 /// The whole screen for a session at a size. Pure: everything it needs is on the session.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let viewAtSize (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : Stdlib.Cli.Tui.View =
   let keys =
     Stdlib.Option.withDefault
@@ -161,7 +158,7 @@ let viewAtSize (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : Stdlib.C
 /// Run the view's `render` on the model. A clean render replaces the frame; a failed one keeps it
 /// and says why underneath. The at-rest verdict comes first: a version that failed its check is
 /// never run, and the previous one is, with the check's words in the band.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let render (s: Session<'model, 'msg>) : Session<'model, 'msg> =
   match Stdlib.Live.call s.render s.model with
   | Ok tree ->
@@ -177,7 +174,7 @@ let render (s: Session<'model, 'msg>) : Session<'model, 'msg> =
     { s with band = Stdlib.Option.Option.Some why }
 
 /// The rows the tree gets at this size: the body less the band.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let treeRowsAt (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : Int =
   let region = Stdlib.Cli.UI.Chrome.bodyRegion size
 
@@ -189,7 +186,7 @@ let treeRowsAt (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : Int =
   Stdlib.max 1 (region.rows - bandHeight)
 
 /// Clamp the window to the tree, and pull it so the focused node is on screen.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let settleScroll (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : Session<'model, 'msg> =
   match s.lastFrame with
   | None -> { s with scroll = 0 }
@@ -208,7 +205,7 @@ let settleScroll (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : Sessio
 
 /// Paint the current frame. A session with no terminal (a test driving `step`) paints nothing and
 /// is read through `viewAtSize` instead.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let present (s: Session<'model, 'msg>) : Session<'model, 'msg> =
   if s.terminal.status == Stdlib.Cli.Tui.TerminalSession.Status.Stopped then
     s
@@ -223,7 +220,7 @@ let present (s: Session<'model, 'msg>) : Session<'model, 'msg> =
 // --- updating ---
 
 /// Run the view's `update`. A failure keeps the model and shows the error; the loop goes on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let applyUpdate (s: Session<'model, 'msg>) (event: Event<'msg>) : Session<'model, 'msg> =
   match Stdlib.Live.call s.update s.model with
   | Ok partial ->
@@ -233,7 +230,7 @@ let applyUpdate (s: Session<'model, 'msg>) (event: Event<'msg>) : Session<'model
   | Error e -> { s with band = Stdlib.Option.Option.Some e }
 
 /// Move focus to the next (or previous) focusable node in the last frame.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let moveFocus (s: Session<'model, 'msg>) (forward: Bool) : Session<'model, 'msg> =
   let ids =
     match s.lastFrame with
@@ -254,7 +251,7 @@ let moveFocus (s: Session<'model, 'msg>) (forward: Bool) : Session<'model, 'msg>
     { s with focus = Stdlib.List.getAt ids next |> Stdlib.Option.withDefault "" }
 
 /// One key: the loop's own keys first (quit, focus), then the focused node's, then the view's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let onKey (s: Session<'model, 'msg>) (k: Stdlib.Cli.UI.Widget.KeyPress) : Session<'model, 'msg> =
   let ctrlC = k.modifiers.ctrl && (k.key == Stdlib.Cli.Stdin.Key.Key.C)
 
@@ -299,7 +296,7 @@ let onKey (s: Session<'model, 'msg>) (k: Stdlib.Cli.UI.Widget.KeyPress) : Sessio
 // --- following edits ---
 
 /// The view `Live.show` names, by its module path.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.shownView: Unknown function or value 'Stdlib.Live.shown'"
 let shownView () : Stdlib.Option.Option<Model.View> =
   Stdlib.Live.shown ()
   |> Stdlib.Option.map (fun loc ->
@@ -309,7 +306,7 @@ let shownView () : Stdlib.Option.Option<Model.View> =
 /// Switch to the view `Live.show` names when it is not the one on screen: a fresh session for it,
 /// on this session's terminal. A view that does not resolve stays where it was and says so.
 /// Returns the session and whether it moved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let followShown (s: Session<'model, 'msg>) : (Session<'model, 'msg> * Bool) =
   match shownView () with
   | Some view when view.render != s.view.render ->
@@ -323,14 +320,14 @@ let followShown (s: Session<'model, 'msg>) : (Session<'model, 'msg> * Bool) =
   | _ -> (s, false)
 
 /// Does the change reach any of the view's entries?
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let affected (s: Session<'model, 'msg>) (change: Stdlib.Live.Change) : Bool =
   (Stdlib.Live.affects change s.render.entry)
   || (Stdlib.Live.affects change s.update.entry)
   || (Stdlib.Live.affects change s.init.entry)
 
 /// Take the change: resolve the entries again through last-good, keep the model, say what moved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let reload (s: Session<'model, 'msg>) (change: Stdlib.Live.Change) : Session<'model, 'msg> =
   let names =
     if change.unknown then "more than 500 ops (everything re-run)"
@@ -346,7 +343,6 @@ let reload (s: Session<'model, 'msg>) (change: Stdlib.Live.Change) : Session<'mo
 // --- saving and resuming the model ---
 
 /// Where a session's snapshot goes: `<the render fn's module>.Sessions.<stamp>`.
-// @compiler blocked: missing-implementation
 let sessionLocation (view: Model.View) : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation> =
   entryOf view.render
   |> Stdlib.Option.map (fun entry ->
@@ -360,7 +356,7 @@ let sessionLocation (view: Model.View) : Stdlib.Option.Option<LanguageTools.Prog
 /// Snapshot the model as a `val` in the store, so a later `--resume <name>` starts from it, on
 /// another machine after a sync if you like. A value that cannot be stored (a stream, a lambda)
 /// says why.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.snapshot: Unknown function or value 'Repl.captureValue'"
 let snapshot (branchId: Uuid) (view: Model.View) (model: 'model) : Stdlib.Result.Result<String, String> =
   match sessionLocation view with
   | None -> Stdlib.Result.Result.Error "the view's render is not a package fn name"
@@ -413,7 +409,7 @@ let snapshot (branchId: Uuid) (view: Model.View) (model: 'model) : Stdlib.Result
         | _ -> Stdlib.Result.Result.Error "the snapshot did not parse"
 
 /// The model stored under <param name>, for `--resume`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.resumeFrom: Unknown function or value 'LanguageTools.PackageManager.Value.find'"
 let resumeFrom (branchId: Uuid) (name: String) : Stdlib.Result.Result<'model, String> =
   match Stdlib.Live.locationOfName name with
   | None -> Stdlib.Result.Result.Error $"{name} is not a package value name"
@@ -429,7 +425,6 @@ let resumeFrom (branchId: Uuid) (name: String) : Stdlib.Result.Result<'model, St
 // --- the loop ---
 
 /// A read of the keyboard as a widget sees it: the key, its modifiers, what it typed.
-// @compiler blocked: missing-implementation
 let press (read: Stdlib.Cli.Stdin.KeyRead.KeyRead) : Stdlib.Cli.UI.Widget.KeyPress =
   Stdlib.Cli.UI.Widget.press
     read.key
@@ -437,13 +432,12 @@ let press (read: Stdlib.Cli.Stdin.KeyRead.KeyRead) : Stdlib.Cli.UI.Widget.KeyPre
     (if read.keyChar == "" then Stdlib.Option.Option.None else Stdlib.Option.Option.Some read.keyChar)
 
 /// How long a toast stays up when nothing else happens.
-// @compiler blocked: missing-implementation
 val toastMs = 3000L
 
 /// One turn: wait, then act. Split from `run` so a test can drive turns one at a time. A toast
 /// on screen adds a timer to the wait; it clears when the timer fires or on the next key,
 /// whichever comes first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let step (s: Session<'model, 'msg>) : Session<'model, 'msg> =
   // One timer: the view's own interval when it has one (a toast clears on the next tick), else
   // the toast's, else none.
@@ -525,7 +519,7 @@ let step (s: Session<'model, 'msg>) : Session<'model, 'msg> =
     present (render after)
   | _ -> s
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let run (s: Session<'model, 'msg>) : Session<'model, 'msg> =
   if s.exiting then s else run (step s)
 
@@ -534,7 +528,7 @@ let run (s: Session<'model, 'msg>) : Session<'model, 'msg> =
 
 /// A session for <param view> at its `init`, rendered once, with no terminal yet. `Error` when a
 /// name does not resolve or `init` fails. What a test drives; `start` puts it on screen.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let prepareWith
   (branchId: Uuid)
   (view: Model.View)
@@ -582,7 +576,7 @@ let prepareWith
 
 /// A session at the view's `init`, rendered once, with no terminal yet. Follows the code, since
 /// what drives this is a test of following it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let prepare
   (branchId: Uuid)
   (view: Model.View)
@@ -590,7 +584,7 @@ let prepare
   prepareWith branchId view Stdlib.Option.Option.None true
 
 /// `prepareWith`, on screen. `Error` also when there is no terminal to take.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let start
   (branchId: Uuid)
   (view: Model.View)
@@ -607,18 +601,18 @@ let start
     | Error message -> Stdlib.Result.Result.Error message
 
 /// The frame a session shows at <param size>, as rows without styling. For tests.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let plainRows (s: Session<'model, 'msg>) (size: Stdlib.Cli.Tui.Size) : List<String> =
   (viewAtSize s size).rows |> Stdlib.List.map (fun r -> Stdlib.String.trimEnd (Stdlib.Cli.Tui.Text.stripSgr r))
 
 /// Leave the screen as we found it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let stop (s: Session<'model, 'msg>) : Unit =
   let _stopped = Stdlib.Cli.Tui.TerminalSession.stop s.terminal
   ()
 
 /// Run a view until it quits. The two callers are `dark ps --watch` and `dark traces --watch`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.openView: Unknown function or value 'start'"
 let openView
   (branchId: Uuid)
   (view: Model.View)

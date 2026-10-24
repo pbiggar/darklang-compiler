@@ -2,7 +2,7 @@
 module Darklang.Cli.Packages.Back
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   match Stdlib.List.last state.packageData.locationHistory with
   | Some previousLocation ->
@@ -23,12 +23,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
     state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
   []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: back"

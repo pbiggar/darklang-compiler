@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Enums
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Enums
 

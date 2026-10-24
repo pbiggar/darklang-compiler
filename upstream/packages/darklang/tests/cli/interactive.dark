@@ -63,7 +63,6 @@ let stepLine (step: Step) : String =
 
 /// Whether this machine can run these tests. The dev container and CI both have expect;
 /// a bare checkout might not, and a test should say so rather than fail obscurely.
-// @compiler blocked: upstream-dependency
 let available () : Bool = Stdlib.Cli.Unix.isCommandAvailable "expect"
 
 
@@ -72,7 +71,6 @@ let available () : Bool = Stdlib.Cli.Unix.isCommandAvailable "expect"
 /// The transcript is everything the child painted, escape sequences and all, which is
 /// what you want in a failure message and what `Stdlib.String.contains` is happy to
 /// search.
-// @compiler blocked: upstream-dependency
 let drive
   (i: Instance.T)
   (args: List<String>)
@@ -131,7 +129,6 @@ let drive
 
 
 /// `drive`, as a test result.
-// @compiler blocked: upstream-dependency
 let expectSteps
   (i: Instance.T)
   (args: List<String>)

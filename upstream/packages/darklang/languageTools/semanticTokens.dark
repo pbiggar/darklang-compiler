@@ -1,11 +1,9 @@
 module Darklang.LanguageTools.SemanticTokens
 
 // <aliases>
-// @compiler blocked: missing-implementation
 type Range = Parser.Range
 // <aliases>
 
-// @compiler blocked: missing-implementation
 type TokenType =
   // universal
   | Symbol
@@ -47,27 +45,23 @@ type TokenType =
 ///
 /// These tokens mean little without reference to a document where the
 /// 'ranges' live within.
-// @compiler blocked: missing-implementation
 type SemanticToken = { range: Range, tokenType: TokenType }
 
-// @compiler blocked: missing-implementation
 let makeToken (s: Range) (t: TokenType) : SemanticToken =
   SemanticToken { range = s, tokenType = t }
 
 
 module ModuleIdentifier =
-  // @compiler blocked: missing-implementation
   let tokenize (m: WrittenTypes.ModuleIdentifier) : List<SemanticToken> =
     [ makeToken m.range TokenType.ModuleName ]
 
 module TypeIdentifier =
-  // @compiler blocked: missing-implementation
   let tokenize (t: WrittenTypes.TypeIdentifier) : List<SemanticToken> =
     [ makeToken t.range TokenType.TypeName ]
 
 module QualifiedTypeIdentifier =
   // Darklang.Stdlib.Option<Int>
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.QualifiedTypeIdentifier'"
   let tokenize
     (q: WrittenTypes.QualifiedTypeIdentifier)
     : List<SemanticToken> =
@@ -86,23 +80,19 @@ module QualifiedTypeIdentifier =
     |> Stdlib.List.flatten
 
 module VariableIdentifier =
-  // @compiler blocked: missing-implementation
   let tokenize (v: WrittenTypes.VariableIdentifier) : List<SemanticToken> =
     [ makeToken v.range TokenType.VariableName ]
 
 module ValueIdentifier =
-  // @compiler blocked: missing-implementation
   let tokenize (c: WrittenTypes.ValueIdentifier) : List<SemanticToken> =
     [ makeToken c.range TokenType.VariableName ]
 
 module FnIdentifier =
-  // @compiler blocked: missing-implementation
   let tokenize (fn: WrittenTypes.FnIdentifier) : List<SemanticToken> =
     [ makeToken fn.range TokenType.FunctionName ]
 
 module QualifiedFnIdentifier =
   /// Darklang.Stdlib.List.map
-  // @compiler blocked: missing-implementation
   let tokenize (q: WrittenTypes.QualifiedFnIdentifier) : List<SemanticToken> =
     [ // Darklang.Stdlib.List.
       (q.modules
@@ -116,7 +106,7 @@ module QualifiedFnIdentifier =
 
 module TypeReference =
   module Builtin =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TypeReference.Builtin'"
     let tokenize
       (t: WrittenTypes.TypeReference.Builtin)
       : List<SemanticToken> =
@@ -195,7 +185,7 @@ module TypeReference =
           [ makeToken rv TokenType.TypeName ] ]
         |> Stdlib.List.flatten
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TypeReference.TypeReference'"
   let tokenize
     (t: WrittenTypes.TypeReference.TypeReference)
     : List<SemanticToken> =
@@ -205,7 +195,7 @@ module TypeReference =
 
 
 module ModuleDeclaration =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ModuleDeclaration.Declaration'"
   let tokenizeDeclaration
     (d: WrittenTypes.ModuleDeclaration.Declaration)
     : List<SemanticToken> =
@@ -219,7 +209,7 @@ module ModuleDeclaration =
     | SubModule sm -> ModuleDeclaration.tokenize sm
     | Expr e -> Expr.tokenize e
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ModuleDeclaration.ModuleDeclaration'"
   let tokenize
     (m: WrittenTypes.ModuleDeclaration.ModuleDeclaration)
     : List<SemanticToken> =
@@ -234,7 +224,7 @@ module ModuleDeclaration =
 
 
 module TypeDeclaration =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TypeDeclaration.Definition'"
   let tokenizeDefinition
     (d: WrittenTypes.TypeDeclaration.Definition)
     : List<SemanticToken> =
@@ -298,7 +288,7 @@ module TypeDeclaration =
 
 
   // type ID = UInt64
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TypeDeclaration.TypeDeclaration'"
   let tokenize
     (t: WrittenTypes.TypeDeclaration.TypeDeclaration)
     : List<SemanticToken> =
@@ -321,7 +311,6 @@ module TypeDeclaration =
 module FnDeclaration =
   module UnitParameter =
     // `()`
-    // @compiler blocked: missing-implementation
     let tokenize
       (p: WrittenTypes.FnDeclaration.UnitParameter)
       : List<SemanticToken> =
@@ -329,7 +318,7 @@ module FnDeclaration =
 
   // `(a: Int)`
   module NormalParameter =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.FnDeclaration.NormalParameter'"
     let tokenize
       (p: WrittenTypes.FnDeclaration.NormalParameter)
       : List<SemanticToken> =
@@ -346,7 +335,7 @@ module FnDeclaration =
       |> Stdlib.List.flatten
 
   module Parameter =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.FnDeclaration.Parameter'"
     let tokenize
       (p: WrittenTypes.FnDeclaration.Parameter)
       : List<SemanticToken> =
@@ -356,7 +345,7 @@ module FnDeclaration =
 
 
   // `let add (a: Int) (b: Int): Int = a + b`
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.FnDeclaration.FnDeclaration'"
   let tokenize
     (fn: WrittenTypes.FnDeclaration.FnDeclaration)
     : List<SemanticToken> =
@@ -385,7 +374,7 @@ module FnDeclaration =
 
 
 module ValueDeclaration =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ValueDeclaration.ValueDeclaration'"
   let tokenize
     (v: WrittenTypes.ValueDeclaration.ValueDeclaration)
     : List<SemanticToken> =
@@ -402,7 +391,7 @@ module ValueDeclaration =
 
 module TypeParamBound =
   // `'a: Show<Int>`
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TypeParamBound'"
   let tokenize (b: WrittenTypes.TypeParamBound) : List<SemanticToken> =
     [ [ makeToken b.symbolColon TokenType.Symbol ]
       QualifiedTypeIdentifier.tokenize b.trait_ ]
@@ -411,7 +400,7 @@ module TypeParamBound =
 
 module TraitDeclaration =
   // `let show (v: 'a) : String`
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TraitDeclaration.Method'"
   let tokenizeMethod
     (m: WrittenTypes.TraitDeclaration.Method)
     : List<SemanticToken> =
@@ -427,7 +416,7 @@ module TraitDeclaration =
     |> Stdlib.List.flatten
 
   // `trait Show<'a> = ...`
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TraitDeclaration.TraitDeclaration'"
   let tokenize
     (t: WrittenTypes.TraitDeclaration.TraitDeclaration)
     : List<SemanticToken> =
@@ -442,7 +431,7 @@ module TraitDeclaration =
 
 module ImplDeclaration =
   // `impl<'a: Show> Show for List<'a> = ...`
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ImplDeclaration.ImplDeclaration'"
   let tokenize
     (i: WrittenTypes.ImplDeclaration.ImplDeclaration)
     : List<SemanticToken> =
@@ -463,7 +452,7 @@ module ImplDeclaration =
 
 
 module TestDeclaration =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.TestDeclaration.TestDeclaration'"
   let tokenize
     (test: WrittenTypes.TestDeclaration.TestDeclaration)
     : List<SemanticToken> =
@@ -486,7 +475,6 @@ module TestDeclaration =
 
 
 module MatchPattern =
-  // @compiler blocked: missing-implementation
   let tokenize (p: WrittenTypes.MatchPattern) : List<SemanticToken> =
     match p with
     | MPVariable(range, _name) -> [ makeToken range TokenType.VariableName ]
@@ -616,7 +604,6 @@ module MatchPattern =
 
 module Expr =
   module LetPattern =
-    // @compiler blocked: missing-implementation
     let tokenize (lp: WrittenTypes.LetPattern) : List<SemanticToken> =
       match lp with
       | LPUnit range -> [ makeToken range TokenType.Symbol ]
@@ -651,7 +638,7 @@ module Expr =
         |> Stdlib.List.flatten
 
   module PipeExpr =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.PipeExpr'"
     let tokenize (pe: WrittenTypes.PipeExpr) : List<SemanticToken> =
       match pe with
       | EPipeInfix(_, (opRange, _op), expr) ->
@@ -716,7 +703,7 @@ module Expr =
       | EPipeVariableOrFnCall(range, _varName) ->
         [ makeToken range TokenType.VariableName ]
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.Expr'"
   let tokenize (e: WrittenTypes.Expr) : List<SemanticToken> =
     match e with
     // ()
@@ -1132,7 +1119,7 @@ module Expr =
 
 
 module ParsedFile =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'WrittenTypes.ParsedFile'"
   let tokenize (wt: WrittenTypes.ParsedFile) : List<SemanticToken> =
     match wt with
     | SourceFile sourceFile ->

@@ -10,7 +10,7 @@ module Darklang.Cli.Packages.ImplCommand
 /// The full name of the trait already at <param location>, where an implementation is about to be
 /// bound: one name holds one item, so binding there would unlist the trait. `dark impl` and the
 /// workbench's editor both refuse on it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.ImplCommand.traitTakesTheName: Unknown function or value 'LanguageTools.PackageManager.Trait.find'"
 let traitTakesTheName
   (branchId: Uuid)
   (location: LanguageTools.ProgramTypes.PackageLocation)
@@ -24,7 +24,7 @@ let traitTakesTheName
     )
   | None -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [] ->
@@ -57,7 +57,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
         state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let createImplInline
   (currentLocation: Packages.PackageLocation)
   (modulePath: String)
@@ -225,7 +225,7 @@ let createImplInline
     { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [
     "Create or update an implementation of a trait for a type"
@@ -280,5 +280,5 @@ let help (_state: Cli.AppState) : String =
   ] |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (_args: List<String>) : List<Cli.Completion.CompletionItem> = []

@@ -9,7 +9,6 @@ module Darklang.Cli
 /// `Some ""` means the flag was there with nothing after it, which is a caller's error to report rather than
 /// something to silently ignore. Either way the flag is consumed, so it can't fall through and be read as
 /// the command.
-// @compiler blocked: missing-implementation
 let takeFlagValue (args: List<String>) (flag: String) : (Stdlib.Option.Option<String> * List<String>) =
   let long = "--" + flag
   let eq = long + "="
@@ -41,13 +40,12 @@ let takeFlagValue (args: List<String>) (flag: String) : (Stdlib.Option.Option<St
 /// So this only fires when something calls the Dark entry point directly -- in practice the test
 /// harness. Deliberately not acted on: resolving it here would be a second branch rule that can
 /// disagree with the F# one. A caller that wants a branch calls `switch`.
-// @compiler blocked: missing-implementation
 let parseBranchFlag (args: List<String>) : (Stdlib.Option.Option<Uuid> * List<String>) =
   let (_ignored, rest) = takeFlagValue args "branch"
   (Stdlib.Option.Option.None, rest)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.executeCliCommand: Unknown function or value 'initState'"
 let executeCliCommand (args: List<String>) : Int =
   let (_unused, remainingArgs) = parseBranchFlag args
   let initialState = initState ()

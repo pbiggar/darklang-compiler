@@ -4,12 +4,10 @@
 /// safe here).
 module Darklang.Stdlib.Cli.UI.SplitPane
 
-// @compiler blocked: missing-implementation
 type Orientation =
   | Horizontal
   | Vertical
 
-// @compiler blocked: missing-implementation
 type Focus =
   | First
   | Second
@@ -19,7 +17,7 @@ type Focus =
 /// Split `region` into two bordered panes by `firstPct` (0-100), render each child into its inner region.
 /// `focused` marks which pane gets the bright border. Below `minTotal`, collapses to the focused child only
 /// (with a "‹1/2›" hint), per the narrow-terminal rule.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.UI.SplitPane.render: Unknown function or value 'Box.panel'"
 let render
   (region: Layout.Region)
   (orientation: Orientation)

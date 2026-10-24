@@ -1,20 +1,20 @@
 module Darklang.Internal.Test
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Internal.Test.WTTest: Unknown type 'LanguageTools.WrittenTypes.Expr'"
 type WTTest =
   { name: String
     lineNumber: Int
     actual: LanguageTools.WrittenTypes.Expr
     expected: LanguageTools.WrittenTypes.Expr }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Internal.Test.PTTest: Unknown type 'LanguageTools.ProgramTypes.Expr'"
 type PTTest =
   { name: String
     lineNumber: Int
     actual: LanguageTools.ProgramTypes.Expr
     expected: LanguageTools.ProgramTypes.Expr }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.WrittenTypes.ParsedFile'"
 let parseTest
   (pf: LanguageTools.WrittenTypes.ParsedFile)
   : Stdlib.Result.Result<WTTest, String> =
@@ -38,7 +38,7 @@ let parseTest
 
     | _ -> Stdlib.Result.Result.Error "expected x = y format"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PTTest'"
 let parseSingleTestFromFile
   (filename: String)
   (testSource: String)

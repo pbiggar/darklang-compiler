@@ -2,10 +2,9 @@ module Darklang.LanguageTools.SemanticTokens.Tests
 
 // TODO: Add additional tests to cover all cases
 
-// @compiler blocked: missing-implementation
 type TokenType = Darklang.LanguageTools.SemanticTokens.TokenType
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.SemanticTokens.Tests.tokenize: Unknown function or value 'Darklang.LanguageTools.SemanticTokens.ParsedFile.tokenize'"
 let tokenize
   (text: String)
   : List<(TokenType * (Int * Int) * (Int * Int))> =

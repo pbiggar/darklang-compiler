@@ -3,11 +3,11 @@ module Darklang.SCM.Tests.BranchIdentity
 // The main-branch constant must match the branch ID a process reports on main.
 // A mismatch silently sends SCM operations down the branch path. Run the process
 // with an explicit main branch so the caller cannot change the answer.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Tests.BranchIdentity.currentIsMain: Unknown function or value 'Darklang.SCM.PackageOps.currentBranch'"
 let currentIsMain () : Bool =
   Darklang.SCM.PackageOps.currentBranch () == Darklang.SCM.Branch.mainBranchId
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.defaults'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.run'" class=missing-support reason=upstream-dependency
 test mainIdIsCurrentBranch =
   let defaults = Stdlib.Test.Process.defaults ()
   let options = { defaults with branch = Some Darklang.SCM.Branch.mainBranchId }
@@ -34,7 +34,6 @@ test mainHasNoRow =
   |> Stdlib.Test.equal Stdlib.Option.Option.None
 
 // A branch id that isn't main has no overlay ops on main, and asking about main yields none either.
-// @compiler xfail compile: "Unknown function or value 'Darklang.SCM.PackageOps.visibleParams'" class=missing-support reason=upstream-dependency
 test mainHasNoOverlayOps =
   Darklang.SCM.PackageOps.visibleParams Darklang.SCM.Branch.mainBranchId
   |> Stdlib.Test.equal []

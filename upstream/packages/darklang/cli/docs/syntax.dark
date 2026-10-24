@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Syntax
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Syntax
 

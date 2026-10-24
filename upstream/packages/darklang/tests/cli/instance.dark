@@ -15,7 +15,7 @@ type T =
 
 /// Keep nested instances beside the active store, inside the enclosing fixture.
 /// LocalStore.path is absolute; child process configuration requires that.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Instance.root: Unknown function or value 'Stdlib.LocalStore.path'"
 let root () : String =
   let store = Stdlib.LocalStore.path ()
   (Stdlib.Cli.Path.parent store) + "/test-instances"
@@ -30,7 +30,7 @@ let root () : String =
 /// No environment variable for this. A guest gets no env by default and an ungranted read
 /// is an error rather than a `None`, so every knob spelled as an env var is a grant every
 /// caller has to remember.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Instance.seedFrom: Unknown function or value 'Stdlib.LocalStore.path'"
 let seedFrom () : String =
   Stdlib.LocalStore.path ()
 
@@ -47,7 +47,7 @@ let cliBinary () : String =
 
 
 /// A fresh instance. Fails with a message rather than half-existing.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Instance.create: Unknown function or value 'root'"
 let create () : Stdlib.Result.Result<T, String> =
   let suffix = Stdlib.toString (Stdlib.Int.random 100000 999999)
   let dir = $"{root ()}/{suffix}"
@@ -74,7 +74,6 @@ let create () : Stdlib.Result.Result<T, String> =
 
 
 /// Remove an instance and everything in it. Safe to call twice.
-// @compiler blocked: upstream-dependency
 let dispose (i: T) : Unit =
   let _ = Stdlib.Cli.Unix.removeDirectory i.dir
   ()
@@ -118,7 +117,7 @@ let output (i: T) (args: List<String>) : String =
 ///
 /// Ordinary results dispose immediately. A runtime error escapes to the enclosing
 /// isolation worker, whose host also removes these nested instance directories.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Instance.withInstance: Unknown function or value 'create'"
 let withInstance (f: T -> Stdlib.Test.Result) : Stdlib.Test.Result =
   match create () with
   | Error e -> Stdlib.Test.fail e

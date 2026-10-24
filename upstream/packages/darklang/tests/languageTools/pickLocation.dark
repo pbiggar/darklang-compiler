@@ -11,14 +11,14 @@ let loc
   Darklang.LanguageTools.ProgramTypes.PackageLocation
     { owner = owner, modules = modules, name = name }
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: compiler-contract diagnostic="Darklang.LanguageTools.PackageManager.Tests.ctx: Unknown field 'preferredLocation' on Darklang.LanguageTools.PackageManager.PickContext"
 let ctx
   (currentModule: List<String>)
   : Darklang.LanguageTools.PackageManager.PickContext =
   Darklang.LanguageTools.PackageManager.PickContext
     { currentModule = currentModule, preferredLocation = None }
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: compiler-contract diagnostic="Darklang.LanguageTools.PackageManager.Tests.preferCtx: Unknown field 'preferredLocation' on Darklang.LanguageTools.PackageManager.PickContext"
 let preferCtx
   (currentModule: List<String>)
   (preferredLocation: Darklang.LanguageTools.ProgramTypes.PackageLocation)

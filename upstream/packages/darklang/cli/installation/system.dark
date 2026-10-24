@@ -3,7 +3,6 @@ module Darklang.Cli.Installation.System
 
 
 /// CLI installation mode
-// @compiler blocked: missing-implementation
 type InstallationMode =
   /// Runs from any location
   /// Creates files as needed in an adjacent .darklang directory
@@ -14,7 +13,6 @@ type InstallationMode =
 
 
 /// Convert installation mode to string for display
-// @compiler blocked: missing-implementation
 let installationModeToString (mode: InstallationMode) : String =
   match mode with
   | Portable -> "portable"
@@ -22,7 +20,6 @@ let installationModeToString (mode: InstallationMode) : String =
 
 
 /// Detect current CLI installation mode based on executable location
-// @compiler blocked: missing-implementation
 let getInstallationMode () : InstallationMode =
   let executablePath = Stdlib.Cli.Sys.currentExecutablePath ()
   let host = (Stdlib.Cli.Host.getRuntimeHost ()) |> Builtin.unwrap
@@ -42,14 +39,12 @@ let getInstallationMode () : InstallationMode =
 /// Compares build hashes, the one identity a binary and a release share. The tag (`v0.0.54`) appears
 /// nowhere in the binary, so comparing the two never matched and every update re-downloaded; and
 /// `config.json` only says what was last recorded, which a failed update used to get wrong.
-// @compiler blocked: missing-implementation
 let isLatestBuild (currentVersion: String) : Stdlib.Result.Result<Bool, String> =
   Darklang.GitHub.Releases.getLatestReleaseBuildHash ()
   |> Stdlib.Result.map (fun latest -> latest == currentVersion)
 
 
 /// Migrate portable database to global installation
-// @compiler blocked: missing-implementation
 let migratePortableData (host: Stdlib.Cli.Host.Host) (portableDbPath: String) : Stdlib.Result.Result<Unit, String> =
   let darklangHomeDir = Config.getDarklangHomeDir host
 
@@ -58,7 +53,6 @@ let migratePortableData (host: Stdlib.Cli.Host.Host) (portableDbPath: String) : 
 
 
 /// Check if a global installation exists
-// @compiler blocked: missing-implementation
 let globalInstallationExists (host: Stdlib.Cli.Host.Host) : Bool =
   let darklangHomeDir = Config.getDarklangHomeDir host
 
@@ -68,7 +62,7 @@ let globalInstallationExists (host: Stdlib.Cli.Host.Host) : Bool =
 
 /// Install CLI by copying the current binary (for development/testing)
 /// If autoConfirm is true, skips prompts and uses fresh database
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.System.installFromCurrentBinary: Unknown function or value 'Stdlib.printErrorLine'"
 let installFromCurrentBinary (host: Stdlib.Cli.Host.Host) (autoConfirm: Bool) : Stdlib.Result.Result<String, String> =
   let currentBinaryPath = Stdlib.Cli.Sys.currentExecutablePath ()
   let currentDir = Stdlib.Cli.FileSystem.currentDirectory ()
@@ -127,7 +121,7 @@ let installFromCurrentBinary (host: Stdlib.Cli.Host.Host) (autoConfirm: Bool) : 
 
 /// Install CLI with option to migrate existing portable data
 /// If autoConfirm is true, skips prompts and uses fresh database
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.System.install: Unknown function or value 'Stdlib.printErrorLine'"
 let install (host: Stdlib.Cli.Host.Host) (autoConfirm: Bool) : Stdlib.Result.Result<String, String> =
   let currentDir = Stdlib.Cli.FileSystem.currentDirectory ()
   let portableDbPath = $"{currentDir}/.darklang/data.db"
@@ -159,7 +153,6 @@ let install (host: Stdlib.Cli.Host.Host) (autoConfirm: Bool) : Stdlib.Result.Res
 ///
 /// <param pinned> names a release to install instead of the latest. <param replace> does the work: the global install and a portable binary keep different things
 /// up to date, but decide whether to update the same way.
-// @compiler blocked: missing-implementation
 let updateIfAvailable
   (currentVersion: String)
   (pinned: Stdlib.Option.Option<String>)
@@ -184,7 +177,7 @@ let updateIfAvailable
 
 /// Uninstall the CLI with user confirmation
 /// If autoConfirm is true, skips confirmation prompt
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.System.uninstallWithConfirmation: Unknown function or value 'Cli.Prompt.confirmExplicit'"
 let uninstallWithConfirmation (host: Stdlib.Cli.Host.Host) (autoConfirm: Bool) : Stdlib.Result.Result<String, String> =
   if Cli.Prompt.confirmExplicit
        autoConfirm

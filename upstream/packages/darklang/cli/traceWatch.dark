@@ -17,11 +17,9 @@ module Darklang.Cli.TraceWatch
 ///
 /// A view's `init` is called with no arguments (`LiveView.Host.start`), so a view that is ABOUT
 /// something has to be told what. `Live.show` does the same with the same mechanism.
-// @compiler blocked: missing-implementation
 val fnKey = "traces.watch.fn"
 
 
-// @compiler blocked: missing-implementation
 type Model =
   { accountID: Stdlib.Option.Option<Uuid>
     branchId: Uuid
@@ -51,7 +49,6 @@ type Model =
     storeVersion: Int }
 
 
-// @compiler blocked: missing-implementation
 type Msg = | Refresh
 
 
@@ -59,7 +56,7 @@ type Msg = | Refresh
 ///
 /// Returns the reason in place of the source when there is nothing to show, so the panel always
 /// has something true in it rather than going blank.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceWatch.annotate: Unknown function or value 'Cli.TraceVerbs.whyEmpty'"
 let annotate
   (accountID: Stdlib.Option.Option<Uuid>)
   (branchId: Uuid)
@@ -109,7 +106,6 @@ let annotate
 /// Its own function because it is the part with a rule rather than a mechanism, and the rule is
 /// easy to get wrong: a new trace arrives at the TOP, so holding the INDEX would quietly move you
 /// onto a different trace while you were reading it.
-// @compiler blocked: missing-implementation
 let pickCursor
   (ids: List<String>)
   (cursor: Int)
@@ -132,7 +128,6 @@ let pickCursor
 /// something repainting on a timer. And a relative time is the wrong thing here anyway -- this
 /// panel is open while traces arrive, so "2 minutes ago" would be wrong within a minute of being
 /// painted unless every tick recomputed it.
-// @compiler blocked: missing-implementation
 let clockFreeTime (created: String) : String =
   match Stdlib.String.split created "T" with
   | [ _, rest ] ->
@@ -146,7 +141,7 @@ let clockFreeTime (created: String) : String =
 /// Reload the traces and re-annotate. One function for every reason the panel changes, so a move
 /// and a tick cannot drift apart in what they show.
 ///
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceWatch.reload: Unknown function or value 'Stdlib.Live.version'"
 let reload
   (accountID: Stdlib.Option.Option<Uuid>)
   (branchId: Uuid)
@@ -181,7 +176,7 @@ let reload
       storeVersion = storeVersion }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceWatch.init: Unknown function or value 'SCM.PackageOps.currentBranch'"
 let init () : Model =
   let accountID = Stdlib.Option.Option.None
   let branchId = SCM.PackageOps.currentBranch ()
@@ -191,7 +186,7 @@ let init () : Model =
   reload accountID branchId fn 0 Stdlib.Option.Option.None
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceWatch.update: Unknown function or value 'Stdlib.Live.version'"
 let update (m: Model) (event: LiveView.Host.Event<Msg>) : Model =
   match event with
   // A tick reloads BOTH halves: a new trace may have arrived, and the code may have been saved
@@ -211,7 +206,7 @@ let update (m: Model) (event: LiveView.Host.Event<Msg>) : Model =
     | _ -> m
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Stdlib.Cli.UI.Node.Node'"
 let render (m: Model) : Stdlib.Cli.UI.Node.Node<Msg> =
   let traces =
     match m.traceLines with

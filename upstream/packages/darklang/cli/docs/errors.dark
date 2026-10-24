@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Errors
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Common Errors
 

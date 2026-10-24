@@ -7,10 +7,8 @@
 module Darklang.Cli.Outliner.Store
 
 /// Bump when the shape below changes, and add a migration.
-// @compiler blocked: missing-implementation
 val currentVersion = 2
 
-// @compiler blocked: missing-implementation
 type PersistedData =
   { version: Int
     documents: List<Document>
@@ -20,29 +18,24 @@ type PersistedData =
 
 // --- Version 1: no version field, no parent pointers, no marks ---
 
-// @compiler blocked: missing-implementation
 type V1NodeContent =
   { text: String }
 
-// @compiler blocked: missing-implementation
 type V1TreeStructure =
   { children: List<Int>
     collapsed: Bool }
 
-// @compiler blocked: missing-implementation
 type V1Outline =
   { nodes: Dict<String, V1NodeContent>
     structure: Dict<String, V1TreeStructure>
     rootChildren: List<Int>
     nextId: Int }
 
-// @compiler blocked: missing-implementation
 type V1Document =
   { id: Int
     title: String
     outline: V1Outline }
 
-// @compiler blocked: missing-implementation
 type V1Data =
   { documents: List<V1Document>
     activeDocId: Int
@@ -50,7 +43,6 @@ type V1Data =
 
 /// Rebuild a v1 outline: every node becomes Plain, and the parent pointers are derived from the child
 /// lists that v1 did have.
-// @compiler blocked: missing-implementation
 let migrateOutline (old: V1Outline) : Outline =
   let withNodes =
     old.nodes
@@ -71,11 +63,9 @@ let migrateOutline (old: V1Outline) : Outline =
   let withRoots = setChildren withChildren Stdlib.Option.Option.None old.rootChildren
   { withRoots with nextId = old.nextId }
 
-// @compiler blocked: missing-implementation
 let migrateDocument (old: V1Document) : Document =
   Document { id = old.id, title = old.title, outline = migrateOutline old.outline }
 
-// @compiler blocked: missing-implementation
 let migrateV1 (old: V1Data) : PersistedData =
   PersistedData
     { version = currentVersion
@@ -86,13 +76,11 @@ let migrateV1 (old: V1Data) : PersistedData =
 
 // --- Location ---
 
-// @compiler blocked: missing-implementation
 let dataFilePath () : String =
   match Stdlib.Cli.Unix.getHomeDirectory () with
   | Ok home -> $"{home}/.darklang/outliner.json"
   | Error _ -> "rundir/outliner.json"
 
-// @compiler blocked: missing-implementation
 let ensureDataDir () : Unit =
   match Stdlib.Cli.Unix.getHomeDirectory () with
   | Ok home ->
@@ -103,7 +91,6 @@ let ensureDataDir () : Unit =
 
 // --- Demo content, for a first run ---
 
-// @compiler blocked: missing-implementation
 let starterDocuments () : List<Document> =
   let notes =
     buildOutline
@@ -136,7 +123,6 @@ let starterDocuments () : List<Document> =
   [ Document { id = 1, title = "My Notes", outline = notes }
     Document { id = 2, title = "Tasks", outline = taskMarks } ]
 
-// @compiler blocked: missing-implementation
 let starterData () : PersistedData =
   PersistedData
     { version = currentVersion
@@ -148,14 +134,12 @@ let starterData () : PersistedData =
 // --- Reading ---
 
 /// What came back from disk.
-// @compiler blocked: missing-implementation
 type LoadResult =
   /// A file we understood (or no file at all, in which case this is the starter content).
   | Loaded of PersistedData
   /// A file we didn't understand. The caller must not write over it.
   | Unreadable of path: String * reason: String
 
-// @compiler blocked: missing-implementation
 let parse (contents: String) : LoadResult =
   match Stdlib.Json.parse<PersistedData> contents with
   | Ok data -> LoadResult.Loaded data
@@ -168,7 +152,6 @@ let parse (contents: String) : LoadResult =
       // against, which is more than this needs to say. The file is named, and it's still there.
       LoadResult.Unreadable(dataFilePath (), "not in a shape the outliner understands")
 
-// @compiler blocked: missing-implementation
 let load () : LoadResult =
   let path = dataFilePath ()
 
@@ -186,12 +169,10 @@ let load () : LoadResult =
 ///
 /// Enough to notice that something else wrote it. Not a lock: two writes inside the same second with the
 /// same size would slip through, which is a far better failure than the one it replaces.
-// @compiler blocked: missing-implementation
 type Stamp =
   { mtimeSec: Int
     size: Int }
 
-// @compiler blocked: missing-implementation
 let stamp () : Stdlib.Option.Option<Stamp> =
   match Stdlib.Cli.Posix.stat (dataFilePath ()) with
   | Ok st -> Stdlib.Option.Option.Some(Stamp { mtimeSec = st.mtimeSec, size = st.size })
@@ -207,7 +188,6 @@ let stamp () : Stdlib.Option.Option<Stamp> =
 /// `expected` is the stamp this session last agreed with. If the file no longer matches it, someone else
 /// has written since (a second outliner in another terminal, most likely), and their work is not ours to
 /// throw away: refuse, and let the caller say so.
-// @compiler blocked: missing-implementation
 let save
   (documents: List<Document>)
   (activeDocId: Int)

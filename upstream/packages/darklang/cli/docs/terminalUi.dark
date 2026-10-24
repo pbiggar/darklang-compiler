@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.TerminalUI
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Terminal UI
 

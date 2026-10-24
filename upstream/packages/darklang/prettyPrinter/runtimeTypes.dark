@@ -6,14 +6,12 @@ module Darklang.PrettyPrinter.RuntimeTypes
 /// they are separate types because they belong to separate vocabularies. Identical declarations
 /// hash identically, so the two can be one stored item and passing either for the other can
 /// type-check by accident. This says the conversion out loud, which is what the code means.
-// @compiler blocked: missing-implementation
 let ptHash
   (hash: LanguageTools.RuntimeTypes.Hash)
   : LanguageTools.ProgramTypes.Hash =
   LanguageTools.ProgramTypes.Hash.Hash (LanguageTools.RuntimeTypes.hashToString hash)
 
 
-// @compiler blocked: missing-implementation
 let nameResolutionError
   (nre: LanguageTools.RuntimeTypes.NameResolutionError)
   : String =
@@ -21,7 +19,6 @@ let nameResolutionError
   | NotFound -> "not found"
   | InvalidName -> "invalid name"
 
-// @compiler blocked: missing-implementation
 let nameResolution<'a>
   (nr: LanguageTools.RuntimeTypes.NameResolution<'a>)
   (f: 'a -> String)
@@ -31,7 +28,6 @@ let nameResolution<'a>
   | Error e -> nameResolutionError e
 
 
-// @compiler blocked: missing-implementation
 let packageName
   (owner: String)
   (modules: List<String>)
@@ -56,7 +52,6 @@ let packageName
 
 /// Given PM locations for a hash, resolve to best display name.
 /// Uses pickLocation with context to choose among multiple locations.
-// @compiler blocked: missing-implementation
 let resolvePackageHash
   (ctx: LanguageTools.PackageManager.PickContext)
   (locations: List<LanguageTools.ProgramTypes.PackageLocation>)
@@ -67,7 +62,6 @@ let resolvePackageHash
   | None -> Darklang.LanguageTools.RuntimeTypes.hashToString hash
 
 /// Like resolvePackageHash but prefers originalName when ambiguous (multiple locations).
-// @compiler blocked: missing-implementation
 let resolvePackageHashWithOriginalName
   (ctx: LanguageTools.PackageManager.PickContext)
   (locations: List<LanguageTools.ProgramTypes.PackageLocation>)
@@ -83,7 +77,7 @@ let resolvePackageHashWithOriginalName
 
 
 /// A type's name for value output, spelled relative to `opts.currentModule`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.typeNameWith: Unknown function or value 'Darklang.LanguageTools.PackageManager.Type.locations'"
 let typeNameWith
     (branchId: Uuid)
     (opts: PrettyPrinter.DisplayOptions)
@@ -109,7 +103,7 @@ let typeNameWith
 /// type in front of them is pure noise: `Some(Some([1, 2, 3]))` says everything
 /// `Option.Some(Option.Some([1, 2, 3]))` does. Every other enum keeps its type name, because `Red` on
 /// its own doesn't tell you it came from `Color`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.caseNameStandsAlone: Unknown function or value 'Darklang.LanguageTools.PackageManager.Type.locations'"
 let caseNameStandsAlone
     (branchId: Uuid)
     (currentModule: List<String>)
@@ -156,7 +150,7 @@ let caseNameStandsAlone
 
 
 module FQTypeName =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.FQTypeName.package: Unknown function or value 'LanguageTools.PackageManager.Type.locations'"
   let package
         (branchId: Uuid)
         (hash: LanguageTools.RuntimeTypes.FQTypeName.Package)
@@ -174,7 +168,7 @@ let typeName
 
 
 /// A trait's full name, by the name its hash is bound to on the branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.traitName: Unknown function or value 'LanguageTools.PackageManager.Trait.locations'"
 let traitName
     (branchId: Uuid)
     (t: LanguageTools.RuntimeTypes.FQTraitName.FQTraitName)
@@ -187,7 +181,7 @@ let traitName
       hash
 
 /// Just the trait's own name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.shortTraitName: Unknown function or value 'Darklang.LanguageTools.PackageManager.Trait.locations'"
 let shortTraitName
     (branchId: Uuid)
     (t: LanguageTools.RuntimeTypes.FQTraitName.FQTraitName)
@@ -227,7 +221,6 @@ let shortTypeName
 
 
 module FQValueName =
-  // @compiler blocked: missing-implementation
   let builtIn (t: LanguageTools.RuntimeTypes.FQValueName.Builtin) : String =
     let namePart = t.name
 
@@ -239,7 +232,7 @@ module FQValueName =
 
     $"{namePart}{versionPart}"
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.FQValueName.package: Unknown function or value 'LanguageTools.PackageManager.Value.locations'"
   let package
         (branchId: Uuid)
         (hash: LanguageTools.RuntimeTypes.FQValueName.Package)
@@ -258,7 +251,6 @@ let valueName
 
 
 module FQFnName =
-  // @compiler blocked: missing-implementation
   let builtIn (t: LanguageTools.RuntimeTypes.FQFnName.Builtin) : String =
     let namePart = t.name
 
@@ -270,7 +262,7 @@ module FQFnName =
 
     $"Builtin.{namePart}{versionPart}"
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.FQFnName.package: Unknown function or value 'LanguageTools.PackageManager.Function.locations'"
   let package
         (branchId: Uuid)
         (hash: LanguageTools.RuntimeTypes.FQFnName.Package)
@@ -652,7 +644,7 @@ module Dval =
   /// The field names of a record type, in the order they were declared.
   ///
   /// Empty when the type isn't resolvable or isn't a record, which callers treat as "no opinion".
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.Dval.declaredFieldOrder: Unknown function or value 'Darklang.LanguageTools.PackageManager.Type.get'"
   let declaredFieldOrder
     (typeName: LanguageTools.RuntimeTypes.FQTypeName.FQTypeName)
     : List<String> =
@@ -672,7 +664,7 @@ module Dval =
   /// from it comes out in an order nobody wrote: `PackageLocation` declared as owner/modules/name
   /// printed as modules/name/owner, and so didn't match its own `view`.
   /// Subject first, because `|>` supplies the first parameter.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
   let inDeclaredOrder
     (pairs: List<(String * LanguageTools.RuntimeTypes.Dval)>)
     (order: List<String>)
@@ -693,7 +685,6 @@ module Dval =
       Stdlib.List.append ordered extra
 
 
-  // @compiler blocked: missing-implementation
   let makeSpaces (len: Int) : String =
     match Stdlib.List.repeat len " " with
     | Ok spaces -> spaces |> Stdlib.String.join ""
@@ -707,7 +698,7 @@ module Dval =
   /// and a 118-column line reported as fitting. Here the name is part of the same document.
   ///
   /// `depth` is compared against `opts.maxDepth`; past it, a value is elided rather than descended into.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.Dval.toDoc: Unknown function or value 'caseNameStandsAlone'"
   let toDoc
     (branchId: Uuid)
     (opts: PrettyPrinter.DisplayOptions)
@@ -879,7 +870,7 @@ module Dval =
 
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.dvalWith: Unknown function or value 'Dval.toDoc'"
 let dvalWith
     (branchId: Uuid)
     (opts: PrettyPrinter.DisplayOptions)
@@ -910,7 +901,7 @@ let dvalWith
 ///
 /// Only lists. A dict with thousands of keys has the same problem and is not handled here,
 /// because "the first n" of a dict needs an ordering this type does not promise.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let capForDisplay
     (maxChars: Int)
     (dv: LanguageTools.RuntimeTypes.Dval)
@@ -926,7 +917,7 @@ let capForDisplay
   | _ -> dv
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.dvalOneLine: Unknown function or value 'capForDisplay'"
 let dvalOneLine
     (branchId: Uuid)
     (maxChars: Int)

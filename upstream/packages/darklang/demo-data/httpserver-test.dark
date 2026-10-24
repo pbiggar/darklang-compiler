@@ -2,11 +2,9 @@ module Darklang.DemoData.HttpServerTest
 
 // Test handlers and router for the HTTP server
 
-// @compiler blocked: missing-implementation
 let helloHandlerFn (req: Stdlib.Http.Request) : Stdlib.Http.Response =
   Stdlib.Http.responseWithText "Hello, World!" 200
 
-// @compiler blocked: missing-implementation
 val helloHandler =
   Stdlib.HttpServer.Handler
     { route = "/hello"
@@ -14,12 +12,10 @@ val helloHandler =
       handler = helloHandlerFn }
 
 
-// @compiler blocked: missing-implementation
 let echoHandlerFn (req: Stdlib.Http.Request) : Stdlib.Http.Response =
   let bodyText = Stdlib.String.fromBlobWithReplacement req.body
   Stdlib.Http.responseWithText bodyText 200
 
-// @compiler blocked: missing-implementation
 val echoHandler =
   Stdlib.HttpServer.Handler
     { route = "/echo"
@@ -27,11 +23,9 @@ val echoHandler =
       handler = echoHandlerFn }
 
 
-// @compiler blocked: missing-implementation
 let rootHandlerFn (req: Stdlib.Http.Request) : Stdlib.Http.Response =
   Stdlib.Http.responseWithText "Welcome to Darklang HTTP Server!" 200
 
-// @compiler blocked: missing-implementation
 val rootHandler =
   Stdlib.HttpServer.Handler
     { route = "/"
@@ -41,13 +35,11 @@ val rootHandler =
 
 // CLEANUP
 /// All handlers for the test server
-// @compiler blocked: missing-implementation
 val handlers =
   [ helloHandler, echoHandler, rootHandler ]
 
 
 /// Router function - routes requests through our handlers
 /// This is a named function so it can be passed to the builtin
-// @compiler blocked: missing-implementation
 let router (req: Stdlib.Http.Request) : Stdlib.Http.Response =
   Stdlib.HttpServer.routeRequest handlers req

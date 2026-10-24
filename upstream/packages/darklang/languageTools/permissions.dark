@@ -2,18 +2,15 @@
 /// host boundary, not a second authorization model.
 module Darklang.LanguageTools.Permissions
 
-// @compiler blocked: missing-implementation
 type Scope<'a> =
   | All
   | Only of 'a
 
-// @compiler blocked: missing-implementation
 type HostRule =
   | Any
   | Exact of String
   | SubdomainsOf of String
 
-// @compiler blocked: missing-implementation
 type HttpRule =
   { method: Permissions.Scope<String>
     scheme: Permissions.Scope<String>
@@ -27,7 +24,6 @@ type HttpRule =
     /// on the path (`All`).
     query: Permissions.Scope<String> }
 
-// @compiler blocked: missing-implementation
 type ProcessRule =
   { executable: Permissions.Scope<String>
     /// The exact argument list, in order, or any.
@@ -37,7 +33,6 @@ type ProcessRule =
 /// `Effects.Effect`. A ceiling row names these (`:{Http, Clock}`); a policy
 /// rule names one whole (`allow clock`). `effectCases` gives each its source
 /// case name and its rule name.
-// @compiler blocked: missing-implementation
 type Effect =
   | Http
   | HttpServer
@@ -62,7 +57,7 @@ type Effect =
   | Runtime
   | Native
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Permissions.Rule: Unknown type 'Permissions.Effect'"
 type Rule =
   | All
   | Effect of Permissions.Effect
@@ -76,7 +71,7 @@ type Rule =
   | DbWrite of Permissions.Scope<String>
   | Process of Permissions.ProcessRule
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Permissions.Policy: Unknown type 'Permissions.Rule'"
 type Policy =
   { allow: List<Permissions.Rule>
     deny: List<Permissions.Rule> }
@@ -84,7 +79,6 @@ type Policy =
 /// Why approving a version for a name did not happen. An approval outcome rather than a policy
 /// type; it lives here because the host builtin that returns it addresses Dark types through the
 /// `LanguageTools.Permissions` package ref.
-// @compiler blocked: missing-implementation
 type ApprovalFailure =
   /// The permission contract differs from the currently approved version's: the human-readable
   /// differences, for a second explicit review.
@@ -94,7 +88,6 @@ type ApprovalFailure =
   /// requires, or a storage failure. The message is complete.
   | Refused of String
 
-// @compiler blocked: missing-implementation
 type TokenMode =
   | Bare
   | SingleQuoted
@@ -106,7 +99,6 @@ type TokenMode =
 /// `Effects.all` order. The case name is what a `:{Http, Clock}` ceiling row
 /// writes; the rule name is what `permissions allow` and denial messages use.
 /// An F# test asserts this table agrees with `Effects.all`.
-// @compiler blocked: missing-implementation
 val effectCases =
   [ (Permissions.Effect.Http, "Http", "http")
     (Permissions.Effect.HttpServer, "HttpServer", "http-server")
@@ -131,40 +123,34 @@ val effectCases =
 
 /// The `effectCases` row an effect is in. Every effect has one, so the
 /// fallback is unreachable; it keeps the lookups total without an Option.
-// @compiler blocked: missing-implementation
 let effectRow (effect: Permissions.Effect) : (Permissions.Effect * String * String) =
   Permissions.effectCases
   |> Stdlib.List.findFirst (fun (e, _case, _name) -> e == effect)
   |> Stdlib.Option.withDefault (effect, "Unknown", "unknown")
 
 /// The rule name of an effect: `FileRead` -> `"file-read"`.
-// @compiler blocked: missing-implementation
 let effectName (effect: Permissions.Effect) : String =
   let (_e, _case, name) = Permissions.effectRow effect
   name
 
 /// The source case name of an effect: `FileRead` -> `"FileRead"`.
-// @compiler blocked: missing-implementation
 let effectCaseName (effect: Permissions.Effect) : String =
   let (_e, case, _name) = Permissions.effectRow effect
   case
 
 /// `"file-read"` -> `FileRead`; None for an unknown rule name.
-// @compiler blocked: missing-implementation
 let effectOfName (name: String) : Stdlib.Option.Option<Permissions.Effect> =
   Permissions.effectCases
   |> Stdlib.List.findFirst (fun (_e, _case, n) -> n == name)
   |> Stdlib.Option.map (fun (e, _case, _name) -> e)
 
 /// `"FileRead"` -> `FileRead`; None for an unknown case name.
-// @compiler blocked: missing-implementation
 let effectOfCase (case: String) : Stdlib.Option.Option<Permissions.Effect> =
   Permissions.effectCases
   |> Stdlib.List.findFirst (fun (_e, c, _name) -> c == case)
   |> Stdlib.Option.map (fun (e, _case, _name) -> e)
 
 /// The source form of a ceiling: `{Http, Clock}`, or `""` when none is declared.
-// @compiler blocked: missing-implementation
 let ceilingRow (ceiling: Stdlib.Option.Option<List<Permissions.Effect>>) : String =
   match ceiling with
   | None -> ""
@@ -172,26 +158,23 @@ let ceilingRow (ceiling: Stdlib.Option.Option<List<Permissions.Effect>>) : Strin
     let cases = effects |> Stdlib.List.map Permissions.effectCaseName
     "{" + (Stdlib.String.join cases ", ") + "}"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Policy'"
 let empty () : Permissions.Policy =
   Permissions.Policy { allow = [], deny = [] }
 
 /// A POSIX absolute path or a Windows drive/UNC path.
-// @compiler blocked: missing-implementation
 let isAbsolutePath (path: String) : Bool =
   Stdlib.String.startsWith path "/"
   || Stdlib.String.startsWith path "\\\\"
   || (Stdlib.String.length path >= 3
       && Stdlib.String.slice path 1 3 == ":\\")
 
-// @compiler blocked: missing-implementation
 let scope (value: String) : Permissions.Scope<String> =
   if value == "*" then Permissions.Scope.All
   else Permissions.Scope.Only value
 
 /// A port for `http-server`: `*` or 0-65535. Anything else is None, never a
 /// rule that silently matches nothing.
-// @compiler blocked: missing-implementation
 let portScope (value: String) : Stdlib.Option.Option<Permissions.Scope<Int>> =
   if value == "*" then Stdlib.Option.Option.Some Permissions.Scope.All
   else
@@ -207,7 +190,7 @@ let portScope (value: String) : Stdlib.Option.Option<Permissions.Scope<Int>> =
 /// read/write-split resources (`file`, `env`, `db`) and <param access> is
 /// `read`, `write` or `read+write` (also `readwrite`, `rw`). None for an
 /// unknown kind or access.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Rule'"
 let accessRules
   (kind: String)
   (access: String)
@@ -237,7 +220,6 @@ let accessRules
     | "rw" -> Stdlib.Option.Option.Some [ read, write ]
     | _ -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
 let defaultPort (scheme: String) : Int =
   if scheme == "http" then 80 else 443
 
@@ -246,7 +228,6 @@ let defaultPort (scheme: String) : Int =
 /// named hosts use the scheme default; wildcard hosts or schemes use any port
 /// (`https://*` therefore covers every HTTPS port). Malformed input returns
 /// `None` instead of widening the rule.
-// @compiler blocked: missing-implementation
 let hostAndPort
   (scheme: String)
   (authority: String)
@@ -283,7 +264,7 @@ let hostAndPort
 /// none (the scheme's default for a named host, any for `*`); a path prefix
 /// or none (any); a query or none (any). Every rendered rule parses back to
 /// itself. Malformed URLs are rejected rather than widened.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Rule'"
 let httpRule
   (method: String)
   (url: String)
@@ -342,7 +323,7 @@ let httpRule
 
 /// Parse one CLI rule. This only constructs the typed Policy value; runtime
 /// authorization remains in `Permissions.Policy`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Rule'"
 let parseRule
   (args: List<String>)
   : Stdlib.Option.Option<List<Permissions.Rule>> =
@@ -388,7 +369,7 @@ let parseRule
 /// or escape. Rendered rules single-quote every guest-controlled field, so
 /// spaces and metacharacters remain one token and a displayed
 /// `permissions allow ...` command is safe to paste into a shell.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.LanguageTools.Permissions.tokens: Expected TList TString, got TList TChar"
 let tokens (text: String) : Stdlib.Option.Option<List<String>> =
   let finish
     (current: List<Char>)
@@ -456,13 +437,13 @@ let tokens (text: String) : Stdlib.Option.Option<List<String>> =
 /// Parse one rule's text (as `permissions allow` would receive it, or as a
 /// denial's `To allow:` hint prints it). Rendered rules round-trip through
 /// this.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Rule'"
 let parseRuleText (text: String) : Stdlib.Option.Option<List<Permissions.Rule>> =
   Permissions.tokens text |> Stdlib.Option.andThen Permissions.parseRule
 
 /// Parse a whole policy from rule texts; `deny <rule>` goes to the deny list.
 /// Error carries the first spec that did not parse.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Policy'"
 let parse
   (specs: List<String>)
   : Stdlib.Result.Result<Permissions.Policy, String> =
@@ -492,13 +473,11 @@ let parse
             Stdlib.Result.Result.Ok(
               { policy with allow = Stdlib.List.append policy.allow rules }))
 
-// @compiler blocked: missing-implementation
 let isAll (scope: Permissions.Scope<'a>) : Bool =
   match scope with
   | All -> true
   | Only _ -> false
 
-// @compiler blocked: missing-implementation
 let scopeText (scope: Permissions.Scope<String>) : String =
   match scope with
   | All -> "*"
@@ -506,17 +485,14 @@ let scopeText (scope: Permissions.Scope<String>) : String =
 
 /// A shell-safe token. This is also understood by <fn tokens>, so rendered
 /// policies round-trip internally as well as through an external shell.
-// @compiler blocked: missing-implementation
 let quoteToken (value: String) : String =
   "'" + (Stdlib.String.replaceAll value "'" "'\\''") + "'"
 
-// @compiler blocked: missing-implementation
 let renderStringScope (scope: Permissions.Scope<String>) : String =
   match scope with
   | All -> "*"
   | Only value -> Permissions.quoteToken value
 
-// @compiler blocked: missing-implementation
 let renderHostRule (host: Permissions.HostRule) : String =
   match host with
   | Any -> "*"
@@ -528,7 +504,6 @@ let renderHostRule (host: Permissions.HostRule) : String =
   | SubdomainsOf domain -> "*." + domain
 
 /// Faithful text for one HTTP rule: `http <method> <url>`.
-// @compiler blocked: missing-implementation
 let renderHttpRule (rule: Permissions.HttpRule) : String =
   let method = Permissions.scopeText rule.method
   let broad =
@@ -563,7 +538,6 @@ let renderHttpRule (rule: Permissions.HttpRule) : String =
     $"http {method} {Permissions.quoteToken url}"
 
 /// Faithful text for one process rule: `process <executable> [args…]`.
-// @compiler blocked: missing-implementation
 let renderProcessRule (rule: Permissions.ProcessRule) : String =
   let executable = Permissions.renderStringScope rule.executable
   match rule.args with
@@ -575,7 +549,7 @@ let renderProcessRule (rule: Permissions.ProcessRule) : String =
       |> Stdlib.String.join " "
     $"process {executable} {args}"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Rule'"
 let renderRule (rule: Permissions.Rule) : String =
   match rule with
   | All -> "all"
@@ -591,7 +565,7 @@ let renderRule (rule: Permissions.Rule) : String =
   | DbWrite scope -> "db write " + Permissions.renderStringScope scope
   | Process rule -> Permissions.renderProcessRule rule
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Permissions.Policy'"
 let render (policy: Permissions.Policy) : List<String> =
   Stdlib.List.append
     (policy.allow |> Stdlib.List.map Permissions.renderRule)

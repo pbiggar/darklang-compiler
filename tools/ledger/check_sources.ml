@@ -1,5 +1,6 @@
 (* check_sources.ml - Validate selected imported bodies and replacement contracts from disk. *)
 open Dark_compiler
+module X = CompilationContexts
 
 let ( let* ) = Result.bind
 let read path = In_channel.with_open_bin path In_channel.input_all
@@ -9,7 +10,7 @@ let lines path =
   |> List.filter (fun line ->
       line <> "" && not (String.starts_with ~prefix:"#" line))
 
-let check root =
+let check native root =
   let* reasons =
     CompilerAnnotations.readReasons
       (Filename.concat root "porting/compiler-reasons.json")
@@ -29,20 +30,62 @@ let check root =
         Ok (file, source))
       (roots @ supplements)
   in
-  let* selected =
-    SourceSelection.select ~context:SourceContracts.emptyContext ~roots
-      ~supplements ~sources
+  let validate roots label =
+    let* selected =
+      SourceSelection.select ~context:SourceContracts.emptyContext ~roots
+        ~supplements ~sources
+    in
+    let units = List.map snd selected.SourceSelection.units in
+    if native then (
+      let* target = Platform.detectHostTarget () in
+      Printf.eprintf "Native validation: %s\n%!" label;
+      let recorder (timing : CompilerOptions.passTiming) =
+        Printf.eprintf "%s: %.0fms\n%!" timing.CompilerOptions.pass
+          (Int64.to_float timing.CompilerOptions.elapsed /. 1e6)
+      in
+      let* stdlib =
+        StdlibCompilation.buildStdlibFromSources ~recorder target units
+      in
+      let request : X.compileRequest =
+        {
+          X.context = X.StdlibOnly stdlib;
+          mode = CompilerOptions.TestExpression;
+          sources =
+            NonEmptyList.singleton
+              {
+                X.name = "native-source-reuse";
+                purpose = NameSyntax.SourceUnitPurpose.Executable;
+                source = "0L";
+              };
+          allowInternal = true;
+          verbosity = 0;
+          options = CompilerOptions.defaultOptions;
+          packageValues = X.emptyPackageValueCatalog;
+          packageManager = None;
+          passTimingRecorder = None;
+          session = None;
+        }
+      in
+      let report = CompilerLibrary.compile request in
+      Result.map (fun _ -> ()) report.CompilerOptions.result)
+    else
+      Result.map
+        (fun _ -> ())
+        (WrittenChecking.checkSourceUnitsWithBase None true false units)
   in
-  let* _, _, _ =
-    WrittenChecking.checkSourceUnitsWithBase None true false
-      (List.map snd selected.SourceSelection.units)
+  let* () =
+    if native then
+      validate
+        (List.filter (fun path -> not (Text.contains path "/tests/")) roots)
+        "application library"
+    else Ok ()
   in
-  Ok ()
+  validate roots "test-helper library"
 
 let () =
   match Array.to_list Sys.argv with
-  | [ _; root ] -> (
-      match check root with
+  | ([ _; root ] | [ _; "--native"; root ]) as arguments -> (
+      match check (List.length arguments = 3) root with
       | Ok () ->
           print_endline
             "Selected source bodies and replacement contracts checked"
@@ -50,5 +93,5 @@ let () =
           prerr_endline message;
           exit 1)
   | _ ->
-      prerr_endline "Usage: check_sources ROOT";
+      prerr_endline "Usage: check_sources [--native] ROOT";
       exit 1

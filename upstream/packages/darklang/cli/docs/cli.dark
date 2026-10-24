@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.CLI
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# CLI Commands
 

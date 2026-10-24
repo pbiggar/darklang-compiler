@@ -18,7 +18,7 @@ module Darklang.SCM.Conflicts
 
 /// The branch this process is on. Asked of `SCM.Branches`, not of `SCM.PackageOps` (which spells the same
 /// thing `currentBranch`): PackageOps depends on this module, so reaching back would close the loop.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.onBranch: Unknown function or value 'Branches.current'"
 let onBranch () : Uuid = Branches.current ()
 
 
@@ -26,7 +26,6 @@ let onBranch () : Uuid = Branches.current ()
 
 /// One side's binding of a name: the hash it points at, plus the authoring stamp of the op that bound it
 /// (the same `origin_ts` the fold's LWW compares).
-// @compiler blocked: missing-implementation
 type Binding =
   { owner: String
     modules: String
@@ -49,7 +48,6 @@ type Binding =
 ///
 /// Not a `Binding` with an empty hash: a removal binds nothing, and every reader of `Binding` would
 /// then have to know about a case that has no version to offer.
-// @compiler blocked: missing-implementation
 type Removal =
   { owner: String
     modules: String
@@ -61,7 +59,6 @@ type Removal =
     previous: Stdlib.Option.Option<String> }
 
 /// A recorded per-name base: the hash two sides last AGREED on. "" = the name did not exist at the base.
-// @compiler blocked: missing-implementation
 type NameBase =
   { owner: String
     modules: String
@@ -70,7 +67,6 @@ type NameBase =
 
 /// One competing version of a name at a reconciliation point. `side` is "local" or "incoming"; `author` is
 /// a best-effort label (an identity or a source id) -- ops aren't signed yet, so it's attribution, not proof.
-// @compiler blocked: missing-implementation
 type Candidate =
   { side: String
     hash: String
@@ -85,7 +81,6 @@ type Candidate =
 
 /// A recorded conflict. `autoResolvedTo` is the hash the deterministic fold picked; the LOSER stays here in
 /// `candidates` so the choice is reviewable and reversible rather than silent.
-// @compiler blocked: missing-implementation
 type Conflict =
   { id: String
     owner: String
@@ -107,19 +102,16 @@ type Conflict =
 
 /// The join key for a location across the three sides (local / incoming / base). A name can't contain "/",
 /// so this is unambiguous.
-// @compiler blocked: missing-implementation
 let bindingKey (owner: String) (modules: String) (name: String) : String =
   $"{owner}/{modules}/{name}"
 
 /// The human-facing dotted name for a location.
-// @compiler blocked: missing-implementation
 let fqn (owner: String) (modules: String) (name: String) : String =
   if modules == "" then $"{owner}.{name}" else $"{owner}.{modules}.{name}"
 
 /// Lexical "is <param a> after <param b>". Dark's numeric operators don't span String, and both things we
 /// order here (ISO stamps, hex hashes) are compared lexically by the F# fold, so route it through the same
 /// ordinal ordering `Stdlib.List.sort` uses rather than inventing a second rule.
-// @compiler blocked: missing-implementation
 let stringGt (a: String) (b: String) : Bool =
   if a == b then
     false
@@ -146,7 +138,6 @@ let stringGt (a: String) (b: String) : Bool =
 ///
 /// No equal-hash case here: `detect` returns None when the hashes match. The F# side needs that case,
 /// since the fold sees every op.
-// @compiler blocked: missing-implementation
 let beats (aTs: String) (aHash: String) (bTs: String) (bHash: String) : Bool =
   if bTs == "" then
     true
@@ -156,12 +147,10 @@ let beats (aTs: String) (aHash: String) (bTs: String) (bHash: String) : Bool =
     stringGt aTs bTs
 
 /// Does the INCOMING binding beat the LOCAL one? The rule above, at a binding.
-// @compiler blocked: missing-implementation
 let incomingWins (incoming: Binding) (local: Binding) : Bool =
   beats incoming.originTs incoming.hash local.originTs local.hash
 
 /// Why the auto-resolution picked what it did.
-// @compiler blocked: missing-implementation
 let resolutionReason (incoming: Binding) (local: Binding) : String =
   if local.originTs == "" then "no-local-stamp"
   else if incoming.originTs == local.originTs then "tie-break-by-hash"
@@ -170,7 +159,6 @@ let resolutionReason (incoming: Binding) (local: Binding) : String =
 /// A stable short id: the first 8 hex of sha256 over the location plus both candidate hashes, SORTED so the
 /// id doesn't depend on which side happened to be local. Re-detecting the same conflict yields the same id,
 /// so recording is idempotent (INSERT OR IGNORE) instead of piling up duplicate rows on every re-fold.
-// @compiler blocked: missing-implementation
 let conflictId
   (owner: String)
   (modules: String)
@@ -199,7 +187,7 @@ let conflictId
 /// Anything else with no base is not a conflict. `None` also means "no predecessor recorded", so both
 /// rules require both sides to say it; guessing from one side is what false-alarms on ordinary peer
 /// updates.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.SCM.Conflicts.detect: Field access requires a record value"
 let detect
   (localLabel: String)
   (incomingLabel: String)
@@ -324,7 +312,6 @@ let detect
 /// `dark rename` ends the old name, so this is "they renamed it while I changed it". A removal of
 /// exactly what you hold records nothing: they ended the version you had, and you have no competing
 /// work to lose.
-// @compiler blocked: missing-implementation
 let detectRemovals
   (localLabel: String)
   (incomingLabel: String)
@@ -381,7 +368,6 @@ let detectRemovals
 // reading the LOCAL side (the `locations` projection)
 
 /// "@p0, @p1, ..." for an IN-list of <param values>.
-// @compiler blocked: missing-implementation
 let inPlaceholders (values: List<String>) : String =
   let ps =
     values
@@ -389,7 +375,6 @@ let inPlaceholders (values: List<String>) : String =
 
   Stdlib.String.join ps ", "
 
-// @compiler blocked: missing-implementation
 let bindingFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Option<Binding> =
   match
     (Stdlib.Sqlite.textField row "owner",
@@ -420,12 +405,10 @@ let bindingFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Opti
 /// `[]`, which reads downstream as "no conflict" -- so nothing in this module builds an unbounded IN-list.
 /// 900 stays under even the old cap, which costs nothing on these paths since none is hot. The import
 /// loop chunks larger (`PackageOps.unknownRecords`), where round trips are what the size buys.
-// @compiler blocked: missing-implementation
 val inChunkSize = 900
 
 /// Split <param values> into IN-list-sized chunks. Falls back to one chunk rather than dropping
 /// anything, because the size is a constant and the only Error case is a non-positive one.
-// @compiler blocked: missing-implementation
 let inChunks (values: List<String>) : List<List<String>> =
   match Stdlib.List.chunkBySize values inChunkSize with
   | Ok cs -> cs
@@ -440,7 +423,7 @@ let inChunks (values: List<String>) : List<List<String>> =
 /// main-scoped, on purpose: a sync import folds into MAIN, so main's bindings are the local side of that
 /// reconciliation whatever branch the process stands on. A branch merge reads the parent's side through
 /// `PackageOps.parentBindings`, which starts from this and overlays the chain.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.localBindingsFor: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let localBindingsFor (names: List<String>) : List<Binding> =
   match names with
   | [] -> []
@@ -462,7 +445,6 @@ let localBindingsFor (names: List<String>) : List<Binding> =
 
 // reading the BASES (the two sources, one shape)
 
-// @compiler blocked: missing-implementation
 let baseFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Option<NameBase> =
   match
     (Stdlib.Sqlite.textField row "owner",
@@ -480,7 +462,7 @@ let baseFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Option<
   | _ -> Stdlib.Option.Option.None
 
 /// The bases a BRANCH recorded when it first touched each name (the parent's hash at the fork point).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.branchBases: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let branchBases (branchId: Uuid) : List<NameBase> =
   Stdlib.Sqlite.rowsP
     (localDb ())
@@ -491,7 +473,6 @@ let branchBases (branchId: Uuid) : List<NameBase> =
 
 // the `conflicts` table (record / read / resolve)
 
-// @compiler blocked: missing-implementation
 let conflictFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Option<Conflict> =
   match Stdlib.Sqlite.textField row "id" with
   | Some id ->
@@ -532,7 +513,7 @@ let conflictFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Opt
 ///
 /// Counted rather than discarded, because the CLI promises "the losing version is kept, not dropped" off
 /// the back of this: a caller compares the count against what it handed in and warns when they differ.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.record: Unknown function or value 'Stdlib.Sqlite.execBatch'"
 let record (branchId: Uuid) (conflicts: List<Conflict>) : Int =
   conflicts
   |> Stdlib.List.fold 0 (fun written c ->
@@ -566,7 +547,7 @@ let record (branchId: Uuid) (conflicts: List<Conflict>) : Int =
 /// the ops that caused the divergence cannot quietly undo it. `previous` names the text being
 /// replaced, so the op reads as an ordinary edit made on top of what this store holds -- which is
 /// exactly what it is, once a person has looked at both.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.settleWording: Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let settleWording
   (branchId: Uuid)
   (c: Conflict)
@@ -611,7 +592,6 @@ let settleWording
 /// The two divergence kinds are; a `doc-divergence` is about the prose said on one piece of content,
 /// and its candidates are hashes of text rather than of items. Anything keyed on the live binding
 /// has to ask this first.
-// @compiler blocked: missing-implementation
 let aboutABinding (kind: String) : Bool =
   Stdlib.List.contains
     [ "same-name-different-hash", "independent-creation", "removed-vs-edited" ]
@@ -623,7 +603,7 @@ let aboutABinding (kind: String) : Bool =
 /// Scoped, because a conflict is a divergence in one line of work: settling main's while standing on a
 /// branch would write the answer into an overlay where it does nothing until merge, and settling a
 /// branch's from main would answer for a projection that hasn't happened yet. Each branch sees its own.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.pending: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let pending () : List<Conflict> =
   let recorded =
     Stdlib.Sqlite.rowsP
@@ -670,7 +650,7 @@ let pending () : List<Conflict> =
 
 /// How many conflicts are waiting -- the number `dark status` and `dark commit` surface. Runs the same
 /// sweep as `pending`, so the count and the list never disagree about a superseded one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.pendingCount: Unknown function or value 'pending'"
 let pendingCount () : Int64 =
   Stdlib.Int.toInt64 (Stdlib.List.length (pending ())) |> Stdlib.Option.withDefault 0L
 
@@ -679,7 +659,7 @@ let pendingCount () : Int64 =
 ///
 /// Branch-scoped like `pending`, so the ids you can act on are exactly the ids you were just shown -- an
 /// unscoped lookup would let an id pasted from main's list resolve while standing on a branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.getByIdPrefix: Unknown function or value 'Stdlib.Sqlite.queryP'"
 let getByIdPrefix (rawPrefix: String) : Stdlib.Option.Option<Conflict> =
   // `dark conflicts` prints ids as `#509907c8`, so a copy-paste brings the `#` along. Accept what we print.
   let idPrefix =
@@ -713,7 +693,7 @@ let getByIdPrefix (rawPrefix: String) : Stdlib.Option.Option<Conflict> =
   | _ -> Stdlib.Option.Option.None
 
 /// Close a conflict: 'acked' (the auto-pick stands) or 'overridden' (a resolution op took over).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Conflicts.setStatus: Unknown function or value 'Stdlib.Sqlite.mustExec'"
 let setStatus (id: String) (status: String) (resolvedBy: String) : Unit =
   let _ =
     Stdlib.Sqlite.mustExec
@@ -726,18 +706,15 @@ let setStatus (id: String) (status: String) (resolvedBy: String) : Unit =
 
 // rendering (one place, so pretty and --json never drift)
 
-// @compiler blocked: missing-implementation
 let shortHash (h: String) : String =
   if h == "" then "(none)"
   else if Stdlib.String.length h <= 8 then h
   else Stdlib.String.first h 8
 
-// @compiler blocked: missing-implementation
 let candidateFor (c: Conflict) (side: String) : Stdlib.Option.Option<Candidate> =
   Stdlib.List.findFirst c.candidates (fun cand -> cand.side == side)
 
 /// One line per conflict: the name, which side the fold kept, and the id to inspect with.
-// @compiler blocked: missing-implementation
 let summaryLine (c: Conflict) : String =
   let kept =
     match candidateFor c "local" with
@@ -752,7 +729,6 @@ let summaryLine (c: Conflict) : String =
 /// A wording disagreement shows the TEXTS. A hash is what identifies a version, and a sentence is
 /// what identifies a wording -- printing `shortHash` of a sentence tells a reader nothing they can
 /// act on, and acting on it is the point of the screen.
-// @compiler blocked: missing-implementation
 let detailLines (c: Conflict) : List<String> =
   let dotted = fqn c.owner c.modules c.name
 

@@ -10,7 +10,6 @@ module Darklang.Cli.Ops
 // All op-log SQL is siloed in `SCM.PackageOps`; this file writes NO SQL, it only formats what that silo
 // returns.
 
-// @compiler blocked: missing-implementation
 let short (s: String) : String =
   if Stdlib.String.length s <= 8 then s else Stdlib.String.slice s 0 8
 
@@ -19,7 +18,7 @@ let short (s: String) : String =
 /// The whole point of a log listing is to be readable without a second command per row, and byte
 /// size never answered anything. Same printer `dark ops show` uses, so the two cannot drift; this
 /// takes the head line and `show` takes all of it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'SCM.PackageOps.OpSummary'"
 let describe (branchId: Uuid) (width: Int) (s: SCM.PackageOps.OpSummary) : String =
   match s.op with
   | None -> "(unreadable by this build)"
@@ -36,7 +35,7 @@ let describe (branchId: Uuid) (width: Int) (s: SCM.PackageOps.OpSummary) : Strin
       (Stdlib.String.slice firstLine 0 (width - 1)) + "..."
 
 /// One display row for an op summary: [short-or-full id; what it does; when].
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'SCM.PackageOps.OpSummary'"
 let summaryRow
   (branchId: Uuid)
   (fullId: Bool)
@@ -46,7 +45,7 @@ let summaryRow
   [ id, describe branchId 44 s, s.ts ]
 
 /// Show what the op(s) matching an id-prefix actually DO -- pretty-printed content, not just metadata.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeShow (state: AppState) (idPrefix: String) : AppState =
   // An empty prefix matches EVERY op, so `dark ops show ""` would print whichever came first as though you
   // had asked for it.
@@ -69,7 +68,7 @@ let executeShow (state: AppState) (idPrefix: String) : AppState =
     state
 
 /// The most recent <param limit> ops this branch can see, newest first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeList (state: AppState) (limit: Int64) : AppState =
   let branch = SCM.PackageOps.currentBranch ()
   // Through `branchName`, so a branch shows its name rather than its raw id.
@@ -96,7 +95,7 @@ let executeList (state: AppState) (limit: Int64) : AppState =
 
   state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ ""
     "  dark ops              the 20 most recent ops on this branch"
@@ -112,7 +111,6 @@ let help (_state: AppState) : String =
 
 /// Where a verb that used to be an `ops` subcommand lives. `ops` reads; every verb that CHANGES the log is
 /// a root command, and a guess at the old shape deserves an answer rather than the help text.
-// @compiler blocked: missing-implementation
 let movedFromOps (verb: String) : Stdlib.Option.Option<String> =
   match verb with
   | "branch"
@@ -126,7 +124,7 @@ let movedFromOps (verb: String) : Stdlib.Option.Option<String> =
   | "archive" -> Stdlib.Option.Option.Some "dark branch archive <id>"
   | _ -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   // `ops` takes no flags at all, and every unrecognised argument shape falls through to `help` -- which
   // would answer a flag mistake with the manual and no error.
@@ -173,7 +171,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
         Cli.printHint "  `dark ops help` says what it does."
         Cli.exitWith state false
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete
   (_state: AppState)
   (_args: List<String>)

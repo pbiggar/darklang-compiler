@@ -6,7 +6,7 @@ module Darklang.Cli.Discard
 // draft is not pending work: it is already running, and discarding it takes those versions back out. What
 // is already committed is never touched, which is what makes this safe to reach for.
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ ""
     "  dark discard          review what would go, then confirm"
@@ -20,7 +20,7 @@ let help (_state: AppState) : String =
     "  step back to, `dark discard <name>`." ]
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let autoConfirm =
     (Stdlib.List.contains args "-y") || (Stdlib.List.contains args "--yes")
@@ -136,7 +136,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
     Cli.printErr $"couldn't discard: {e}"
     Cli.exitWith state false
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete
   (_state: AppState)
   (_args: List<String>)
