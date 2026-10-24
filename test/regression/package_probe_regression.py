@@ -14,7 +14,8 @@ def main():
             (root / directory).mkdir(parents=True, exist_ok=True)
         (root / "porting/compiler-reasons.json").write_text(
             json.dumps({"missing-implementation": "Unvalidated test declaration",
-                        "compiler-gap": "Previously inspected limitation"}))
+                        "compiler-gap": "Previously inspected limitation",
+                        "compiler-implementation": "Existing compiler substitute"}))
         (root / "upstream/sources.list").write_text("packages/recursive.dark\n")
         (root / "library-sources.list").write_text("")
         (root / "upstream/packages/recursive.dark").write_text("""module Probe
@@ -64,6 +65,28 @@ let useMarker (value: Bool) : Bool = ProbeMarker.mark value
         for kind in ("trait", "implementation"):
             matching = [row for row in all_rows.values() if row["kind"] == kind]
             assert len(matching) == 1 and matching[0]["status"] == "checked", all_rows
+        (root / "packages").mkdir()
+        (root / "packages/compiler.dark").write_text("""module Probe
+trait DuplicateMarker<'a> =
+  let duplicateMark (value: 'a) : Bool
+impl DuplicateMarker for Bool =
+  let duplicateMark (value: Bool) : Bool = value
+let existing (value: Bool) : Bool = value
+""")
+        (root / "library-sources.list").write_text("packages/compiler.dark\n")
+        source.write_text(source.read_text() + """
+// @compiler blocked: compiler-gap
+impl Probe.DuplicateMarker for Bool =
+  let duplicateMark (value: Bool) : Bool = value
+// @compiler replace: packages/compiler.dark#Probe.existing reason=compiler-implementation
+let existing (value: Bool) : Bool = value
+""")
+        subprocess.run([str(probe), "--all-blocked", str(root), str(manifest),
+                        str(report)], check=True, timeout=60)
+        duplicate = [row for row in json.loads(report.read_text())
+                     if row["kind"] == "implementation" and "DuplicateMarker" in row["name"]]
+        assert len(duplicate) == 1 and duplicate[0]["status"] == "blocked", duplicate
+        assert "Already selected from packages/compiler.dark" in duplicate[0]["diagnostic"], duplicate
     print("Package probe checks recursive groups, all blocked reasons, and real dependencies")
 
 

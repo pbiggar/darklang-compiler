@@ -94,6 +94,120 @@ let main includePackages allBlocked root manifest output =
     S.select ~context:SourceContracts.emptyContext ~roots ~supplements ~sources
     |> require
   in
+  let sourceNodes =
+    List.concat_map (fun (file, source) -> S.nodes file source) sources
+  in
+  let selectedNodes =
+    let rec collect path declarations =
+      List.concat_map
+        (function
+          | W.DModule modul ->
+              collect (path @ W.moduleNameParts modul) modul.W.declarations
+          | ( W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _
+            | W.DTest _ | W.DAssertion _ | W.DExpr _ ) as declaration -> (
+              match
+                List.find_opt
+                  (fun (node : S.node) ->
+                    node.S.path = path && node.S.declaration = declaration)
+                  sourceNodes
+              with
+              | Some node -> [ node ]
+              | None ->
+                  Crash.crash "Selected declaration absent from probe sources"))
+        declarations
+    in
+    List.concat_map
+      (fun (_, unit_) ->
+        let tree = Validation.ValidatedSourceFile.toWrittenTypes unit_ in
+        collect [] tree.W.declarations
+        @ collect [] (List.map (fun expr -> W.DExpr expr) tree.W.exprsToEval))
+      selected.S.units
+  in
+  let implementationKey (node : S.node) (impl : W.implDecl) =
+    let spelling =
+      List.map
+        (fun ((part : W.identifier), _) -> part.W.name)
+        impl.W.trait_.W.modules
+      @ [ impl.W.trait_.W.typ.W.name ]
+      |> String.concat "."
+    in
+    let candidates =
+      NameResolution.candidateSpellings NameResolution.Type node.S.path spelling
+      @
+      if String.contains spelling '.' then []
+      else [ "Darklang.Stdlib." ^ spelling ]
+    in
+    let identity =
+      List.find_opt
+        (fun name ->
+          List.exists
+            (fun (other : S.node) ->
+              S.kind other.S.declaration = "trait" && other.S.name = name)
+            selectedNodes)
+        candidates
+    in
+    Option.map
+      (fun identity ->
+        let trait_ =
+          {
+            impl.W.trait_ with
+            W.modules = [];
+            typ = { impl.W.trait_.W.typ with W.name = identity };
+          }
+        in
+        let declaration =
+          W.DImpl { impl with W.trait_; members = []; description = "" }
+        in
+        WrittenFormatter.syntaxKey
+          {
+            W.range = W.synthRange;
+            declarations = [ declaration ];
+            exprsToEval = [];
+          })
+      identity
+  in
+  let sameSelection (node : S.node) (other : S.node) =
+    node.S.name = other.S.name
+    && S.kind node.S.declaration = S.kind other.S.declaration
+    ||
+    match node.S.declaration with
+    | W.DImpl left -> (
+        match other.S.declaration with
+        | W.DImpl right when node.S.path = other.S.path -> (
+            match
+              (implementationKey node left, implementationKey other right)
+            with
+            | Some left, Some right -> left = right
+            | None, _ | Some _, None -> false)
+        | W.DImpl _ | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _
+        | W.DModule _ | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+            false)
+    | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DModule _
+    | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+        false
+  in
+  let candidates, duplicateSelections =
+    List.fold_right
+      (fun (node : S.node) (pending, duplicates) ->
+        let existing =
+          if not allBlocked then None
+          else
+            List.find_opt
+              (fun (other : S.node) ->
+                other.S.file <> node.S.file && sameSelection node other)
+              selectedNodes
+        in
+        match existing with
+        | None -> (node :: pending, duplicates)
+        | Some other ->
+            ( pending,
+              ( node,
+                "Already selected from " ^ other.S.file
+                ^ "; importing another declaration of " ^ node.S.name
+                ^ " requires an explicit replacement contract" )
+              :: duplicates ))
+      candidates ([], [])
+  in
   let units = List.map snd selected.S.units in
   let base =
     let _, _, environment =
@@ -324,9 +438,12 @@ let main includePackages allBlocked root manifest output =
   Yojson.Basic.to_file output
     (`List
        (List.map (fun node -> row node "checked" "") accepted
-       @ List.map (fun (node, message) -> row node "blocked" message) blocked));
+       @ List.map
+           (fun (node, message) -> row node "blocked" message)
+           (blocked @ duplicateSelections)));
   Printf.printf "Imported declarations: %d checked, %d blocked\n"
-    (List.length accepted) (List.length blocked)
+    (List.length accepted)
+    (List.length blocked + List.length duplicateSelections)
 
 let () =
   match Array.to_list Sys.argv with
