@@ -1131,9 +1131,9 @@ let runTestsWithProgressReporter completedTestReporter args =
               match test.E.compilerDisposition with
               | CompilerAnnotations.Xfail _ ->
                   R.evaluateExpectations test (R.CompileFailed (1, message, 0L))
-              | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
-              | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
-                ->
+              | CompilerAnnotations.Run | CompilerAnnotations.ErrorMessage _
+              | CompilerAnnotations.Blocked _ | CompilerAnnotations.Excluded _
+              | CompilerAnnotations.Replace _ ->
                   Error { R.run = R.CompileFailed (1, message, 0L); message }
             in
             let collectExitCodeDetails (test : E.e2eTest) run =
@@ -1242,8 +1242,11 @@ let runTestsWithProgressReporter completedTestReporter args =
                             | CompilerAnnotations.AotRejection ->
                                 "aot-rejection"
                             | CompilerAnnotations.MissingSupport ->
-                                "missing-support")
-                      | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+                                "missing-support"
+                            | CompilerAnnotations.UpstreamBug -> "upstream-bug")
+                      | CompilerAnnotations.Run
+                      | CompilerAnnotations.ErrorMessage _
+                      | CompilerAnnotations.Blocked _
                       | CompilerAnnotations.Excluded _
                       | CompilerAnnotations.Replace _ ->
                           JString "none" );
@@ -1751,7 +1754,8 @@ let runTestsWithProgressReporter completedTestReporter args =
                         E.compilerDisposition = CompilerAnnotations.Run;
                         skipReason = None;
                       }
-                  | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+                  | CompilerAnnotations.Run | CompilerAnnotations.ErrorMessage _
+                  | CompilerAnnotations.Blocked _
                   | CompilerAnnotations.Excluded _
                   | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _
                     ->

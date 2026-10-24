@@ -430,73 +430,16 @@ let checkBareMinMagnitude state index =
       (Some ("write it negated: -" ^ text))
 [@@warning "-4"]
 
-(*
-   whole/fraction decimal strings of a float literal at token `i`. The
-   double's shortest round-trip form is used when it's a plain decimal (the
-   usual case); when it needs an exponent (`1e300`, `0.00000001`) or isn't
-   finite-decimal at all, the SOURCE text is decimal-shifted instead — the
-   PT float representation is exponent-free strings, and an exponent leaking
-   into the whole part crashes `makeFloat` downstream.
-   decimal-shift the literal text `mant[.frac][eE][+-]exp` (exact, no
-   floating-point re-derivation)
-*)
+(* Validate the source's decimal precision before constructing written digits.
+   Both expressions and patterns use this path; formatting never determines
+   literal acceptance or the decimal representation used during lowering. *)
 let floatParts state index value =
-  let roundTrip = FloatFormat.roundTrip (Float.abs value) in
-  if
-    String.for_all
-      (fun char -> (char >= '0' && char <= '9') || char = '.')
-      roundTrip
-  then
-    match String.split_on_char '.' roundTrip with
-    | [ whole; fraction ] -> (whole, fraction)
-    | _ -> (roundTrip, "0")
-  else
-    let text = txt state index in
-    let rec leadingMinus offset =
-      if offset < String.length text && text.[offset] = '-' then
-        leadingMinus (offset + 1)
-      else offset
-    in
-    let offset = leadingMinus 0 in
-    let text = String.sub text offset (String.length text - offset) in
-    let parts =
-      String.split_on_char 'e'
-        (String.map (fun char -> if char = 'E' then 'e' else char) text)
-    in
-    let mantissa, exponent =
-      match parts with
-      | [ mantissa; exponent ] ->
-          let exponent =
-            match Text.tryParseInt32 exponent with
-            | Some value when value >= -400l && value <= 400l ->
-                Int32.to_int value
-            | Some value ->
-                err state DiagnosticCode.intRange index
-                  (Printf.sprintf
-                     "Float exponent %ld is outside the supported range \
-                      -400..400"
-                     value);
-                max (-400) (min 400 (Int32.to_int value))
-            | None ->
-                err state DiagnosticCode.intRange index
-                  "Float exponent is too large to represent";
-                0
-          in
-          (mantissa, exponent)
-      | _ -> (text, 0)
-    in
-    let whole, fraction =
-      match String.split_on_char '.' mantissa with
-      | [ whole; fraction ] -> (whole, fraction)
-      | _ -> (mantissa, "")
-    in
-    let digits = whole ^ fraction and point = String.length whole + exponent in
-    if point <= 0 then ("0", String.make (-point) '0' ^ digits)
-    else if point >= String.length digits then
-      (digits ^ String.make (point - String.length digits) '0', "0")
-    else
-      ( String.sub digits 0 point,
-        String.sub digits point (String.length digits - point) )
+  match FloatLiteral.parse (txt state index) value with
+  | Ok parts -> parts
+  | Error error ->
+      let code, message = FloatLiteral.diagnostic error in
+      err state code index message;
+      ("0", "0")
 
 (*
    Reject invalid escapes / codepoints in string, char, and interpolated-string
