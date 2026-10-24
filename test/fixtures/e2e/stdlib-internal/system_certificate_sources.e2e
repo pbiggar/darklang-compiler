@@ -1,0 +1,4 @@
+// Certificate discovery honors explicit OpenSSL locations independently.
+Stdlib.__Tls13Client.__rootSources (Some "/custom/ca.pem") (Some "/one:/two") = (["/custom/ca.pem"], ["/one", "/two"])
+Stdlib.__Tls13Client.__rootSources (Some "") (Some "") = ([""], [])
+Stdlib.__Tls13Client.__readRootsFromSources ["/definitely/missing/dark-ca.pem"] [] = Error "No system X.509 trust certificates are available"

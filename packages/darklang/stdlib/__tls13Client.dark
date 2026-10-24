@@ -195,14 +195,50 @@ let __readBundle (paths: List<String>) : Stdlib.Result.Result<List<Blob>, String
     | Error _ -> Stdlib.__Tls13Client.__readBundle rest
     | Ok contents -> Stdlib.__Tls13Client.parsePemBundle contents
 
-let loadSystemRoots () : Stdlib.Result.Result<List<Blob>, String> =
-  Stdlib.__Tls13Client.__readBundle [
+// Resolve trust locations at execution time, independently of HTTP policy.
+// An explicit empty OpenSSL location suppresses that category's defaults.
+let __rootSources (file: Stdlib.Option.Option<String>) (directory: Stdlib.Option.Option<String>)
+  : (List<String> * List<String>) =
+  let files = match file with | Some path -> [path] | None -> [
     "/etc/ssl/certs/ca-certificates.crt",
     "/etc/ssl/cert.pem",
     "/etc/pki/tls/certs/ca-bundle.crt",
     "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
     "/etc/ssl/ca-bundle.pem",
-    "/usr/local/share/certs/ca-root-nss.crt" ]
+    "/usr/local/share/certs/ca-root-nss.crt" ] in
+  let directories = match directory with
+    | Some paths -> Stdlib.List.filter (Stdlib.String.split paths ":") (fun path -> path != "")
+    | None -> ["/etc/ssl/certs"] in
+  (files, directories)
+
+// A certificate directory can contain symlinks, non-certificates and subdirectories.
+// Only successfully parsed, nonempty PEM files contribute trust anchors.
+let __directoryRoots (paths: List<String>) : List<Blob> =
+  Stdlib.List.fold paths [] (fun roots path ->
+    if Stdlib.Cli.FileSystem.isDirectory path then roots
+    else match Stdlib.Cli.FileSystem.readFile path with
+      | Error _ -> roots
+      | Ok contents -> match Stdlib.__Tls13Client.parsePemBundle contents with
+        | Error _ -> roots
+        | Ok certificates -> roots @ certificates)
+
+let __readRootsFromSources (files: List<String>) (directories: List<String>)
+  : Stdlib.Result.Result<List<Blob>, String> =
+  let bundled = match Stdlib.__Tls13Client.__readBundle files with
+    | Ok roots -> roots
+    | Error _ -> [] in
+  let roots = Stdlib.List.fold directories bundled (fun roots directory ->
+    if Stdlib.Cli.FileSystem.isDirectory directory then
+      roots @ Stdlib.__Tls13Client.__directoryRoots (Stdlib.Cli.FileSystem.listDirectory directory)
+    else roots) in
+  match roots with
+  | [] -> Error "No system X.509 trust certificates are available"
+  | _ :: _ -> Ok roots
+
+let loadSystemRoots () : Stdlib.Result.Result<List<Blob>, String> =
+  let (files, directories) = Stdlib.__Tls13Client.__rootSources
+    (Stdlib.Cli.Env.get "SSL_CERT_FILE") (Stdlib.Cli.Env.get "SSL_CERT_DIR") in
+  Stdlib.__Tls13Client.__readRootsFromSources files directories
 
 let __authenticate (flight: Stdlib.__Tls13Handshake.ServerFlight)
   (host: String) (roots: List<Blob>) : Stdlib.Result.Result<Unit, String> =
