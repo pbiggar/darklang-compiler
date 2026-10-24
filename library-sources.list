@@ -154,6 +154,9 @@ packages/darklang/stdlib/valueSearch.dark
 packages/darklang/stdlib/dateTime.dark
 packages/darklang/stdlib/duration.dark
 packages/darklang/stdlib/blob.dark
+packages/darklang/stdlib/sqlite/__codec.dark
+packages/darklang/stdlib/sqlite/__pager.dark
+packages/darklang/stdlib/sqlite/__btree.dark
 packages/darklang/stdlib/stream.dark
 packages/darklang/stdlib/html.dark
 packages/darklang/stdlib/http.dark

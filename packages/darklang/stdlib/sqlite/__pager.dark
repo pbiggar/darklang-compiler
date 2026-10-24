@@ -1,0 +1,139 @@
+// Demand-loaded SQLite pages with transaction-local dirty pages and before images.
+// No SQLite/libSQL native calls, whole-file replacement, WAL or durable crash recovery.
+module Darklang.Stdlib.Sqlite.__Pager
+
+type __State = { fd: Int, size: Int, count: Int, originalCount: Int,
+  cache: Dict<Int, Blob>, dirty: Dict<Int, Blob> }
+
+let __get (b: Blob) (o: Int) (w: Int) : Int = Stdlib.Sqlite.__Codec.__beRead b o w
+let __put (b: Blob) (o: Int) (w: Int) (v: Int) : Blob = Stdlib.Sqlite.__Codec.__put b o w v
+
+let __io (r: Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, String> =
+  r |> Stdlib.Result.mapError (fun e -> "SQLite I/O: " + e.message)
+
+let __readExact (fd: Int) (remaining: Int) (reversed: List<Blob>) : Stdlib.Result.Result<Blob, String> =
+  if remaining == 0 then Ok (Stdlib.Blob.concat (Stdlib.List.reverse reversed))
+  else __io (Stdlib.Cli.Posix.fdRead fd remaining) |> Stdlib.Result.andThen (fun chunk ->
+    let n = Stdlib.Blob.length chunk
+    if n == 0 then Error "SQLite: truncated database page"
+    else __readExact fd (remaining - n) (chunk :: reversed))
+
+let __readAt (fd: Int) (offset: Int) (n: Int) : Stdlib.Result.Result<Blob, String> =
+  __io (Stdlib.Cli.Posix.fdSeekFromStart fd offset)
+  |> Stdlib.Result.andThen (fun _ -> __readExact fd n [])
+
+let __writeAt (fd: Int) (offset: Int) (b: Blob) : Stdlib.Result.Result<Unit, String> =
+  __io (Stdlib.Cli.Posix.fdSeekFromStart fd offset)
+  |> Stdlib.Result.andThen (fun _ -> __io (Stdlib.Cli.Posix.fdWrite fd b))
+  |> Stdlib.Result.map (fun _ -> ())
+
+let __read (s: __State) (page: Int) : Stdlib.Result.Result<(__State * Blob), String> =
+  if page < 1 || page > s.count then Error "SQLite: page number outside database"
+  else match Stdlib.Dict.get s.dirty page with
+  | Some b -> Ok (s, b)
+  | None ->
+    match Stdlib.Dict.get s.cache page with
+    | Some b -> Ok (s, b)
+    | None -> __readAt s.fd ((page - 1) * s.size) s.size |> Stdlib.Result.map (fun b ->
+      ({ s with cache = Stdlib.Dict.set s.cache page b }, b))
+
+let __write (s: __State) (page: Int) (b: Blob) : Stdlib.Result.Result<__State, String> =
+  if page < 1 || page > s.count || Stdlib.Blob.length b != s.size then Error "SQLite: invalid page write"
+  else __read s page |> Stdlib.Result.map (fun (loaded, _) ->
+    { loaded with dirty = Stdlib.Dict.setOverridingDuplicates loaded.dirty page b })
+
+let __newPage (s: __State) : (__State * Int) =
+  let page = s.count + 1
+  let b = Stdlib.Sqlite.__Codec.__zeros s.size
+  ({ s with count = page, dirty = Stdlib.Dict.set s.dirty page b }, page)
+
+let __allocate (s: __State) : Stdlib.Result.Result<(__State * Int), String> =
+  __read s 1 |> Stdlib.Result.andThen (fun (s, header) ->
+    let head = __get header 32 4
+    let freeCount = __get header 36 4
+    if head == 0 then
+      if freeCount != 0 then Error "SQLite: invalid freelist count" else Ok (__newPage s)
+    else if head == 1 || freeCount == 0 then Error "SQLite: invalid freelist trunk"
+    else __read s head |> Stdlib.Result.andThen (fun (s, trunk) ->
+      let leaves = __get trunk 4 4
+      if leaves > (s.size - 8) / 4 then Error "SQLite: invalid freelist leaves"
+      else
+        let page = if leaves == 0 then head else __get trunk (8 + (leaves - 1) * 4) 4
+        let next = if leaves == 0 then __get trunk 0 4 else head
+        let updatedHeader = __put (__put header 32 4 next) 36 4 (freeCount - 1)
+        __write s 1 updatedHeader |> Stdlib.Result.andThen (fun s ->
+          (if leaves == 0 then Ok s else __write s head (__put trunk 4 4 (leaves - 1)))
+          |> Stdlib.Result.andThen (fun s ->
+            __write s page (Stdlib.Sqlite.__Codec.__zeros s.size)
+            |> Stdlib.Result.map (fun s -> (s, page))))))
+
+let __free (s: __State) (page: Int) : Stdlib.Result.Result<__State, String> =
+  if page <= 1 then Error "SQLite: cannot free schema page"
+  else __read s 1 |> Stdlib.Result.andThen (fun (s, header) ->
+    let head = __get header 32 4
+    let count = __get header 36 4
+    let trunk = __put (Stdlib.Sqlite.__Codec.__zeros s.size) 0 4 head
+    __write s page trunk |> Stdlib.Result.andThen (fun s ->
+      __write s 1 (__put (__put header 32 4 page) 36 4 (count + 1))))
+
+let __empty (size: Int) : Blob =
+  let b = Stdlib.Sqlite.__Codec.__replace (Stdlib.Sqlite.__Codec.__zeros size) 0 (Stdlib.Blob.fromString "SQLite format 3\u0000")
+  let fields = [(16,2,size), (18,1,1), (19,1,1), (21,1,64), (22,1,32), (23,1,32),
+    (24,4,1), (28,4,1), (40,4,1), (44,4,4), (56,4,1), (92,4,1), (96,4,3046000),
+    (100,1,13), (105,2,size)]
+  Stdlib.List.fold fields b (fun b (o,w,v) -> __put b o w v)
+
+let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
+  if length == 0 then
+    Ok (__State { fd = fd, size = 4096, count = 1, originalCount = 0,
+      cache = Dict {}, dirty = Stdlib.Dict.singleton 1 (__empty 4096) })
+  else if length < 100 then Error "SQLite: invalid database header"
+  else __readAt fd 0 100 |> Stdlib.Result.andThen (fun header ->
+    let rawSize = __get header 16 2
+    let size = if rawSize == 1 then 65536 else rawSize
+    let count = length / size
+    if Stdlib.Blob.toHex (Stdlib.Blob.slice header 0 16) != "53514C69746520666F726D6174203300" then Error "SQLite: not a database"
+    else if size < 512 || size > 65536 || (size & (size - 1)) != 0 || length % size != 0 then Error "SQLite: invalid page size"
+    else if __get header 18 1 != 1 || __get header 19 1 != 1 then Error "SQLite: WAL and newer file formats are unsupported"
+    else if __get header 20 1 != 0 || __get header 52 4 != 0 || __get header 64 4 != 0 then Error "SQLite: reserved bytes and auto-vacuum are unsupported"
+    else if __get header 56 4 != 1 then Error "SQLite: only UTF-8 databases are supported"
+    else if __get header 44 4 < 1 || __get header 44 4 > 4 then Error "SQLite: unsupported schema format"
+    else
+      let declared = __get header 28 4
+      let valid = __get header 24 4 == __get header 92 4 && declared != 0
+      if valid && declared > count then Error "SQLite: truncated database"
+      else Ok (__State { fd = fd, size = size, count = if valid then declared else count,
+        originalCount = count, cache = Dict {}, dirty = Dict {} }))
+
+let __open (path: String) : Stdlib.Result.Result<__State, String> =
+  if path == ":memory:" || path == "" then Error "SQLite: a filesystem database path is required"
+  else __io (Stdlib.Cli.Posix.openFile path (2 + Stdlib.Cli.Posix.OpenFlags.creat ()) 384)
+  |> Stdlib.Result.andThen (fun fd ->
+    let loaded = __io (Stdlib.Cli.Posix.flock fd true) |> Stdlib.Result.andThen (fun _ ->
+      __io (Stdlib.Cli.Posix.stat path) |> Stdlib.Result.andThen (fun stat -> __load fd stat.size))
+    match loaded with
+    | Ok s -> Ok s
+    | Error e -> let _ = Stdlib.Cli.Posix.fdClose fd in Error e)
+
+let __flush (s: __State) (pages: List<(Int * Blob)>) : Stdlib.Result.Result<Unit, String> =
+  match pages with
+  | [] -> Ok ()
+  | (page, b) :: rest -> __writeAt s.fd ((page - 1) * s.size) b
+    |> Stdlib.Result.andThen (fun _ -> __flush s rest)
+
+let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
+  if Stdlib.Dict.isEmpty s.dirty then Ok ()
+  else __read s 1 |> Stdlib.Result.andThen (fun (s, header) ->
+    let counter = (__get header 24 4 + 1) % 4294967296
+    let header = __put (__put (__put header 24 4 counter) 92 4 counter) 28 4 s.count
+    let pages = Stdlib.Dict.toList (Stdlib.Dict.remove s.dirty 1) @ [(1,header)]
+    match __flush s pages with
+    | Ok () -> Ok ()
+    | Error e ->
+      // Before images cover ordinary write errors. They are not power-loss recovery.
+      let originals = Stdlib.Dict.toList s.cache
+      match __flush s originals with
+      | Ok () -> Error e
+      | Error rollback -> Error (e + "; rollback also failed: " + rollback))
+
+let __close (s: __State) : Stdlib.Result.Result<Unit, String> = __io (Stdlib.Cli.Posix.fdClose s.fd)

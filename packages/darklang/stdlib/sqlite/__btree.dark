@@ -1,0 +1,262 @@
+// SQLite rowid table B-trees: local page edits, recursive splits, overflow chains and reclamation.
+// Deletion keeps underfull pages; subsequent inserts reuse their space without a balancing pass.
+module Darklang.Stdlib.Sqlite.__Btree
+
+type __Entry = { key: Int, payload: Blob }
+type __Node = { cells: List<(Int * Int)>, right: Int }
+type __Edit = { state: Stdlib.Sqlite.__Pager.__State, split: Stdlib.Option.Option<(Int * Int)> }
+
+let __get (b: Blob) (o: Int) (w: Int) : Int = Stdlib.Sqlite.__Codec.__beRead b o w
+let __var (n: Int) : Blob = Stdlib.Sqlite.__Codec.__var n
+let __be (n: Int) (w: Int) : Blob = Stdlib.Sqlite.__Codec.__be n w
+let __offset (page: Int) : Int = if page == 1 then 100 else 0
+let __local (size: Int) (payload: Int) : Int =
+  let maximum = size - 35
+  let minimum = ((size - 12) * 32 / 255) - 23
+  if payload <= maximum then payload
+  else let k = minimum + (payload - minimum) % (size - 4) in if k <= maximum then k else minimum
+
+let __leafCell (size: Int) (b: Blob) (o: Int) : Stdlib.Result.Result<(Int * Blob), String> =
+  Stdlib.Sqlite.__Codec.__readVar b o |> Stdlib.Result.andThen (fun (length, afterLength) ->
+    Stdlib.Sqlite.__Codec.__readVar b afterLength |> Stdlib.Result.andThen (fun (unsigned, afterKey) ->
+      let local = __local size length
+      let total = afterKey - o + local + (if local < length then 4 else 0)
+      if length > 67108864 || o + total > size then Error "SQLite: invalid table cell"
+      else Ok ((if unsigned >= 9223372036854775808 then unsigned - 18446744073709551616 else unsigned), Stdlib.Blob.slice b o total)))
+
+let __leafCells (size: Int) (page: Int) (b: Blob) (index: Int) (count: Int)
+  (acc: List<(Int * Blob)>) : Stdlib.Result.Result<List<(Int * Blob)>, String> =
+  if index == count then Ok (Stdlib.List.reverse acc)
+  else
+    let start = __offset page
+    let o = __get b (start + 8 + index * 2) 2
+    if o < start + 8 + count * 2 then Error "SQLite: overlapping table cell"
+    else __leafCell size b o |> Stdlib.Result.andThen (fun cell -> __leafCells size page b (index + 1) count (cell :: acc))
+
+let __leaf (size: Int) (page: Int) (b: Blob) : Stdlib.Result.Result<List<(Int * Blob)>, String> =
+  let start = __offset page
+  let count = __get b (start + 3) 2
+  if __get b start 1 != 13 || start + 8 + count * 2 > size then Error "SQLite: invalid table leaf"
+  else __leafCells size page b 0 count []
+
+let __nodeCells (size: Int) (page: Int) (b: Blob) (index: Int) (count: Int)
+  (acc: List<(Int * Int)>) : Stdlib.Result.Result<List<(Int * Int)>, String> =
+  if index == count then Ok (Stdlib.List.reverse acc)
+  else
+    let o = __get b (__offset page + 12 + index * 2) 2
+    if o < __offset page + 12 + count * 2 || o + 4 >= size then Error "SQLite: invalid interior cell"
+    else Stdlib.Sqlite.__Codec.__readVar b (o + 4) |> Stdlib.Result.andThen (fun (key, _) ->
+      let key = if key >= 9223372036854775808 then key - 18446744073709551616 else key
+      __nodeCells size page b (index + 1) count ((__get b o 4, key) :: acc))
+
+let __node (size: Int) (page: Int) (b: Blob) : Stdlib.Result.Result<__Node, String> =
+  let start = __offset page
+  let count = __get b (start + 3) 2
+  if __get b start 1 != 5 || start + 12 + count * 2 > size then Error "SQLite: invalid table interior"
+  else __nodeCells size page b 0 count [] |> Stdlib.Result.map (fun cells -> __Node { cells = cells, right = __get b (start + 8) 4 })
+
+let __pack (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (kind: Int) (right: Int) (cells: List<Blob>)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  let start = __offset page
+  let header = if kind == 5 then 12 else 8
+  let count = Stdlib.List.length cells
+  let bytes = Stdlib.List.fold cells 0 (fun n b -> n + Stdlib.Blob.length b)
+  if start + header + count * 2 + bytes > s.size then Error "SQLite: page is full"
+  else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s, old) ->
+    let base = if page == 1 then Stdlib.Blob.concat [Stdlib.Blob.slice old 0 100, Stdlib.Sqlite.__Codec.__zeros (s.size - 100)] else Stdlib.Sqlite.__Codec.__zeros s.size
+    let base = Stdlib.Sqlite.__Codec.__put base start 1 kind
+    let base = Stdlib.Sqlite.__Codec.__put base (start + 3) 2 count
+    let base = Stdlib.Sqlite.__Codec.__put base (start + 5) 2 ((s.size - bytes) % 65536)
+    let base = if kind == 5 then Stdlib.Sqlite.__Codec.__put base (start + 8) 4 right else base
+    let (_, pointers) = Stdlib.List.fold cells (s.size, []) (fun (end_, pointers) b ->
+      let o = end_ - Stdlib.Blob.length b in (o, pointers @ [__be o 2]))
+    let base = Stdlib.Sqlite.__Codec.__replace base (start + header) (Stdlib.Blob.concat pointers)
+    // Cells are stored in reverse physical order so each logical pointer addresses its own bytes.
+    let base = Stdlib.Sqlite.__Codec.__replace base (s.size - bytes) (Stdlib.Blob.concat (Stdlib.List.reverse cells))
+    Stdlib.Sqlite.__Pager.__write s page base)
+
+let __writeLeaf (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (cells: List<(Int * Blob)>)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  __pack s page 13 0 (Stdlib.List.map cells (fun (_, b) -> b))
+
+let __writeNode (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (node: __Node)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  __pack s page 5 node.right (Stdlib.List.map node.cells (fun (child,key) -> Stdlib.Blob.concat [__be child 4, __var key]))
+
+let __overflowWrite (s: Stdlib.Sqlite.__Pager.__State) (payload: Blob) (offset: Int)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * Int), String> =
+  if offset == Stdlib.Blob.length payload then Ok (s, 0)
+  else Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s, page) ->
+    let n = Stdlib.Int.min (s.size - 4) (Stdlib.Blob.length payload - offset)
+    __overflowWrite s payload (offset + n) |> Stdlib.Result.andThen (fun (s, next) ->
+      let b = Stdlib.Blob.concat [__be next 4, Stdlib.Blob.slice payload offset n, Stdlib.Sqlite.__Codec.__zeros (s.size - n - 4)]
+      Stdlib.Sqlite.__Pager.__write s page b |> Stdlib.Result.map (fun s -> (s, page))))
+
+let __makeCell (s: Stdlib.Sqlite.__Pager.__State) (key: Int) (payload: Blob)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * Blob), String> =
+  let n = Stdlib.Blob.length payload
+  if n > 67108864 then Error "SQLite: record exceeds 64 MiB limit"
+  else
+    let local = __local s.size n
+    __overflowWrite s payload local |> Stdlib.Result.map (fun (s, overflow) ->
+      (s, Stdlib.Blob.concat [__var n, __var key, Stdlib.Blob.slice payload 0 local,
+        if overflow == 0 then Stdlib.Blob.empty else __be overflow 4]))
+
+let __overflowRead (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (remaining: Int) (seen: List<Int>) (acc: List<Blob>)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * Blob), String> =
+  if remaining == 0 then
+    if page == 0 then Ok (s, Stdlib.Blob.concat (Stdlib.List.reverse acc)) else Error "SQLite: overflow chain has excess pages"
+  else if page <= 1 || Stdlib.List.contains seen page then Error "SQLite: invalid overflow chain"
+  else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s, b) ->
+    let n = Stdlib.Int.min (s.size - 4) remaining
+    __overflowRead s (__get b 0 4) (remaining - n) (page :: seen) ((Stdlib.Blob.slice b 4 n) :: acc))
+
+let __payload (s: Stdlib.Sqlite.__Pager.__State) (raw: Blob)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * Blob), String> =
+  Stdlib.Sqlite.__Codec.__readVar raw 0 |> Stdlib.Result.andThen (fun (n, o) ->
+    Stdlib.Sqlite.__Codec.__readVar raw o |> Stdlib.Result.andThen (fun (_, afterKey) ->
+      let local = __local s.size n
+      let prefix = Stdlib.Blob.slice raw afterKey local
+      if local == n then Ok (s, prefix)
+      else __overflowRead s (__get raw (afterKey + local) 4) (n - local) [] [prefix]))
+
+let __overflowFree (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (budget: Int)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  if page == 0 then Ok s
+  else if budget == 0 || page <= 1 then Error "SQLite: invalid overflow chain"
+  else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s, b) ->
+    let next = __get b 0 4
+    Stdlib.Sqlite.__Pager.__free s page |> Stdlib.Result.andThen (fun s -> __overflowFree s next (budget - 1)))
+
+let __releaseCell (s: Stdlib.Sqlite.__Pager.__State) (raw: Blob) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  Stdlib.Sqlite.__Codec.__readVar raw 0 |> Stdlib.Result.andThen (fun (n,o) ->
+    Stdlib.Sqlite.__Codec.__readVar raw o |> Stdlib.Result.andThen (fun (_,afterKey) ->
+      let local = __local s.size n
+      if local == n then Ok s else __overflowFree s (__get raw (afterKey + local) 4) s.count))
+
+let __insertSorted (cells: List<(Int * Blob)>) (key: Int) (raw: Blob) : List<(Int * Blob)> =
+  match cells with
+  | [] -> [(key,raw)]
+  | (k,b) :: rest -> if key < k then (key,raw) :: cells else (k,b) :: __insertSorted rest key raw
+
+let __leafFits (size: Int) (page: Int) (cells: List<(Int * Blob)>) : Bool =
+  __offset page + 8 + Stdlib.List.fold cells 0 (fun n (_,b) -> n + 2 + Stdlib.Blob.length b) <= size
+
+let __splitLeaf (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (cells: List<(Int * Blob)>)
+  : Stdlib.Result.Result<__Edit, String> =
+  // Split by bytes, not row count: a single local payload may occupy most of a page.
+  let total = Stdlib.List.fold cells 0 (fun n (_,b) -> n + 2 + Stdlib.Blob.length b)
+  let (_, left, right) = Stdlib.List.fold cells (0, [], []) (fun (used,left,right) cell ->
+    let (_,b) = cell
+    if used < total / 2 || Stdlib.List.isEmpty left then (used + 2 + Stdlib.Blob.length b, left @ [cell], right)
+    else (used,left,right @ [cell]))
+  if Stdlib.List.isEmpty right || Stdlib.Bool.not (__leafFits s.size page left) || Stdlib.Bool.not (__leafFits s.size 2 right) then Error "SQLite: record does not fit a table page"
+  else Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s,newPage) ->
+    __writeLeaf s page left |> Stdlib.Result.andThen (fun s ->
+      __writeLeaf s newPage right |> Stdlib.Result.map (fun s ->
+        let separator = Stdlib.List.fold left 0 (fun _ (k,_) -> k)
+        __Edit { state = s, split = Some (separator,newPage) })))
+
+let __nodeFits (size: Int) (page: Int) (node: __Node) : Bool =
+  __offset page + 12 + Stdlib.List.fold node.cells 0 (fun n (_,k) -> n + 6 + Stdlib.Blob.length (__var k)) <= size
+
+let __storeNode (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (node: __Node)
+  : Stdlib.Result.Result<__Edit, String> =
+  if __nodeFits s.size page node then __writeNode s page node |> Stdlib.Result.map (fun s -> __Edit { state = s, split = None })
+  else
+    let mid = Stdlib.List.length node.cells / 2
+    match Stdlib.List.getAt node.cells mid with
+    | None -> Error "SQLite: cannot split empty interior"
+    | Some (middleChild,pivot) ->
+      Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s,rightPage) ->
+        __writeNode s page (__Node { cells = Stdlib.List.take node.cells mid, right = middleChild })
+        |> Stdlib.Result.andThen (fun s ->
+          __writeNode s rightPage (__Node { cells = Stdlib.List.drop node.cells (mid + 1), right = node.right })
+          |> Stdlib.Result.map (fun s -> __Edit { state = s, split = Some (pivot,rightPage) })))
+
+let __choose (cells: List<(Int * Int)>) (right: Int) (key: Int) : Int =
+  match cells with
+  | [] -> right
+  | (child,limit) :: rest -> if key <= limit then child else __choose rest right key
+
+let __addSplit (cells: List<(Int * Int)>) (child: Int) (pivot: Int) (newRight: Int) : List<(Int * Int)> =
+  match cells with
+  | [] -> [(child,pivot)]
+  | (c,k) :: rest -> if c == child then (c,pivot) :: (newRight,k) :: rest else (c,k) :: __addSplit rest child pivot newRight
+
+let __insertAt (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (key: Int) (payload: Blob) (depth: Int)
+  : Stdlib.Result.Result<__Edit, String> =
+  if depth > 64 then Error "SQLite: invalid B-tree depth"
+  else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s,b) ->
+    let kind = __get b (__offset page) 1
+    if kind == 13 then __leaf s.size page b |> Stdlib.Result.andThen (fun cells ->
+      if Stdlib.List.any cells (fun (k,_) -> k == key) then Error "SQLite: UNIQUE constraint failed: primary key"
+      else __makeCell s key payload |> Stdlib.Result.andThen (fun (s,raw) ->
+        let cells = __insertSorted cells key raw
+        if __leafFits s.size page cells then __writeLeaf s page cells |> Stdlib.Result.map (fun s -> __Edit { state = s, split = None })
+        else __splitLeaf s page cells))
+    else __node s.size page b |> Stdlib.Result.andThen (fun node ->
+      let child = __choose node.cells node.right key
+      __insertAt s child key payload (depth + 1) |> Stdlib.Result.andThen (fun edit ->
+        match edit.split with
+        | None -> Ok edit
+        | Some (pivot,newRight) ->
+          let cells = __addSplit node.cells child pivot newRight
+          __storeNode edit.state page (__Node { cells = cells, right = if child == node.right then newRight else node.right }))))
+
+let __insert (s: Stdlib.Sqlite.__Pager.__State) (root: Int) (key: Int) (payload: Blob)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  if key < -9223372036854775808 || key > 9223372036854775807 then Error "SQLite: rowid outside Int64"
+  else __insertAt s root key payload 0 |> Stdlib.Result.andThen (fun edit ->
+    match edit.split with
+    | None -> Ok edit.state
+    | Some (pivot,right) ->
+      Stdlib.Sqlite.__Pager.__allocate edit.state |> Stdlib.Result.andThen (fun (s,left) ->
+        Stdlib.Sqlite.__Pager.__read s root |> Stdlib.Result.andThen (fun (s,b) ->
+          (if __get b (__offset root) 1 == 13 then __leaf s.size root b |> Stdlib.Result.andThen (fun cells -> __writeLeaf s left cells)
+           else __node s.size root b |> Stdlib.Result.andThen (fun node -> __writeNode s left node))
+          |> Stdlib.Result.andThen (fun s -> __writeNode s root (__Node { cells = [(left,pivot)], right = right })))))
+
+let __walk (s: Stdlib.Sqlite.__Pager.__State) (pages: List<(Int * Int)>) (seen: List<Int>) (acc: List<__Entry>)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<__Entry>), String> =
+  match pages with
+  | [] -> Ok (s, Stdlib.List.reverse acc)
+  | (page,depth) :: rest ->
+    if depth > 64 || Stdlib.List.contains seen page then Error "SQLite: cyclic table B-tree"
+    else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s,b) ->
+      if __get b (__offset page) 1 == 13 then
+        __leaf s.size page b |> Stdlib.Result.andThen (fun cells ->
+          Stdlib.List.fold cells (Ok (s,acc)) (fun result (key,raw) ->
+            result |> Stdlib.Result.andThen (fun (s,acc) -> __payload s raw |> Stdlib.Result.map (fun (s,payload) -> (s, __Entry { key = key, payload = payload } :: acc))))
+          |> Stdlib.Result.andThen (fun (s,acc) -> __walk s rest (page :: seen) acc))
+      else __node s.size page b |> Stdlib.Result.andThen (fun node ->
+        let children = Stdlib.List.map node.cells (fun (child,_) -> (child,depth + 1)) @ [(node.right,depth + 1)]
+        __walk s (children @ rest) (page :: seen) acc))
+
+let __scan (s: Stdlib.Sqlite.__Pager.__State) (root: Int)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<__Entry>), String> = __walk s [(root,0)] [] []
+
+let __deleteAt (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (key: Int) (depth: Int)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  if depth > 64 then Error "SQLite: invalid B-tree depth"
+  else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s,b) ->
+    if __get b (__offset page) 1 == 13 then __leaf s.size page b |> Stdlib.Result.andThen (fun cells ->
+      match Stdlib.List.findFirst cells (fun (k,_) -> k == key) with
+      | None -> Ok s
+      | Some (_,raw) -> __releaseCell s raw |> Stdlib.Result.andThen (fun s ->
+        __writeLeaf s page (Stdlib.List.filter cells (fun (k,_) -> k != key))))
+    else __node s.size page b |> Stdlib.Result.andThen (fun node -> __deleteAt s (__choose node.cells node.right key) key (depth + 1)))
+
+let __drop (s: Stdlib.Sqlite.__Pager.__State) (pages: List<Int>) (seen: List<Int>)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
+  match pages with
+  | [] -> Ok s
+  | page :: rest ->
+    if page == 1 || Stdlib.List.contains seen page then Error "SQLite: invalid dropped tree"
+    else Stdlib.Sqlite.__Pager.__read s page |> Stdlib.Result.andThen (fun (s,b) ->
+      (if __get b (__offset page) 1 == 13 then __leaf s.size page b |> Stdlib.Result.andThen (fun cells ->
+        Stdlib.List.fold cells (Ok s) (fun result (_,raw) -> result |> Stdlib.Result.andThen (fun s -> __releaseCell s raw))
+        |> Stdlib.Result.map (fun s -> (s,rest)))
+       else __node s.size page b |> Stdlib.Result.map (fun node -> (s, (Stdlib.List.map node.cells (fun (c,_) -> c)) @ (node.right :: rest))))
+      |> Stdlib.Result.andThen (fun (s,next) -> Stdlib.Sqlite.__Pager.__free s page
+        |> Stdlib.Result.andThen (fun s -> __drop s next (page :: seen))))
