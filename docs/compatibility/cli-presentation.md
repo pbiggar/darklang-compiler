@@ -1,19 +1,7 @@
 # CLI presentation parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-The explicit printing prelude was revalidated between compiler starting HEAD
-`c609b56ce1ec488afc3146c585b6f45a2fcf22a8` and darklang/dark
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation comparison commit
-`ab81ead7f4b232b4ffa181d8ddb71e9381c510c8` was tested against that same exact
-interpreter revision. Compiler evidence revision
-`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, DCB1 report commit `8a402797`, and
-the previous parity document were discovery aids only. The focused matrix
-passed 30/30 at the implementation comparison commit. Performance is outside
-this contract unless it changes observable behavior.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../porting/README.md) owns current support and test dispositions.
 
 The pinned interpreter sources are
 `packages/darklang/stdlib/cli/log.dark` and
@@ -93,7 +81,7 @@ routed through `packages/darklang/stdlib/string.dark`; signed selection parsing 
 `src/passes/anf/PrintInsertion.ml`, and CLI execution is coordinated by
 `src/driver/CompilerExecution.ml` and `src/Program.ml`.
 
-## Revision-stamped probes
+## Focused probes
 
 The executable matrix is
 `test/fixtures/e2e/interpreter/cli_presentation.e2e`. Public prelude probes at
@@ -105,15 +93,6 @@ closed-or-bytes stdin model and exact-byte output mode defined in
 `test/test-suite-tooling/Runners/E2ETestRunner.ml:992-1004`. The 18 pinned upstream color cases are
 enabled at `test/test-suite-tooling/TestRunner.ml:493`.
 
-At the revision pair named above, a redirected same-source ask probe with input
-`Ada\n` produced stdout hex
-`4e616d653f2022416461220a` (`Name? "Ada"\n`) and empty stderr. A native
-same-source interruption probe ran
-`Spinner.run "Waiting" (fun () -> Prompt.ask "Value?")` with stdin held open,
-then delivered SIGINT after the prompt became readable. It terminated by
-signal 2, produced stdout hex
-`57616974696e672e2e2e2056616c75653f20` (`Waiting... Value? `), produced no
-stderr, and did not print `done`. These redirected bytes are identical to the
-pinned package algorithm; the native signal result verifies the documented OS
-termination boundary rather than introducing an interpreter-specific cleanup
-path.
+Redirected prompt and interrupted-spinner probes check exact bytes, empty stderr
+and native SIGINT termination. An interrupted spinner must not print `done`;
+this exercises the OS signal boundary rather than interpreter cleanup.

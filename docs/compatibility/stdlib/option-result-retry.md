@@ -1,17 +1,7 @@
 # Option, Result, and Retry parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-Every source comparison in this document uses compiler baseline HEAD
-`7e08aa752a123ba6094ce6f6aafac6dfd2c8a4a9` and darklang/dark revision
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The approved compiler evidence
-revision `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` and DCB1 report commit
-`8a402797ccccda0ca47b516b356ae1de4d670038` were checked as starting evidence;
-neither is treated as retained behavioral proof. Performance is outside this
-comparison unless it changes an observable result.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 ## Revalidated contract
 
@@ -25,21 +15,13 @@ comparison unless it changes an observable result.
 | `Retry.withFixedDelayLoop` / `withFixedDelay` | The same termination and propagation rules apply, but the delay is unchanged. The wrapper starts at attempt 1. | Portable source at `packages/darklang/stdlib/retry.dark`; deterministic focused cases cover both entry points and a real 1 ms inter-attempt delay at `control_combinators_retry.e2e:32-42`. | Public parity |
 | Retry delay | Milliseconds are passed to a blocking delay between callback attempts only. | `Cli.Posix.sleep` delegates at `packages/darklang/stdlib/cli/posix.dark`; the typed effect is introduced in `src/passes/anf/lowering/LoweringPrimitives.ml` and retained as a Float through ANF/MIR/LIR. Code generation normalizes total nanoseconds into native seconds/nanoseconds and retries the remaining timeout on `EINTR` for Linux ARM64, Linux x86_64, and macOS ARM64. Backend assertions pin conversion, syscall numbers, target conventions, and interruption loops. | Behavior parity through an internal AOT boundary |
 
-The enabled interpreter truth tables are
-`test/fixtures/e2e/upstream/stdlib/option.dark:288,291,294,297` and
-`result.dark:223,227,231,235,240,244,248,252`. They are gated in
-`test/test-suite-tooling/TestRunner.ml:513-514`. The additional focused
-file is deliberately source-compatible with both implementations so argument
-order, distinct payloads, callback counts, termination, and result propagation
-can be compared without separate fixtures.
+The imported Option/Result truth tables and `control_combinators_retry.e2e`
+cover argument order, distinct payloads, callback counts, termination and
+result propagation. Current selection is recorded in source annotations.
 
-Option, Result, and Retry now use byte-identical interpreter source from
-`e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`, the revision in
-`porting/sources.yaml`. This removes the compiler's separate implementations,
-including explicit generic arguments and qualified arithmetic calls. The
-interpreter's current `Option.and` also constructs `None` in its empty arm,
-which is valid when the two option payload types differ. Native arithmetic
-and sleep implementations remain dependencies supplied by the compiler.
+Option, Result and Retry use original interpreter source selected at the pin in
+`porting/sources.yaml`; native arithmetic and sleep remain compiler dependencies.
+The empty arm of `Option.and` constructs `None`, allowing differing payload types.
 
 Qualified generic constructors retain the contextual result type in their
 checked metadata, including parameters absent from their payload. This keeps
@@ -64,11 +46,7 @@ that establishes eager left-to-right argument evaluation is
 boundary converts milliseconds to a `TimeSpan` and awaits `Task.Delay` in
 `backend/src/Builtins/Builtins.Time/Libs/Time.fs:14-31`.
 
-At compiler baseline HEAD, `packages/darklang/stdlib/option.dark` and
-`packages/darklang/stdlib/result.dark` had no requested combinators, the stdlib source tree
-had no `Retry.dark`, and `packages/darklang/stdlib/cli/posix.dark` implemented sleep by
-spawning the shell command `sleep`. The implementation now loads
-`packages/darklang/stdlib/retry.dark` in `src/driver/StdlibCompilation.ml`; represents delay in the
+The compiler loads `packages/darklang/stdlib/retry.dark` in `src/driver/StdlibCompilation.ml`; represents delay in the
 ANF, MIR, and LIR definitions; assigns target syscall numbers in `src/Platform.ml`;
 and lowers the operation in `src/backend/arm64/instructions/ARM64EmitNativeEffects.ml` and
 `src/backend/x64/instructions/X64EmitNativeEffects.ml`.
@@ -85,21 +63,3 @@ execution. The interpreter may encounter analogous errors only when evaluating
 the affected expression. This timing is the retained intentional divergence;
 the accepted Option, Result, and Retry results above do not intentionally
 diverge.
-
-## Historical verification record
-
-On Linux ARM64, the focused parity file first failed 24/24 before the functions
-and Retry module existed. After implementation it passed 26/26, including the
-native 1 ms delay. Enabling the unchanged pinned truth tables then found the
-constructor-association error above; after that correction, the Option-focused
-set passed 109/109 and the backend sleep assertions passed 3/3.
-
-After integration rebase onto compiler main
-`f1e769453ef41309d056ae386351939ce1eb83b9`, `./run-tests --ai` passed
-6,819/6,819 tests in 167.8 seconds. The additional main-side ARM64
-entry-transfer test and this work's sleep test both remain registered. The
-full benchmark profile verified all 19 workload outputs and parity
-contracts against exact Dark baseline
-`153d9588152ac5ba7b98ce8d699eacea1abc3b0e`, with every current instruction
-count equal and a current/baseline geometric ratio of `1.000000`. The table
-header in `benchmarks/RESULTS.md` reports a Performance ratio of `2.25x`.

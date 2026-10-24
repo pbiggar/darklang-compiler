@@ -1,27 +1,9 @@
 # AltJson and Json parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
-## Revision baseline
-
-This contract was revalidated from compiler implementation commit
-`8a33ccda12d38e41b6ffa7627363fa8f4ff7b238`, based on compiler `main` at
-`f8729846ea9012bceae1510d136f1a0ea1080b61`, and darklang/dark interpreter
-revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
-`8a402797` and compiler evidence revision
-`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` were navigation aids only; every
-retained behavior below was checked again against the pinned interpreter
-sources and execution fixtures. Performance is outside this contract unless it
-changes an observable value or failure.
-
-The same-source interpreter fixtures are
-`test/fixtures/e2e/upstream/stdlib/alt-json.dark` and
-`test/fixtures/e2e/upstream/stdlib/json.dark`. The compact native regression matrix
-is `test/fixtures/e2e/json-parity.e2e`. AltJson and the focused matrix are
-enabled; the upstream `json.dark` file is currently whole-file gated.
+Focused coverage lives in `test/fixtures/e2e/json-parity.e2e` and the imported Json tests.
 
 ## Structural JSON
 

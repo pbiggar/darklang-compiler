@@ -3,31 +3,18 @@
 This document records the compiler's user-defined enum behavior and the
 interpreter evidence used as its parity baseline.
 
-## Evidence revisions
+## Semantic baseline
 
-The parity comparison is pinned to:
-
-- compiler evidence revision `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`
-- darklang/dark interpreter revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
-- implementation base `0a919617e2390be93506ef367225fe23bfbbf00a`
-
-The historical DCB1 report at `8a402797` was used only to identify candidates.
-Every behavior retained below was checked again in the pinned sources. The
-same-source compiler matrix is `test/fixtures/e2e/interpreter/adt_parity.e2e`;
-declaration failures that occur while an E2E preamble is built are covered by
-focused parser/type-checker tests instead.
+The comparison baseline is `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+`test/fixtures/e2e/interpreter/adt_parity.e2e` carries the behavior matrix;
+focused parser/checker tests cover declaration failures in E2E preambles.
 
 Interpreter evidence is in `backend/src/LibParser/GRAMMAR.md`, enum declaration
 types in `backend/src/LibExecution/ProgramTypes.fs`, runtime `DEnum` in
 `backend/src/LibExecution/RuntimeTypes.fs`, construction in
 `backend/src/LibExecution/TypeChecker.fs`, and equality in
 `backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs` at the pinned revision.
-The pinned checkout and its tracked tests were source-audited directly. An
-exact-revision interpreter execution was also attempted, but that checkout
-could not restore because its generated `.paket/Paket.Restore.targets` was
-absent and the repository's devcontainer launcher was unavailable. Compiler
-expectations therefore encode the pinned interpreter source behavior; they are
-not presented as results from a different installed interpreter revision.
+These expectations derive from the pinned interpreter sources.
 
 ## Public syntax
 

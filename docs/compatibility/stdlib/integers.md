@@ -1,29 +1,7 @@
 # Integer parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This implementation was revalidated from compiler baseline
-`C@a78567efd773de86265e55a54445ddf5a5a8911c` and interpreter baseline
-`I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The historical DCB1 report at
-`8a402797` and compiler evidence at
-`C@51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` were used only to locate the
-surface; every retained finding was checked again against
-`packages/darklang/stdlib/int.dark` through `uint128.dark` and
-`backend/testfiles/execution/stdlib/ints` at the pinned interpreter revision.
-
-Integration was revalidated after rebasing at exact compiler revision
-`C@f2f5f68e3e6c0a15c41a492caf2144b98356bc50` against the same exact
-interpreter revision `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
-The comparison used a fresh checkout of the interpreter revision, not the DCB1
-report or only the copied fixtures. At that compiler revision, the public
-implementations are `packages/darklang/stdlib/int.dark`, `Int8.dark` through
-`UInt64.dark`, `Int128.dark`, and `UInt128.dark`; shared arbitrary-width
-primitives and checked conversions are in `packages/darklang/stdlib/int/__integer.dark`.
-The matching behavioral probes are the eleven files under
-`test/fixtures/e2e/upstream/stdlib/ints` and `test/fixtures/e2e/int128-wrapping.e2e`.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 ## Parity surface
 

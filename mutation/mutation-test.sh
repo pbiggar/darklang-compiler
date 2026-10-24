@@ -224,6 +224,8 @@ main() {
     # Initialize CSV
     if [[ "$RESUME" != true ]] || [[ ! -f "$RESULTS_CSV" ]]; then
         echo "mutation_id,type,file,line,result,time_ms" > "$RESULTS_CSV"
+        # Numeric IDs belong to this discovery run, not to future source trees.
+        : > "${RESULTS_DIR}/addressed.txt"
     fi
 
     # Get checkpoint

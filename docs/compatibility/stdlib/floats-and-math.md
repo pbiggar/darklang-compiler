@@ -1,39 +1,8 @@
 # Float and Math compatibility
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This document records the observable Float/Math contract implemented by the
-native compiler. It is a behavior comparison, not a performance comparison.
-
-## Current upstream changes
-
-At interpreter `e76430be5`, `Float.toBits` returns `UInt64`, and `Math.tanh`
-computes hyperbolic tangent. Negative zero has bits `9223372036854775808UL`;
-`tanh 1.0` is approximately `0.7615941559557649`. These supersede the historical
-signed-bit and sinh compatibility choices below. Optimizer expression keys
-preserve float bit patterns so `toBits` distinguishes both zero signs.
-See [upstream adoption](../upstream-adoption.md#interpreter-refresh-2026-10-20).
-
-## Pinned evidence
-
-Every interpreter comparison in this change used:
-
-- compiler baseline `C@fb61d714723f34d6c43e9bdc03dd96fb46f0c4ea`
-  (the exact rebased HEAD before implementation);
-- interpreter release `v0.0.35`,
-  `I@0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`;
-- historical inventory `DCB1@8a402797` only as starting evidence.
-
-The release and revision were rechecked on 2026-09-15. The
-interpreter surface is anchored at
-`packages/darklang/stdlib/float.dark:4-146` and
-`packages/darklang/stdlib/math.dark:4-92`. Its runtime behavior is anchored at
-`backend/src/Builtins/Builtins.Pure/Libs/Float.fs:12-367`,
-`backend/src/Builtins/Builtins.Pure/Libs/Math.fs:13-213`, and
-`backend/src/LibExecution/Builtin.fs:97-104`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
+Float bit representation and hyperbolic tangent follow interpreter
+`e76430be5`; the original rounding/parsing comparison used `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`.
 
 The compiler implementation is in `packages/darklang/stdlib/float.dark` and
 `packages/darklang/stdlib/math.dark`. Public values continue to render through
@@ -46,7 +15,7 @@ The compiler implementation is in `packages/darklang/stdlib/float.dark` and
 
 Interpreter parity includes `Float.ParseError.BadFormat`; `ceiling`,
 `roundUp`, `floor`, `roundDown`, `round`, `roundTowardsZero`, `truncate`,
-`clamp`, `parse`, `power`, and `isNaN`; and `Math.acos`, `asin`, `atan`,
+`clampRefusingNaN`, `parse`, `power`, `isNaN`, and `isFinite`; and `Math.acos`, `asin`, `atan`,
 `atan2`, `cos`, `cosh`, `sin`, `sinh`, `tan`, and `tanh`. Existing parity
 functions such as Float arithmetic, `absoluteValue`, `negate`, `sqrt`,
 `toString`, and Math `pi`, `tau`, `degrees`, `turns`, and `radians` remain.
@@ -115,10 +84,8 @@ x64 execute the same binary64 operation sequence. `acos` and `asin` return
 functions preserve the tested NaN, infinity, quadrant, overflow, and signed-zero
 behavior.
 
-At `I@0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`, `mathTanh` calls
-`System.Math.Sinh` (`Math.fs:201-209`). That historical anomaly was
-reproduced before the 2026-10-20 refresh: `Math.tanh(1.0)` equals the sinh result, not the
-mathematical hyperbolic tangent. Current E2E tests instead require the corrected hyperbolic tangent.
+`Float.toBits` returns UInt64 and preserves signed zero: negative zero is
+`9223372036854775808UL`. `Math.tanh(1.0)` is approximately `0.7615941559557649`.
 
 ## Error phase and focused probes
 

@@ -3,30 +3,11 @@
 This document distinguishes Dark's public dictionary contract from the native
 HAMT that implements it.
 
-## Parity baseline
+## Semantic baseline
 
-The public contract was revalidated against these exact revisions:
-
-- current compiler comparison point:
-  `9cf0799fc485a2edc1eb19551826745705cf695e` (the exact `main` HEAD onto which
-  this evidence and focused test were rebased)
-- darklang/dark interpreter:
-  `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
-- historical compiler starting point:
-  `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
-  `packages/darklang/stdlib/dict.dark`, `__HAMT.dark`, and
-  `src/DarkStdlib.ml:150-166`
-- DCB1 report `8a402797` was starting evidence only; retained findings were
-  checked again against the current compiler and interpreter revisions above.
-
-The historical and current compiler source blobs are not identical, so the
-historical revision was not treated as proof of current behavior. The relevant
-`Dict.dark`, `__HAMT.dark`, and `src/DarkStdlib.ml` blobs at the current compiler point
-are identical to the earlier pre-rebase repair point
-`6366204f670c906bbf4cd6b22b53786098c92a03`. The rebased candidate changes
-only parity documentation, focused E2E coverage, and append-only benchmark
-history; the compiler behavior compared here is therefore exactly the behavior
-at `9cf0799fc485a2edc1eb19551826745705cf695e`.
+The original comparison baseline is `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+See [dictionary compatibility](../../compatibility/stdlib/dicts.md) for the
+subsequent structural-key contract and source annotations for current support.
 
 The interpreter's F# Builtins Dict module and packaged `dict.dark` define the
 language-visible contract. Ahead-of-time compilation and the HAMT layout are

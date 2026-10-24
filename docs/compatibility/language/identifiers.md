@@ -1,16 +1,7 @@
 # Identifier and qualified-name parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This lexical comparison is pinned to compiler evidence revision
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark interpreter
-revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation started from
-compiler HEAD `83e21f79edbb28857e9f71b0cc27b75d4b612417`, after rebasing on local
-`main`. DCB1 report commit `8a402797` and older parity documents were starting
-evidence only; every retained row below was revalidated at the pinned revisions.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 Pinned interpreter evidence is `backend/src/LibParser/Lexer.fs:477-501,
 689-824,905-965`, `backend/src/LibParser/Parser.fs:529-554,1148-1219,
@@ -81,7 +72,7 @@ boundary.
   [name-resolution.md](name-resolution.md). Performance is outside this matrix.
 
 Imported `test/fixtures/e2e/upstream/` fixtures provide interpreter evidence
-with the [source adaptations](../current-audit.md#imported-corpus-provenance)
+with the [import annotations](../../porting/upstream-import.md)
 recorded by the current corpus comparison. Repository-authored stdlib, E2E, optimization, benchmark, roundtrip,
 and documentation sources use `let`, modules, and apostrophe-prefixed
 declaration parameters.

@@ -180,14 +180,7 @@ Guards are evaluated after pattern match but before body execution.
 
 ## Interpreter Parity Boundary
 
-The source comparison evidence is compiler HEAD
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark HEAD
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The integration revalidation
-which found the nested-alternative and bare-tuple gaps started from compiler
-HEAD `67359e1eaa4f17e686c64ba8ce1d645c56863fef`. DCB1 report commit
-`8a402797ccccda0ca47b516b356ae1de4d670038` was used only as an inventory
-lead; every finding retained here was checked again against those exact source
-revisions.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 
 Pinned interpreter evidence is in
 `backend/src/LibExecution/ProgramTypes.fs:271` (the recursive pattern union),

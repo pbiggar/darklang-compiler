@@ -2,9 +2,7 @@
 
 Dictionary key and value semantics reviewed on 2026-10-22 against interpreter
 `e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The public dictionary type accepts both the historical `Dict<value>` spelling,
 which implies `String` keys, and the interpreter-compatible
@@ -58,5 +56,5 @@ and numeric-edge cases. Its enabled cases cover primitive widths, tuple, list,
 option, record, enum, nested Dict, and recursively nested keys. The formerly
 disabled `language/collections/edict.dark` smoke file is also enabled in full.
 The NaN-ordering assertion has a local oracle adaptation recorded in the
-[current audit](../current-audit.md#imported-corpus-provenance). Syntax
+[import annotations](../../porting/upstream-import.md). Syntax
 roundtrips cover two-argument Dict types and expression-key literals.

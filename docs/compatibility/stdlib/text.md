@@ -1,16 +1,7 @@
 # Char, String, and Regex parity contract
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This contract was revalidated against compiler baseline
-`C@2ac3d8a0385e6002f604412e2296662dda6bb000` and interpreter revision
-`I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The implementation is the tree
-containing this document. DCB1 report `8a402797` and historical compiler probe
-`C@51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` were used only to seed the
-comparison; every retained item was checked in the source revisions above.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The canonical interpreter declarations are
 `packages/darklang/stdlib/{char,string,regex}.dark`; their managed behavior is
@@ -136,37 +127,16 @@ not source-resolvable; public text behavior is provided only by the parity API.
 
 ## Focused evidence
 
-- The retained decomposed probe, `String.length("e\u0301")`, returned byte
-  length `3` at `C@51093e0`; it returns EGC length `1` in this tree, matching
-  `I@04fbe9d`.
+- `String.length("e\u0301")` returns EGC length `1`, preserving normalization
+  rather than exposing UTF-8 byte length.
 - `test/fixtures/e2e/stdlib/text_parity.e2e` covers NFC concatenation, a family emoji
   EGC, scalar construction, UTF-16 versus EGC indexes, and regex match/split
   behavior.
 - The pinned upstream `char.dark`, `string.dark`, and `regex.dark` files are
   imported. Char and Regex are enabled. String has individual gates for its
-  unsupported interpreter test helpers; the current assertion counts and
-  diagnostics are maintained in the [failure ledger](../failures/stdlib/string.md).
+  interpreter test helpers; current dispositions are recorded in the source ledger.
 
-## Historical integration verification
-
-The completed implementation was rebased onto `main@9b6c27d0a52c313774ef5a05b78447cf0015c353`.
-Its final source commit is
-`C@671ab160ef4fb2de3829ee251285e09733e8c1e8`; the exact integration HEAD used
-for the post-rebase comparisons was
-`C@5515cc67bfe4c5918940b7b3d47d1027c259bcb0`. At that revision:
-
-- `bin/Tests/Debug/net10.0/Tests --ai` passed 7,760/7,760 tests.
-- `python3 scripts/generate_unicode_tables.py --check` passed against the
-  pinned Unicode 17.0.0 inputs.
-- `./benchmarks/run_benchmarks.sh --verify full` completed all 19 ARM64
-  workloads with no failures and an exact current/baseline geometric ratio of
-  1.000000. The displayed Dark/Rust performance ratio remained 2.25x.
-
-The compiler's intentional AOT boundary is also preserved: a type-invalid call
-fails during compilation and reports the inferred type, whereas the interpreter
-fixture's corresponding runtime error includes the concrete argument value.
-
-## String addition adoption (2026-10-12)
+## String addition
 
 Interpreter `07bafe2d8` implements String `+` with NFC normalization in
 `FastOps.fs` and `Builtins.Pure/Libs/NoModule.fs`. The compiler now selects
@@ -181,17 +151,5 @@ by the parser; use `+` for Strings and explicitly convert Char operands.
 
 `test/fixtures/e2e/string-plus.e2e` covers literals, variables, function calls,
 pipelines, chained operands, inferred lambdas, explicit generic functions,
-empty operands, legacy syntax and compilation-error boundaries. The focused
-native x86-64 run passed 19/19 assertions after reproducing the missing behavior
-before implementation. Native x86-64 validation passed `env -u LD_PRELOAD
-./build --ai`, `./run-tests --ai` (13,212/13,212), `dune runtest`, and
-`python3 scripts/check_compiled_leaks.py` (58/58 clean). The parent benchmark
-gate stopped before measurement on the existing x86-64 snapshot's incompatible
-workload contract, as documented in the HTTP/HTML adoption ledger; no benchmark
-sources, contracts or snapshots changed. The PR remains draft and unmerged.
-
-The 2026-10-13 review follow-up in [PR #65](https://github.com/pbiggar/darklang-compiler/pull/65)
-expanded this fixture to 25/25 passing assertions, including closure operands,
-simultaneous String/numeric specializations and a 128-operand generic chain.
-The complete host suite passed 13,302/13,302; see the [adoption ledger](../upstream-adoption.md)
-for the full verification results and remaining performance-gate blocker.
+empty operands, legacy syntax and compilation-error boundaries. The fixture also covers closure operands, simultaneous String/numeric specializations,
+and a 128-operand generic chain.

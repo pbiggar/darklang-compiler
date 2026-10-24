@@ -14,11 +14,13 @@ compiler bugs belong in [known issues](known-issues.md).
   HAMT payloads, allocator reuse, and the shared raw-memory policy.
 - Expand byte-level x86-64 instruction-encoding coverage and replace the
   hand-maintained coverage count with a test-derived report.
-- Finish upstream-test enablement. `test/test-suite-tooling/TestRunner.ml` discovers the complete
-  upstream corpus and is the source of truth for the unsupported-file and
-  unsupported-line denysets. Do not preserve dated failure counts here.
+- Finish upstream-test enablement using per-item annotations in `upstream/`
+  and the [source ledger](../porting/README.md). Do not maintain parallel denysets
+  or dated failure counts.
 - Validate the compiler against the existing package repository and turn each
   discovered incompatibility into a focused test or compatibility-ledger item.
+- Investigate the unreproduced large `String.toBlob` and repeated secret-input
+  ownership reports in [package review](../compatibility/package-review.md#unresolved-investigation-leads).
 
 ## Longer-term direction
 

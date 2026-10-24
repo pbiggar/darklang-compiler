@@ -1,18 +1,7 @@
 # Stream parity contract
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-Stream passes 25/25 in the fresh unchanged-source probe, although its whole-file gate remains.
-See the [fresh probes](../current-audit.md#fresh-probes-of-whole-file-gates).
-
-This ledger was revalidated against compiler commit
-`60ed997edae2f59ffeed2f54d539fd1de285bd72` and darklang/dark commit
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
-`8a402797ccccda0ca47b516b356ae1de4d670038` was used only to locate the
-original gap; every entry below was checked again against current source.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 Interpreter anchors are `packages/darklang/stdlib/stream.dark`,
 `backend/src/Builtins/Builtins.Pure/Libs/Stream.fs`,
