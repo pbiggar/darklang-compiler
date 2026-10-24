@@ -177,7 +177,7 @@ test map5 =
         (fun v w x y z -> v - w - x - y - z)
       |> Stdlib.Test.equal None ]
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TSum" class=aot-rejection reason=aot-type-error
 test mapWithDefault =
   Stdlib.Test.all
     [ Stdlib.Option.mapWithDefault (Some 5L) 6L (fun x -> x + 1L)
@@ -236,7 +236,6 @@ test join =
       Stdlib.Option.join (Some None) |> Stdlib.Test.equal None
       Stdlib.Option.join None |> Stdlib.Test.equal None ]
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
 test combine =
   Stdlib.Test.all
     [ Stdlib.Option.combine [ Some 6L, Some 5L, Some 4L, Some 3L ]
@@ -246,7 +245,6 @@ test combine =
       Stdlib.Option.combine [ None, None, None, None ]
       |> Stdlib.Test.equal None ]
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
 test values =
   Stdlib.Test.all
     [ Stdlib.Option.values [ Some 6L, Some 5L, Some 4L, Some 3L ]

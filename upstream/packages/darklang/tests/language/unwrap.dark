@@ -395,7 +395,7 @@ test okInOptionLambdaRaises =
   => raises
     "`?` got a Result, but the enclosing function or lambda returns an Option; convert it first with Stdlib.Result.toOption: Ok(1)"
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test optionInResultLambdaRaises =
   (fun v -> Ok (v? + 1)) None
   => raises

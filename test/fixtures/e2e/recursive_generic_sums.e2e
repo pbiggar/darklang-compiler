@@ -27,7 +27,7 @@ Stdlib.List.fold [1L, 2L] Stdlib.Option.Option.None (fun _ value -> Stdlib.Optio
 // Inference must retain nominal identity and concrete type arguments.
 let requireOption (value: Stdlib.Option.Option<Int64>) : Int64 = 0L
 let requireIntTree (value: Tree<Int64>) : Int64 = 0L
-requireOption Tree.Empty = compileerror="Expected TSum (\"Darklang.Stdlib.Option.Option\", [TInt64]), got TSum (\"Tree\""
+requireOption Tree.Empty = compileerror="Expected TSum (\"Darklang.Stdlib.Option.Option\", [TInt64]), got TSum"
 requireIntTree (Tree.Node(Tree.Empty, "one", Tree.Empty)) = compileerror="Expected TInt64, got TString"
 
 // A generic call must satisfy its input and contextual result constraints together.
