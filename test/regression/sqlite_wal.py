@@ -93,9 +93,9 @@ def main():
         for number in range(4100):
             connection.execute('UPDATE t SET v=?',(100+number,))
             connection.commit()
-        assert run(mode='query')=='4199'
         block_reader=sqlite3.connect(db);block_reader.execute('BEGIN')
         assert block_reader.execute('SELECT v FROM t').fetchall()==[(4199,)]
+        assert run(mode='query')=='4199'
         assert run('UPDATE t SET v=4200')=='Ok 1'
         assert connection.execute('SELECT v FROM t').fetchall()==[(4200,)]
         connection.execute('UPDATE t SET v=4201');connection.commit()

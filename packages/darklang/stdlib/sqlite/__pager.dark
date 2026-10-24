@@ -97,7 +97,7 @@ let __open (path: String) : Stdlib.Result.Result<__State, String> =
         if s.originalCount == 0 then Ok s
         else Stdlib.Sqlite.__Io.__readAt fd 18 1 |> Stdlib.Result.andThen (fun mode ->
           if __get mode 0 1 != 2 then Ok s
-          else Stdlib.Sqlite.__Wal.__open path s.size s.count |> Stdlib.Result.andThen (fun wal ->
+          else Stdlib.Sqlite.__Wal.__open s.fd path s.size s.count |> Stdlib.Result.andThen (fun wal ->
             let state = { s with count = wal.count, wal = Some wal }
             let loaded = __read state 1 |> Stdlib.Result.andThen (fun (state,header) ->
               if __get header 56 4 != 1 && __get header 56 4 != 0 then Error "SQLite: only UTF-8 databases are supported"
@@ -148,7 +148,7 @@ let __release (s: __State) : Stdlib.Result.Result<Unit,String> =
   | None -> Stdlib.Sqlite.__Locks.__unlock s.fd 1073741824 512
 let __refresh (s: __State) (timeout: Int) : Stdlib.Result.Result<__State,String> =
   match s.wal with
-  | Some wal -> Stdlib.Sqlite.__Wal.__snapshot wal.fd wal.shm s.size 20 |> Stdlib.Result.map (fun wal ->
+  | Some wal -> Stdlib.Sqlite.__Wal.__snapshot s.fd wal.fd wal.shm s.size 20 |> Stdlib.Result.map (fun wal ->
     { s with count = wal.count, originalCount = wal.count, cache = Dict {}, dirty = Dict {}, wal = Some wal })
   | None -> Stdlib.Sqlite.__Locks.__shared s.fd timeout |> Stdlib.Result.andThen (fun _ ->
     Stdlib.Sqlite.__Io.__readAt s.fd 18 1 |> Stdlib.Result.andThen (fun mode ->

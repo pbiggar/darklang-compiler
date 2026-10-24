@@ -51,12 +51,7 @@ let __rollback (state: __State) : Stdlib.Result.Result<__State,String> =
   if Stdlib.Bool.not state.active then Error "SQLite: no active transaction"
   else Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ -> { state with active = false })
 let __autoCheckpoint (state: __State) : Unit =
-  let _ = match state.pager.wal with
-    | None -> Ok ()
-    | Some wal -> Stdlib.Sqlite.__Wal.__readIndex wal.shm wal.size |> Stdlib.Result.andThen (fun index ->
-      if Stdlib.Sqlite.__Wal.__le index 16 4 < 1000 then Ok ()
-      else Stdlib.Sqlite.__Wal.__checkpoint state.pager.fd wal 0 |> Stdlib.Result.map (fun _ -> ()))
-  ()
+  match state.pager.wal with | None -> () | Some wal -> Stdlib.Sqlite.__Wal.__autoCheckpoint state.pager.fd wal
 let __commit (state: __State) : Stdlib.Result.Result<__State,String> =
   if Stdlib.Bool.not state.active then Error "SQLite: no active transaction"
   else Stdlib.Sqlite.__Pager.__commit state.pager |> Stdlib.Result.andThen (fun _ ->
@@ -65,7 +60,7 @@ let __commit (state: __State) : Stdlib.Result.Result<__State,String> =
     Stdlib.Sqlite.__Pager.__stamp state.pager |> Stdlib.Result.andThen (fun stamp ->
       Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ ->
         let state = { state with active = false,stamp = stamp,version = state.version + (if Stdlib.Dict.isEmpty state.pager.dirty && stamp != state.stamp then 1 else 0) }
-        let _ = __autoCheckpoint state
+        let _ = if Stdlib.Dict.isEmpty state.pager.dirty then () else __autoCheckpoint state
         state)))
 let __dataVersion (state: __State) : Stdlib.Result.Result<(__State * Int),String> =
   __observe state |> Stdlib.Result.map (fun state -> (state,state.version))
