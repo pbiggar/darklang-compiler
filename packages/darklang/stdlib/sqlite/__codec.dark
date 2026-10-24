@@ -28,8 +28,8 @@ let __put (b: Blob) (offset: Int) (width: Int) (value: Int) : Blob =
   __replace b offset (__be value width)
 
 let __varLoop (n: Int) (tail: List<Int64>) : Blob =
-  if n < 128 then Stdlib.Blob.__fromInt64List ((__i64 n) :: tail)
-  else __varLoop (n / 128) ((__i64 (128 + n % 128)) :: tail)
+  if n < 128 then Stdlib.Blob.__fromInt64List ([__i64 n] @ tail)
+  else __varLoop (n / 128) ([__i64 (128 + n % 128)] @ tail)
 
 let __var (n: Int) : Blob =
   let unsigned = if n < 0 then n + 18446744073709551616 else n
@@ -74,8 +74,8 @@ let __integerWidth (n: Int) : Int =
 
 let __field (value: Stdlib.Sqlite.Value) : (Int * Blob) =
   match value with
-  | Stdlib.Sqlite.Value.Null -> (0, __zeros 0)
-  | Stdlib.Sqlite.Value.Int i ->
+  | Null -> (0, __zeros 0)
+  | Int i ->
     let n = Stdlib.Int.fromInt64 i
     if n == 0 then (8, __zeros 0)
     else if n == 1 then (9, __zeros 0)
@@ -83,11 +83,11 @@ let __field (value: Stdlib.Sqlite.Value) : (Int * Blob) =
       let width = __integerWidth n
       let serial = if width == 6 then 5 else if width == 8 then 6 else width
       (serial, __be (if n < 0 then n + Stdlib.Int.power 256 width else n) width)
-  | Stdlib.Sqlite.Value.Real f -> (7, __be (Stdlib.Int.fromUInt64 (Stdlib.Float.toBits f)) 8)
-  | Stdlib.Sqlite.Value.Text s ->
+  | Real f -> (7, __be (Stdlib.Int.fromUInt64 (Stdlib.Float.toBits f)) 8)
+  | Text s ->
     let b = Stdlib.Blob.fromString s
     (13 + 2 * Stdlib.Blob.length b, b)
-  | Stdlib.Sqlite.Value.Bytes b -> (12 + 2 * Stdlib.Blob.length b, b)
+  | Bytes b -> (12 + 2 * Stdlib.Blob.length b, b)
 
 let __headerSize (n: Int) : Int =
   let total = n + 1
@@ -147,7 +147,7 @@ let __recordFields (b: Blob) (headerEnd: Int) (serialOffset: Int) (dataOffset: I
     __readVar b serialOffset |> Stdlib.Result.andThen (fun (serial, next) ->
       if next > headerEnd then Error "SQLite: invalid serial type"
       else __decodeField b dataOffset serial |> Stdlib.Result.andThen (fun value ->
-        __recordFields b headerEnd next (dataOffset + __serialWidth serial) (value :: reversed)))
+        __recordFields b headerEnd next (dataOffset + __serialWidth serial) ([value] @ reversed)))
 
 let __decodeRecord (b: Blob) : Stdlib.Result.Result<List<Stdlib.Sqlite.Value>, String> =
   __readVar b 0 |> Stdlib.Result.andThen (fun (headerEnd, next) ->

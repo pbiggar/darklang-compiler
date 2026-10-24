@@ -16,7 +16,7 @@ let __readExact (fd: Int) (remaining: Int) (reversed: List<Blob>) : Stdlib.Resul
   else __io (Stdlib.Cli.Posix.fdRead fd remaining) |> Stdlib.Result.andThen (fun chunk ->
     let n = Stdlib.Blob.length chunk
     if n == 0 then Error "SQLite: truncated database page"
-    else __readExact fd (remaining - n) (chunk :: reversed))
+    else __readExact fd (remaining - n) ([chunk] @ reversed))
 
 let __readAt (fd: Int) (offset: Int) (n: Int) : Stdlib.Result.Result<Blob, String> =
   __io (Stdlib.Cli.Posix.fdSeekFromStart fd offset)
@@ -91,7 +91,7 @@ let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
   else __readAt fd 0 100 |> Stdlib.Result.andThen (fun header ->
     let rawSize = __get header 16 2
     let size = if rawSize == 1 then 65536 else rawSize
-    let count = length / size
+    let count = if size < 512 then 0 else length / size
     if Stdlib.Blob.toHex (Stdlib.Blob.slice header 0 16) != "53514C69746520666F726D6174203300" then Error "SQLite: not a database"
     else if size < 512 || size > 65536 || (size & (size - 1)) != 0 || length % size != 0 then Error "SQLite: invalid page size"
     else if __get header 18 1 != 1 || __get header 19 1 != 1 then Error "SQLite: WAL and newer file formats are unsupported"

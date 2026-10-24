@@ -1,0 +1,272 @@
+// A deliberately restricted SQL grammar. Unsupported syntax fails before any commit.
+module Darklang.Stdlib.Sqlite.__Sql
+
+type __Token = Word of String | Quoted of String | Atom of Stdlib.Sqlite.Value | Symbol of String | Param of Int
+type __Expr = Literal of Stdlib.Sqlite.Value | Column of String | Parameter of Int
+  | Cast of __Expr * String | Binary of __Expr * String * __Expr | Count | Star
+type __Column = { name: String, affinity: String, primary: Bool, notNull: Bool }
+type __Select = { fields: List<(__Expr * String)>, table: Stdlib.Option.Option<String>,
+  predicate: Stdlib.Option.Option<__Expr>, order: List<(__Expr * Bool)>, limit: Stdlib.Option.Option<Int> }
+type __Statement = Create of String * Bool * List<__Column> | Drop of String * Bool
+  | Insert of String * List<String> * List<__Expr> * Bool
+  | Update of String * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
+  | Delete of String * Stdlib.Option.Option<__Expr> | Select of __Select
+
+let __lower (s: String) : String = Stdlib.String.toLowercase s
+let __char (s: String) (i: Int) : Int64 =
+  if i < 0 || i >= Stdlib.Int.fromInt64 (Stdlib.String.__byteLength s) then -1L
+  else Stdlib.String.__byteAtUnchecked s (Stdlib.Sqlite.__Codec.__i64 i)
+let __slice (s: String) (start: Int) (end_: Int) : String =
+  Stdlib.String.__substring s (Stdlib.Sqlite.__Codec.__i64 start) (Stdlib.Sqlite.__Codec.__i64 end_)
+let __identifierStart (c: Int64) : Bool = (c >= 65L && c <= 90L) || (c >= 97L && c <= 122L) || c == 95L || c >= 128L
+let __identifierRest (c: Int64) : Bool = __identifierStart c || (c >= 48L && c <= 57L)
+let __wordEnd (s: String) (i: Int) : Int = if __identifierRest (__char s i) then __wordEnd s (i + 1) else i
+let __numberEnd (s: String) (i: Int) : Int =
+  let c = __char s i
+  if (c >= 48L && c <= 57L) || c == 46L || c == 101L || c == 69L || ((c == 43L || c == 45L) && (__char s (i - 1) == 101L || __char s (i - 1) == 69L)) then __numberEnd s (i + 1) else i
+
+let __quoted (s: String) (i: Int) (quote: Int64) (acc: String) : Stdlib.Result.Result<(String * Int), String> =
+  let c = __char s i
+  if c == -1L then Error "SQLite: unterminated quoted token"
+  else if c == quote then
+    if __char s (i + 1) == quote then __quoted s (i + 2) quote (acc + __slice s i (i + 1))
+    else Ok (acc,i + 1)
+  else __quoted s (i + 1) quote (acc + __slice s i (i + 1))
+
+let __commentEnd (s: String) (i: Int) : Stdlib.Result.Result<Int, String> =
+  if __char s i == -1L then Error "SQLite: unterminated SQL comment"
+  else if __char s i == 42L && __char s (i + 1) == 47L then Ok (i + 2)
+  else __commentEnd s (i + 1)
+let __lineEnd (s: String) (i: Int) : Int =
+  if __char s i == -1L || __char s i == 10L then i else __lineEnd s (i + 1)
+
+let __number (s: String) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
+  match Stdlib.Int64.parse s with
+  | Ok i -> Ok (Stdlib.Sqlite.Value.Int i)
+  | Error _ -> Stdlib.Float.parse s |> Stdlib.Result.map (fun f -> Stdlib.Sqlite.Value.Real f)
+    |> Stdlib.Result.mapError (fun _ -> "SQLite: invalid numeric literal")
+
+let __lex (s: String) (i: Int) (acc: List<__Token>) : Stdlib.Result.Result<List<__Token>, String> =
+  let c = __char s i
+  if c == -1L then Ok (Stdlib.List.reverse acc)
+  else if c == 32L || c == 9L || c == 10L || c == 13L then __lex s (i + 1) acc
+  else if c == 45L && __char s (i + 1) == 45L then __lex s (__lineEnd s (i + 2)) acc
+  else if c == 47L && __char s (i + 1) == 42L then __commentEnd s (i + 2) |> Stdlib.Result.andThen (fun end_ -> __lex s end_ acc)
+  else if c == 39L || c == 34L || c == 96L then
+    __quoted s (i + 1) c "" |> Stdlib.Result.andThen (fun (value,next) ->
+      let token = if c == 39L then Atom (Stdlib.Sqlite.Value.Text value) else Quoted value
+      __lex s next ([token] @ acc))
+  else if (c == 120L || c == 88L) && __char s (i + 1) == 39L then
+    __quoted s (i + 2) 39L "" |> Stdlib.Result.andThen (fun (hex,next) ->
+      Stdlib.Blob.fromHex hex |> Stdlib.Result.andThen (fun b -> __lex s next ([Atom (Stdlib.Sqlite.Value.Bytes b)] @ acc)))
+  else if c >= 48L && c <= 57L then
+    let end_ = __numberEnd s i
+    __number (__slice s i end_) |> Stdlib.Result.andThen (fun value -> __lex s end_ ([Atom value] @ acc))
+  else if c == 64L then
+    let end_ = __wordEnd s (i + 1)
+    let name = __slice s (i + 1) end_
+    if Stdlib.String.startsWith (__lower name) "p" then
+      Stdlib.Int.parse (__slice name 1 (end_ - i - 1)) |> Stdlib.Result.mapError (fun _ -> "SQLite: parameters must be @p0, @p1, ...")
+      |> Stdlib.Result.andThen (fun n -> if n < 0 then Error "SQLite: invalid parameter" else __lex s end_ ([Param n] @ acc))
+    else Error "SQLite: parameters must be @p0, @p1, ..."
+  else if __identifierStart c then
+    let end_ = __wordEnd s (i + 1)
+    __lex s end_ ([Word (__slice s i end_)] @ acc)
+  else
+    let one = __slice s i (i + 1)
+    let two = __slice s i (i + 2)
+    if two == "<=" || two == ">=" || two == "<>" || two == "!=" || two == "==" then __lex s (i + 2) ([Symbol two] @ acc)
+    else if Stdlib.List.contains ["(",")",",",";","*","=","<",">","-","+"] one then __lex s (i + 1) ([Symbol one] @ acc)
+    else Error ("SQLite: unsupported SQL token " + one)
+
+let __is (token: __Token) (text: String) : Bool =
+  match token with
+  | Word s -> __lower s == text
+  | Symbol s -> s == text
+  | _ -> false
+let __eat (tokens: List<__Token>) (text: String) : Stdlib.Result.Result<List<__Token>, String> =
+  match tokens with
+  | first :: rest -> if __is first text then Ok rest else Error ("SQLite: expected " + text)
+  | [] -> Error ("SQLite: expected " + text)
+let __name (tokens: List<__Token>) : Stdlib.Result.Result<(String * List<__Token>), String> =
+  match tokens with
+  | Word s :: rest -> Ok (s,rest)
+  | Quoted s :: rest -> Ok (s,rest)
+  | _ -> Error "SQLite: expected identifier"
+
+let __precedence (token: __Token) : Int =
+  if __is token "or" then 1 else if __is token "and" then 2
+  else if Stdlib.List.any ["=","==","!=","<>","<",">","<=",">=","is"] (fun s -> __is token s) then 3 else 0
+let __tokenText (token: __Token) : String =
+  match token with | Word s -> __lower s | Symbol s -> s | _ -> ""
+
+let __expression (tokens: List<__Token>) (minimum: Int) : Stdlib.Result.Result<(__Expr * List<__Token>), String> =
+  __atom tokens |> Stdlib.Result.andThen (fun (left,rest) -> __binary left rest minimum)
+
+let __atom (tokens: List<__Token>) : Stdlib.Result.Result<(__Expr * List<__Token>), String> =
+  match tokens with
+  | Atom v :: rest -> Ok (Literal v,rest)
+  | Param n :: rest -> Ok (Parameter n,rest)
+  | Symbol "*" :: rest -> Ok (Star,rest)
+  | Symbol "(" :: rest -> __expression rest 1 |> Stdlib.Result.andThen (fun (expr,rest) ->
+    __eat rest ")" |> Stdlib.Result.map (fun rest -> (expr,rest)))
+  | Symbol "-" :: Atom v :: rest ->
+    (match v with
+    | Int i -> if i == -9223372036854775808L then Error "SQLite: integer overflow" else Ok (Literal (Stdlib.Sqlite.Value.Int (0L - i)),rest)
+    | Real f -> Ok (Literal (Stdlib.Sqlite.Value.Real (0.0 - f)),rest)
+    | _ -> Error "SQLite: expected number after minus")
+  | Symbol "+" :: Atom v :: rest -> Ok (Literal v,rest)
+  | Word word :: rest ->
+    if __lower word == "null" then Ok (Literal Stdlib.Sqlite.Value.Null,rest)
+    else if __lower word == "count" then
+      __eat rest "(" |> Stdlib.Result.andThen (fun rest -> __eat rest "*")
+      |> Stdlib.Result.andThen (fun rest -> __eat rest ")") |> Stdlib.Result.map (fun rest -> (Count,rest))
+    else if __lower word == "cast" then
+      __eat rest "(" |> Stdlib.Result.andThen (fun rest -> __expression rest 1)
+      |> Stdlib.Result.andThen (fun (expr,rest) -> __eat rest "as" |> Stdlib.Result.andThen __name
+        |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (Cast (expr,__lower name),rest))))
+    else Ok (Column word,rest)
+  | Quoted name :: rest -> Ok (Column name,rest)
+  | _ -> Error "SQLite: expected expression"
+
+let __binary (left: __Expr) (tokens: List<__Token>) (minimum: Int) : Stdlib.Result.Result<(__Expr * List<__Token>), String> =
+  match tokens with
+  | op :: rest ->
+    let precedence = __precedence op
+    if precedence < minimum then Ok (left,tokens)
+    else
+      let (operator,rest) = match rest with
+        | next :: tail -> if __is op "is" && __is next "not" then ("is not",tail) else (__tokenText op,rest)
+        | [] -> (__tokenText op,rest)
+      __expression rest (precedence + 1) |> Stdlib.Result.andThen (fun (right,rest) ->
+        __binary (Binary (left,operator,right)) rest minimum)
+  | [] -> Ok (left,[])
+
+let __expressions (tokens: List<__Token>) : Stdlib.Result.Result<(List<__Expr> * List<__Token>), String> =
+  __expression tokens 1 |> Stdlib.Result.andThen (fun (expr,rest) ->
+    match rest with
+    | Symbol "," :: tail -> __expressions tail |> Stdlib.Result.map (fun (exprs,rest) -> ([expr] @ exprs,rest))
+    | _ -> Ok ([expr],rest))
+
+let __names (tokens: List<__Token>) : Stdlib.Result.Result<(List<String> * List<__Token>), String> =
+  __name tokens |> Stdlib.Result.andThen (fun (name,rest) ->
+    match rest with
+    | Symbol "," :: tail -> __names tail |> Stdlib.Result.map (fun (names,rest) -> ([name] @ names,rest))
+    | _ -> Ok ([name],rest))
+
+let __constraints (column: __Column) (tokens: List<__Token>) : Stdlib.Result.Result<(__Column * List<__Token>), String> =
+  match tokens with
+  | Word word :: rest ->
+    if __lower word == "primary" then __eat rest "key" |> Stdlib.Result.andThen (fun rest ->
+      if column.affinity != "integer" then Error "SQLite: only INTEGER PRIMARY KEY is supported"
+      else __constraints { column with primary = true } rest)
+    else if __lower word == "not" then __eat rest "null" |> Stdlib.Result.andThen (fun rest -> __constraints { column with notNull = true } rest)
+    else Error ("SQLite: unsupported column constraint " + word)
+  | _ -> Ok (column,tokens)
+
+let __columns (tokens: List<__Token>) : Stdlib.Result.Result<(List<__Column> * List<__Token>), String> =
+  __name tokens |> Stdlib.Result.andThen (fun (name,rest) ->
+    __name rest |> Stdlib.Result.andThen (fun (affinity,rest) ->
+      let affinity = __lower affinity
+      if Stdlib.Bool.not (Stdlib.List.contains ["integer","int","text","real","blob","numeric"] affinity) then Error "SQLite: unsupported column type"
+      else __constraints (__Column { name = name, affinity = affinity, primary = false, notNull = false }) rest
+      |> Stdlib.Result.andThen (fun (column,rest) ->
+        match rest with
+        | Symbol "," :: tail -> __columns tail |> Stdlib.Result.map (fun (columns,rest) -> ([column] @ columns,rest))
+        | _ -> Ok ([column],rest))))
+
+let __predicate (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Option<__Expr> * List<__Token>), String> =
+  match tokens with
+  | Word word :: rest -> if __lower word == "where" then __expression rest 1 |> Stdlib.Result.map (fun (expr,rest) -> (Some expr,rest)) else Ok (None,tokens)
+  | _ -> Ok (None,tokens)
+
+let __fieldName (expr: __Expr) : String =
+  match expr with | Column s -> s | Count -> "count(*)" | Star -> "*" | _ -> "expression"
+let __fields (tokens: List<__Token>) : Stdlib.Result.Result<(List<(__Expr * String)> * List<__Token>), String> =
+  __expression tokens 1 |> Stdlib.Result.andThen (fun (expr,rest) ->
+    (match rest with
+    | Word word :: tail -> if __lower word == "as" then __name tail else Ok (__fieldName expr,rest)
+    | _ -> Ok (__fieldName expr,rest))
+    |> Stdlib.Result.andThen (fun (alias,rest) ->
+      match rest with
+      | Symbol "," :: tail -> __fields tail |> Stdlib.Result.map (fun (fields,rest) -> ([(expr,alias)] @ fields,rest))
+      | _ -> Ok ([(expr,alias)],rest)))
+
+let __order (tokens: List<__Token>) : Stdlib.Result.Result<(List<(__Expr * Bool)> * List<__Token>), String> =
+  __expression tokens 1 |> Stdlib.Result.andThen (fun (expr,rest) ->
+    let (descending,rest) = match rest with
+      | Word word :: tail -> if __lower word == "desc" then (true,tail) else if __lower word == "asc" then (false,tail) else (false,rest)
+      | _ -> (false,rest)
+    match rest with
+    | Symbol "," :: tail -> __order tail |> Stdlib.Result.map (fun (order,rest) -> ([(expr,descending)] @ order,rest))
+    | _ -> Ok ([(expr,descending)],rest))
+
+let __limit (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Option<Int> * List<__Token>), String> =
+  match tokens with
+  | Word word :: tail ->
+    if __lower word != "limit" then Ok (None,tokens)
+    else
+      (match tail with
+      | Atom value :: rest ->
+        (match value with
+        | Int n -> if n < 0L then Error "SQLite: negative LIMIT is unsupported" else Ok (Some (Stdlib.Int.fromInt64 n),rest)
+        | _ -> Error "SQLite: LIMIT must be an integer literal")
+      | _ -> Error "SQLite: LIMIT must be an integer literal")
+  | _ -> Ok (None,tokens)
+
+let __select (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * List<__Token>), String> =
+  __fields tokens |> Stdlib.Result.andThen (fun (fields,rest) ->
+    (match rest with
+    | Word word :: tail -> if __lower word == "from" then __name tail |> Stdlib.Result.map (fun (table,rest) -> (Some table,rest)) else Ok (None,rest)
+    | _ -> Ok (None,rest)) |> Stdlib.Result.andThen (fun (table,rest) ->
+      __predicate rest |> Stdlib.Result.andThen (fun (predicate,rest) ->
+        (match rest with
+        | Word word :: tail -> if __lower word == "order" then __eat tail "by" |> Stdlib.Result.andThen __order else Ok ([],rest)
+        | _ -> Ok ([],rest)) |> Stdlib.Result.andThen (fun (order,rest) ->
+          __limit rest |> Stdlib.Result.map (fun (limit,rest) ->
+            (Select (__Select { fields = fields, table = table, predicate = predicate, order = order, limit = limit }),rest))))))
+
+let __assignments (tokens: List<__Token>) : Stdlib.Result.Result<(List<(String * __Expr)> * List<__Token>), String> =
+  __name tokens |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "=" |> Stdlib.Result.andThen (fun rest -> __expression rest 1)
+    |> Stdlib.Result.andThen (fun (expr,rest) -> match rest with
+      | Symbol "," :: tail -> __assignments tail |> Stdlib.Result.map (fun (assignments,rest) -> ([(name,expr)] @ assignments,rest))
+      | _ -> Ok ([(name,expr)],rest)))
+
+let __statement (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * List<__Token>), String> =
+  match tokens with
+  | Word command :: rest ->
+    let command = __lower command
+    if command == "select" then __select rest
+    else if command == "create" then __eat rest "table" |> Stdlib.Result.andThen (fun rest ->
+      (match rest with
+      | Word word :: tail -> if __lower word == "if" then __eat tail "not" |> Stdlib.Result.andThen (fun tail -> __eat tail "exists") |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok (false,rest)
+      | _ -> Ok (false,rest)) |> Stdlib.Result.andThen (fun (ignore,rest) ->
+        __name rest |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "(" |> Stdlib.Result.andThen __columns
+          |> Stdlib.Result.andThen (fun (columns,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (Create (name,ignore,columns),rest))))))
+    else if command == "drop" then __eat rest "table" |> Stdlib.Result.andThen (fun rest ->
+      (match rest with
+      | Word word :: tail -> if __lower word == "if" then __eat tail "exists" |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok (false,rest)
+      | _ -> Ok (false,rest)) |> Stdlib.Result.andThen (fun (ignore,rest) -> __name rest |> Stdlib.Result.map (fun (name,rest) -> (Drop (name,ignore),rest))))
+    else if command == "insert" then
+      (match rest with
+      | Word word :: tail -> if __lower word == "or" then __eat tail "ignore" |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok (false,rest)
+      | _ -> Ok (false,rest)) |> Stdlib.Result.andThen (fun (ignore,rest) ->
+        __eat rest "into" |> Stdlib.Result.andThen __name |> Stdlib.Result.andThen (fun (name,rest) ->
+          (match rest with
+          | Symbol "(" :: tail -> __names tail |> Stdlib.Result.andThen (fun (names,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (names,rest)))
+          | _ -> Ok ([],rest)) |> Stdlib.Result.andThen (fun (names,rest) ->
+            __eat rest "values" |> Stdlib.Result.andThen (fun rest -> __eat rest "(") |> Stdlib.Result.andThen __expressions
+            |> Stdlib.Result.andThen (fun (values,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (Insert (name,names,values,ignore),rest))))))
+    else if command == "update" then __name rest |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "set" |> Stdlib.Result.andThen __assignments
+      |> Stdlib.Result.andThen (fun (assignments,rest) -> __predicate rest |> Stdlib.Result.map (fun (predicate,rest) -> (Update (name,assignments,predicate),rest))))
+    else if command == "delete" then __eat rest "from" |> Stdlib.Result.andThen __name |> Stdlib.Result.andThen (fun (name,rest) ->
+      __predicate rest |> Stdlib.Result.map (fun (predicate,rest) -> (Delete (name,predicate),rest)))
+    else Error ("SQLite: unsupported SQL statement " + command)
+  | _ -> Error "SQLite: expected SQL statement"
+
+let __parse (sql: String) : Stdlib.Result.Result<__Statement, String> =
+  __lex sql 0 [] |> Stdlib.Result.andThen __statement |> Stdlib.Result.andThen (fun (statement,rest) ->
+    match rest with
+    | [] -> Ok statement
+    | [Symbol ";"] -> Ok statement
+    | _ -> Error "SQLite: unsupported trailing SQL")
