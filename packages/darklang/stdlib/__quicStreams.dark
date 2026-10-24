@@ -13,36 +13,36 @@ let receiver (window: Int64) : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive
     Stdlib.__QuicStreams.Receive { buffer = buffer, credit = window, highest = 0L, finalSize = None, resetCode = None })
 
 let __final (state: Stdlib.__QuicStreams.Receive) (end_: Int64) (fin: Bool)
-  : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String> =
+  : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, Stdlib.__QuicWire.Failure> =
   match state.finalSize with
   | Some size ->
-    if end_ > size || (fin && end_ != size) then Error "QUIC stream final size changed"
+    if end_ > size || (fin && end_ != size) then Error (Stdlib.__QuicWire.protocol 6L "QUIC stream final size changed")
     else Ok state.finalSize
   | None ->
-    if fin && end_ < state.highest then Error "QUIC stream final size is below received data"
+    if fin && end_ < state.highest then Error (Stdlib.__QuicWire.protocol 6L "QUIC stream final size is below received data")
     else Ok (if fin then Some end_ else None)
 
 let insert (state: Stdlib.__QuicStreams.Receive) (offset: Int64) (bytes: Blob) (fin: Bool)
-  : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive, String> =
+  : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive, Stdlib.__QuicWire.Failure> =
   let size = Stdlib.Blob.__byteLength bytes in
-  if offset < 0L || offset > 4611686018427387903L - size then Error "Invalid QUIC STREAM range"
+  if offset < 0L || offset > 4611686018427387903L - size then Error (Stdlib.__QuicWire.protocol 7L "Invalid QUIC STREAM range")
   else
     let end_ = offset + size in
-    if end_ > state.credit then Error "QUIC stream flow control exceeded"
+    if end_ > state.credit then Error (Stdlib.__QuicWire.protocol 3L "QUIC stream flow control exceeded")
     else
       match Stdlib.__QuicStreams.__final state end_ fin with
       | Error message -> Error message
       | Ok finalSize ->
         let buffer = if Stdlib.Option.isSome state.resetCode then Ok state.buffer
-                     else Stdlib.__QuicReassembly.insert state.buffer offset bytes in
+                     else Stdlib.__QuicReassembly.insert state.buffer offset bytes |> Stdlib.Result.mapError Stdlib.__QuicWire.localFailure in
         buffer |> Stdlib.Result.map (fun next -> Stdlib.__QuicStreams.Receive {
           buffer = next, credit = state.credit, highest = if end_ > state.highest then end_ else state.highest,
           finalSize = finalSize, resetCode = state.resetCode })
 
 let reset (state: Stdlib.__QuicStreams.Receive) (finalSize: Int64) (code: Int64)
-  : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive, String> =
-  if finalSize < 0L || code < 0L || code > 4611686018427387903L then Error "Invalid QUIC stream reset"
-  else if finalSize > state.credit then Error "QUIC stream flow control exceeded"
+  : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive, Stdlib.__QuicWire.Failure> =
+  if finalSize < 0L || code < 0L || code > 4611686018427387903L then Error (Stdlib.__QuicWire.protocol 7L "Invalid QUIC stream reset")
+  else if finalSize > state.credit then Error (Stdlib.__QuicWire.protocol 3L "QUIC stream flow control exceeded")
   else Stdlib.__QuicStreams.__final state finalSize true |> Stdlib.Result.map (fun final ->
     Stdlib.__QuicStreams.Receive { buffer = Stdlib.__QuicReassembly.State {
       maximum = state.buffer.maximum, consumed = state.buffer.consumed, segments = [] },

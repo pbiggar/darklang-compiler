@@ -61,53 +61,53 @@ let __closed (channel: Stdlib.__QuicFlow.Channel) : Bool =
   let received = match channel.receive with | None -> true | Some receiver -> Stdlib.__QuicStreams.complete receiver in
   sent && received
 
-let __new (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.Channel, String> =
+let __new (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.Channel, Stdlib.__QuicWire.Failure> =
   let local = Stdlib.__QuicFlow.__local state id in
   let uni = Stdlib.__QuicFlow.__uni id in
   let limits = if local then state.peer else state.local in
   let count = if uni then limits.streamsUni else limits.streamsBidi in
-  if id < 0L || id > 4611686018427387903L || id / 4L >= count then Error "QUIC stream concurrency limit exceeded"
-  else if Stdlib.List.length state.channels >= 1030 then Error "QUIC stream history profile exhausted"
-  else if Stdlib.List.length (Stdlib.List.filter state.channels (fun channel -> Stdlib.Bool.not (Stdlib.__QuicFlow.__closed channel))) >= 64 then Error "QUIC active stream owner profile exhausted"
+  if id < 0L || id > 4611686018427387903L || id / 4L >= count then Error (Stdlib.__QuicWire.protocol 4L "QUIC stream concurrency limit exceeded")
+  else if Stdlib.List.length state.channels >= 1030 then Error (Stdlib.__QuicWire.Failure.LocalFailure "QUIC stream history profile exhausted")
+  else if Stdlib.List.length (Stdlib.List.filter state.channels (fun channel -> Stdlib.Bool.not (Stdlib.__QuicFlow.__closed channel))) >= 64 then Error (Stdlib.__QuicWire.Failure.LocalFailure "QUIC active stream owner profile exhausted")
   else
     let sending = if uni && Stdlib.Bool.not local then Ok None else Stdlib.__QuicStreams.sender id (if uni then state.peer.uni else if local then state.peer.bidiRemote else state.peer.bidiLocal) |> Stdlib.Result.map (fun sender -> Some sender) in
     let window = if uni then state.local.uni else if local then state.local.bidiLocal else state.local.bidiRemote in
     let receiving = if uni && local then Ok None else Stdlib.__QuicFlow.__receiver window |> Stdlib.Result.map (fun receiver -> Some receiver) in
     match sending, receiving with
     | Ok sending, Ok receiving -> Ok (Stdlib.__QuicFlow.Channel { id = id, send = sending, receive = receiving, stopped = None })
-    | _, _ -> Error "QUIC stream creation failed"
+    | _, _ -> Builtin.crash "Validated QUIC limits could not create a stream"
 
 let openStream (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
   if Stdlib.Bool.not (Stdlib.__QuicFlow.__local state id) then Error "Cannot locally open a peer QUIC stream"
   else if Stdlib.Option.isSome (Stdlib.__QuicFlow.channel state id) then Error "QUIC stream is already open"
-  else Stdlib.__QuicFlow.__new state id |> Stdlib.Result.map (fun channel ->
+  else Stdlib.__QuicFlow.__new state id |> Stdlib.Result.mapError Stdlib.__QuicWire.message |> Stdlib.Result.map (fun channel ->
     Stdlib.__QuicFlow.__state state state.peer (Stdlib.__QuicFlow.__replace state channel) state.sent state.received state.consumed state.credit)
 
-let __incoming (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.Channel, String> =
+let __incoming (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.Channel, Stdlib.__QuicWire.Failure> =
   match Stdlib.__QuicFlow.channel state id with
   | Some channel -> Ok channel
-  | None -> if Stdlib.__QuicFlow.__local state id then Error "Peer referenced an unopened local QUIC stream"
+  | None -> if Stdlib.__QuicFlow.__local state id then Error (Stdlib.__QuicWire.protocol 5L "Peer referenced an unopened local QUIC stream")
             else Stdlib.__QuicFlow.__new state id
 
 let __received (state: Stdlib.__QuicFlow.State) (channel: Stdlib.__QuicFlow.Channel)
-  (previous: Stdlib.__QuicStreams.Receive) (next: Stdlib.__QuicStreams.Receive) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
+  (previous: Stdlib.__QuicStreams.Receive) (next: Stdlib.__QuicStreams.Receive) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, Stdlib.__QuicWire.Failure> =
   let increase = next.highest - previous.highest in
-  if increase > state.credit - state.received then Error "QUIC connection flow control exceeded"
+  if increase > state.credit - state.received then Error (Stdlib.__QuicWire.protocol 3L "QUIC connection flow control exceeded")
   else
     let channel = Stdlib.__QuicFlow.Channel { id = channel.id, send = channel.send, receive = Some next, stopped = channel.stopped } in
     Ok (Stdlib.__QuicFlow.__state state state.peer (Stdlib.__QuicFlow.__replace state channel) state.sent (state.received + increase) state.consumed state.credit)
 
-let receive (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamData) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
+let receive (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamData) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, Stdlib.__QuicWire.Failure> =
   Stdlib.__QuicFlow.__incoming state frame.id |> Stdlib.Result.andThen (fun channel ->
     match channel.receive with
-    | None -> Error "Peer sent data on a send-only QUIC stream"
+    | None -> Error (Stdlib.__QuicWire.protocol 5L "Peer sent data on a send-only QUIC stream")
     | Some previous -> Stdlib.__QuicStreams.insert previous frame.offset frame.bytes frame.fin
         |> Stdlib.Result.andThen (Stdlib.__QuicFlow.__received state channel previous))
 
-let reset (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.Reset) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
+let reset (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.Reset) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, Stdlib.__QuicWire.Failure> =
   Stdlib.__QuicFlow.__incoming state frame.id |> Stdlib.Result.andThen (fun channel ->
     match channel.receive with
-    | None -> Error "Peer reset a send-only QUIC stream"
+    | None -> Error (Stdlib.__QuicWire.protocol 5L "Peer reset a send-only QUIC stream")
     | Some previous -> Stdlib.__QuicStreams.reset previous frame.finalSize frame.code
         |> Stdlib.Result.andThen (Stdlib.__QuicFlow.__received state channel previous))
 
@@ -159,16 +159,16 @@ let maxData (state: Stdlib.__QuicFlow.State) (credit: Int64) : Stdlib.Result.Res
       streamsBidi = state.peer.streamsBidi, streamsUni = state.peer.streamsUni } in
     Ok (Stdlib.__QuicFlow.__state state peer state.channels state.sent state.received state.consumed state.credit)
 
-let maxStreamData (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamLimit) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
+let maxStreamData (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamLimit) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, Stdlib.__QuicWire.Failure> =
   Stdlib.__QuicFlow.__incoming state frame.id |> Stdlib.Result.andThen (fun channel ->
     match channel.send with
-    | None -> Error "Peer granted credit on a receive-only QUIC stream"
-    | Some sender -> Stdlib.__QuicStreams.updateCredit sender frame.value |> Stdlib.Result.map (fun sender ->
+    | None -> Error (Stdlib.__QuicWire.protocol 5L "Peer granted credit on a receive-only QUIC stream")
+    | Some sender -> Stdlib.__QuicStreams.updateCredit sender frame.value |> Stdlib.Result.mapError Stdlib.__QuicWire.localFailure |> Stdlib.Result.map (fun sender ->
         let channel = Stdlib.__QuicFlow.Channel { id = channel.id, send = Some sender, receive = channel.receive, stopped = channel.stopped } in
         Stdlib.__QuicFlow.__state state state.peer (Stdlib.__QuicFlow.__replace state channel) state.sent state.received state.consumed state.credit))
 
-let maxStreams (state: Stdlib.__QuicFlow.State) (uni: Bool) (count: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
-  if count < 0L || count > 1152921504606846976L then Error "Invalid QUIC stream concurrency credit"
+let maxStreams (state: Stdlib.__QuicFlow.State) (uni: Bool) (count: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, Stdlib.__QuicWire.Failure> =
+  if count < 0L || count > 1152921504606846976L then Error (Stdlib.__QuicWire.protocol 7L "Invalid QUIC stream concurrency credit")
   else
     let bidiCount = if Stdlib.Bool.not uni && count > state.peer.streamsBidi then count else state.peer.streamsBidi in
     let uniCount = if uni && count > state.peer.streamsUni then count else state.peer.streamsUni in
@@ -176,13 +176,13 @@ let maxStreams (state: Stdlib.__QuicFlow.State) (uni: Bool) (count: Int64) : Std
       bidiRemote = state.peer.bidiRemote, uni = state.peer.uni, streamsBidi = bidiCount, streamsUni = uniCount } in
     Ok (Stdlib.__QuicFlow.__state state peer state.channels state.sent state.received state.consumed state.credit)
 
-let stop (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamLimit) : Stdlib.Result.Result<Stdlib.__QuicFlow.Write, String> =
+let stop (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamLimit) : Stdlib.Result.Result<Stdlib.__QuicFlow.Write, Stdlib.__QuicWire.Failure> =
   Stdlib.__QuicFlow.__incoming state frame.id |> Stdlib.Result.andThen (fun channel ->
     match channel.send with
-    | None -> Error "Peer stopped a receive-only QUIC stream"
+    | None -> Error (Stdlib.__QuicWire.protocol 5L "Peer stopped a receive-only QUIC stream")
     | Some sender ->
       if sender.finished then Ok (Stdlib.__QuicFlow.Write { frames = Stdlib.Blob.empty, state = state })
-      else Stdlib.__QuicApplication.reset frame.id frame.value sender.offset |> Stdlib.Result.map (fun frames ->
+      else Stdlib.__QuicApplication.reset frame.id frame.value sender.offset |> Stdlib.Result.mapError Stdlib.__QuicWire.localFailure |> Stdlib.Result.map (fun frames ->
         let sender = Stdlib.__QuicStreams.Send { id = sender.id, credit = sender.credit, offset = sender.offset, finished = true } in
         let channel = Stdlib.__QuicFlow.Channel { id = channel.id, send = Some sender, receive = channel.receive, stopped = Some frame.value } in
         Stdlib.__QuicFlow.Write { frames = frames,

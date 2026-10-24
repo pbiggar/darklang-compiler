@@ -1,0 +1,5 @@
+module Darklang.Stdlib.Fun
+
+
+// @compiler replace: packages/darklang/stdlib/fun.dark#Darklang.Stdlib.Fun.identity reason=compiler-implementation
+let identity (value: 'a) : 'a = value

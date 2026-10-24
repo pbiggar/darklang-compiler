@@ -1,0 +1,117 @@
+// Postfix ? extracts success and returns failure from its nearest function.
+let next (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> =
+  Some (v? + 1L)
+next (Some 4L) = Some 5L
+next None = None
+let stringify (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Result.Result<String, String> =
+  Ok (Stdlib.toString v?)
+stringify (Ok 4L) = Ok "4"
+stringify (Error "stop") = Error "stop"
+Stdlib.List.map [Some 1L, None, Some 3L] (fun v -> Some (v? + 1L)) = [Some 2L, None, Some 4L]
+let inner (v: Stdlib.Option.Option<Int64>) : Int64 =
+  let f = fun () -> Some (v? + 1L) in match f () with | None -> 99L | Some n -> n
+inner None = 99L
+let skip (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<List<Int64>> =
+  Some [v?, Builtin.unwrap None]
+skip None = None
+let nested (v: Stdlib.Result.Result<Stdlib.Result.Result<Int64, String>, String>) : Stdlib.Result.Result<Int64, String> =
+  Ok (v?? + 1L)
+nested (Ok (Ok 4L)) = Ok 5L
+nested (Ok (Error "inside")) = Error "inside"
+nested (Error "outside") = Error "outside"
+let branch (choose: Bool) (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> =
+  Some (if choose then v? else 12L)
+branch false None = Some 12L
+branch true None = None
+branch true (Some 3L) = Some 3L
+let guard (v: Stdlib.Option.Option<Bool>) : Stdlib.Option.Option<Int64> =
+  match 1L with | 1L when v? -> Some 1L | _ -> Some 2L
+guard None = None
+guard (Some false) = Some 2L
+guard (Some true) = Some 1L
+let two (a: Stdlib.Option.Option<Int64>) (b: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> =
+  Some (a? + b?)
+let p = two (Some 1L) in (p (Some 2L), p None) = (Some 3L, None)
+let callable (v: Stdlib.Option.Option<Int64 -> Int64>) : Stdlib.Option.Option<Int64> =
+  Some (v? 4L)
+callable None = None
+callable (Some (fun n -> n + 1L)) = Some 5L
+let tupleOrder (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<(Int64 * Int64)> =
+  Some ((v?, Builtin.unwrap None))
+tupleOrder None = None
+let text (v: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
+  Some $"value: {v?}"
+text None = None
+text (Some "hello") = Some "value: hello"
+let recurse (n: Int64) (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> =
+  if n == 0L then Some v? else Some ((recurse (n - 1L) v)? + 1L)
+recurse 5L None = None
+recurse 5L (Some 0L) = Some 5L
+let discarded (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> =
+  let f = fun () -> Some (v? + 1L) in let _ = f () in Some 7L
+discarded None = Some 7L
+let pipeline (v: Stdlib.Option.Option<Int64>) : Int64 =
+  let r = v |> fun x -> Some (x? + 1L) in match r with | None -> 99L | Some n -> n
+pipeline None = 99L
+pipeline (Some 3L) = 4L
+let cond (v: Stdlib.Option.Option<Bool>) : Stdlib.Option.Option<Int64> =
+  if v? then Some 1L else Some 0L
+cond None = None
+cond (Some true) = Some 1L
+let stmt (v: Stdlib.Option.Option<Unit>) : Stdlib.Option.Option<Int64> =
+  v?; Some 1L
+stmt None = None
+stmt (Some ()) = Some 1L
+let generic<'a, 'b, 'e> (v: Stdlib.Result.Result<'a, 'e>) (f: 'a -> 'b) : Stdlib.Result.Result<'b, 'e> =
+  Ok (f v?)
+generic (Ok 4L) (fun n -> Stdlib.toString n) = Ok "4"
+generic (Error "stop") (fun n -> Stdlib.toString (n + 1L)) = Error "stop"
+(fun x -> Some (x? + 1L)) None = None
+(fun x -> let n = x? in Some (n + 1L)) (Some 3L) = Some 4L
+(fun x -> if true then Some x? else None) (Some 3L) = Some 3L
+Stdlib.List.map [Ok 1L, Error "e"] (fun v -> Ok (v? + 1L)) = [Ok 2L, Error "e"]
+Stdlib.List.filterMap [Some 1L, None, Some 3L] (fun v -> Some (v? * 10L)) = [10L, 30L]
+Stdlib.List.fold [Some 1L, None, Some 2L] (Some 0L) (fun acc v -> Some (acc? + v?)) = None
+type Alias<'a> = Stdlib.Result.Result<'a, String>
+let alias (v: Alias<Int64>) : Alias<String> =
+  Ok (Stdlib.toString v?)
+alias (Ok 4L) = Ok "4"
+alias (Error "stop") = Error "stop"
+type Container = { item: Stdlib.Option.Option<Int64> }
+let fields (v: Stdlib.Option.Option<Container>) : Stdlib.Option.Option<Int64> =
+  Some v?.item?
+fields None = None
+fields (Some (Container { item = None })) = None
+fields (Some (Container { item = Some 4L })) = Some 4L
+type Row = { a: String, b: String }
+let update (row: Row) (v: Stdlib.Option.Option<String>) : Stdlib.Option.Option<Row> =
+  Some { row with b = v? }
+update (Row { a = "kept", b = "old" }) (Some "new") = Some (Row { a = "kept", b = "new" })
+update (Row { a = "kept", b = "old" }) None = None
+let dict (v: Stdlib.Option.Option<String>) : Stdlib.Option.Option<Dict<String, String>> =
+  Some (Dict { "a": v? })
+dict None = None
+dict (Some "value") = Some (Dict { "a": "value" })
+let traced (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Result.Result<Int64, String> =
+  let _ = Builtin.print "operand" in v
+let once (v: Stdlib.Result.Result<Int64, String>) : Bool =
+  let f = fun () -> let n = (traced v)? in let _ = Builtin.print "after" in Ok n in f () == v
+once (Error "stop") = stdout="operandtrue\n" stderr="" exact_bytes=true
+once (Ok 7L) = stdout="operandaftertrue\n" stderr="" exact_bytes=true
+[stringify (Error ("bad" + Stdlib.Int64.toString 4L)), Ok "other"] = [Error "bad4", Ok "other"]
+let keep (v: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
+  let prefix = "prefix" + Stdlib.Int64.toString 4L in Some (prefix + v?)
+keep None = None
+keep (Some ("value" + Stdlib.Int64.toString 5L)) = Some "prefix4value5"
+let viaLocal (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> =
+  let f = fun x -> x + 1L in Some (f v?)
+viaLocal None = None
+viaLocal (Some 3L) = Some 4L
+let builtin (v: Stdlib.Option.Option<Stdlib.Option.Option<Int64>>) : Stdlib.Option.Option<Int64> =
+  Some (Builtin.unwrap v?)
+builtin None = None
+builtin (Some (Some 4L)) = Some 4L
+let optionText (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<String> =
+  Some (Stdlib.Int64.toString v?)
+optionText None = None
+optionText (Some 4L) = Some "4"

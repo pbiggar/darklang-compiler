@@ -109,6 +109,15 @@ let[@warning "-4"] check checkExpression (globals : globals) locals symbols
                 | None -> Error "Lambda requires at least one parameter"
                 | Some parametersChecked ->
                     let bodyLocals = M.fold M.add parameters locals in
+                    let returnTarget, symbols =
+                      WrittenCheckingState.allocateBinding "?return" symbols
+                    in
+                    let bodyGlobals =
+                      {
+                        globals with
+                        returnBoundary = Some (returnTarget, returnType);
+                      }
+                    in
                     let bodyExpected =
                       match (returnType, body) with
                       | AST.TInferenceVar _, _ -> Some returnType
@@ -116,6 +125,29 @@ let[@warning "-4"] check checkExpression (globals : globals) locals symbols
                         when Unification.containsTVar returnType ->
                           None
                       | _ -> Some returnType
+                    in
+                    let checkedBody =
+                      match
+                        checkExpression bodyGlobals bodyLocals symbols
+                          bodyExpected body
+                      with
+                      | Ok _ as result -> result
+                      | Error _ as original -> (
+                          match
+                            ( WrittenCheckingState.resolve symbols returnType,
+                              WrittenUnwrapSupport.returnHint globals body )
+                          with
+                          | AST.TInferenceVar _, Some hint ->
+                              let hint, symbols =
+                                WrittenCheckingState.freshenType
+                                  globals.typeParams hint symbols
+                              in
+                              Result.bind
+                                (WrittenCheckingState.constrain returnType hint
+                                   symbols) (fun symbols ->
+                                  checkExpression bodyGlobals bodyLocals symbols
+                                    (Some hint) body)
+                          | _ -> original)
                     in
                     Result.map
                       (fun (bodyType, body, symbols) ->
@@ -137,6 +169,10 @@ let[@warning "-4"] check checkExpression (globals : globals) locals symbols
                             parametersChecked
                         in
                         let body =
+                          WrittenCheckingState.returnScope returnTarget
+                            returnType body symbols
+                        in
+                        let body =
                           WrittenCheckingState.resolveExpression symbols body
                         in
                         let bodyType =
@@ -155,7 +191,6 @@ let[@warning "-4"] check checkExpression (globals : globals) locals symbols
                               Some (C.checkedType inferredReturn),
                               body ),
                           symbols ))
-                      (checkExpression globals bodyLocals symbols bodyExpected
-                         body))
+                      checkedBody)
         | Some (AST.TFunction _) -> Error "Lambda parameter count mismatch"
         | _ -> Error "Lambda requires an expected function type")

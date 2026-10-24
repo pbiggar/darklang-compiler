@@ -46,7 +46,7 @@ let checkFrames () : Unit =
         | Ok number -> Stdlib.__QuicFrames.acknowledge number.value in
       match result with | Error message -> Stdlib.printLine ("ERROR " + message) | Ok ack -> Stdlib.printLine (Stdlib.Blob.toHex ack)
     else
-      let result = Stdlib.__QuicFrames.parseHandshake data in
+      let result = Stdlib.__QuicFrames.parseHandshake data |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage in
       match result with
       | Error message -> Stdlib.printLine ("ERROR " + message)
       | Ok frames ->
@@ -87,7 +87,7 @@ def main():
             rangeset = RangeSet(ranges)
             buf = Buffer(capacity=4096)
             buf.push_uint8(2)
-            push_ack_frame(buf, rangeset, delay=12345)
+            push_ack_frame(buf, rangeset, delay=12345, capacity=4095)
             decoded, delay = pull_ack_frame(Buffer(data=buf.data[1:]))
             expected = ",".join(f"{item.start}:{item.stop - 1}" for item in reversed(list(decoded)))
             assert run("decode", buf.data) == f"ACK {delay} {expected} -"

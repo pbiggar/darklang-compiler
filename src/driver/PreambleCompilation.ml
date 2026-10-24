@@ -29,7 +29,7 @@ let buildCheckedContext (stdlib : X.stdlibResult)
   (* Convert preamble to ANF (mono → inline → lift → ANF). *)
   let* conversion =
     P.convertTypedDeclarationsWithTrace recorder (Some stdlib.X.context)
-      (P.Monomorphize (Some stdlib.X.context.X.genericFuncDefs)) typed
+      (P.Monomorphize (Some stdlib.X.context.X.genericFuncDefs)) env typed
     |> Result.map_error (fun error -> "Preamble ANF conversion error: " ^ error)
   in
   let registries = conversion.P.registries in
@@ -152,6 +152,12 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   let tops =
     List.map (fun func -> CheckedAST.FunctionDef func) functions @ items
   in
+  let* () =
+    DictionaryFunctionKeys.check stdlib.X.context.X.keyFunctions symbols
+      analysis.X.typeCheckEnv.Types.aliasReg
+      analysis.X.typeCheckEnv.Types.indexedTypeReg
+      analysis.X.typeCheckEnv.Types.indexedSumTypeReg tops
+  in
   let symbols, tops =
     CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
       symbols analysis.X.typeCheckEnv.Types.aliasReg
@@ -162,7 +168,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   let program = CheckedAST.programFromCheckedParts (symbols, tops) in
   let* conversion =
     P.convertTypedDeclarationsWithTrace recorder (Some stdlib.X.context)
-      (P.ReplaceTypeApps specs) program
+      (P.ReplaceTypeApps specs) analysis.X.typeCheckEnv program
   in
   let registries = conversion.P.registries in
   let options = CompilerOptions.defaultOptions in
@@ -191,6 +197,18 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   let context =
     {
       context with
+      X.keyFunctions =
+        List.fold_left
+          (fun functions -> function
+            | CheckedAST.FunctionDef fn
+              when not
+                     (String.starts_with ~prefix:"Darklang.Stdlib."
+                        fn.CheckedAST.name) ->
+                FunctionIdMap.add fn.CheckedAST.id fn functions
+            | CheckedAST.FunctionDef _ | CheckedAST.TypeDef _
+            | CheckedAST.Expression _ | CheckedAST.ValueDef _ ->
+                functions)
+          stdlib.X.context.X.keyFunctions items;
       X.writtenEnvironment =
         Option.map
           (WrittenChecking.includeAllocatedFunctions conversion.P.symbols)

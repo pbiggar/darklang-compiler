@@ -1,5 +1,5 @@
-// Recursive declaration groups remain monomorphic while active.
-let polyRecurse<'a> (x: a) : Int64 = polyRecurse<List<a>> ([x]); polyRecurse<Int64> 1L = error="Polymorphic recursion is not supported inside recursive group member: polyRecurse"
+// Reachable constructor-growing recursion requires infinitely many native instances.
+let polyRecurse<'a> (x: a) : Int64 = polyRecurse<List<a>> ([x]); polyRecurse<Int64> 1L = compileerror="Unbounded generic specialization"
 
 // A completed generic group can be instantiated independently at many types.
 let completedIdentity<'a> (x: a) : a = x

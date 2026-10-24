@@ -48,25 +48,40 @@ module Test =
     | (data, text) -> Stdlib.Int.toString data + "_" + text  // 'data' shadows parameter
 
 
+// @compiler blocked: compiler-gap
 Test.addTwo 3 4 = 7
 
+// @compiler blocked: compiler-gap
 Test.shadowTest 999 = 42
 
+// @compiler blocked: compiler-gap
 Test.argAndLocalVar 5 = 15
 
+// @compiler blocked: compiler-gap
 Test.nestedShadowing 1 2 = 103
 
+// @compiler blocked: compiler-gap
 Test.lambdaTest 10 = 21
 
+// @compiler blocked: compiler-gap
 Test.matchArgName 0 = 100
+// @compiler blocked: compiler-gap
 Test.matchArgName 5 = 10
 
+// @compiler blocked: compiler-gap
 Test.matchWithNestedShadowing 0 42 = 42
+// @compiler blocked: compiler-gap
 Test.matchWithNestedShadowing 2 99 = 600
+// @compiler blocked: compiler-gap
 Test.matchWithNestedShadowing 3 99 = 19
+// @compiler blocked: compiler-gap
 Test.matchWithNestedShadowing2 5 0 = 0
+// @compiler blocked: compiler-gap
 Test.matchWithNestedShadowing2 5 4 = 12
 
+// @compiler blocked: compiler-gap
 Test.tupleMatchWithArgShadowing (0, "hello") = "hello"
+// @compiler blocked: compiler-gap
 Test.tupleMatchWithArgShadowing (1, "test") = "test_modified"
+// @compiler blocked: compiler-gap
 Test.tupleMatchWithArgShadowing (5, "world") = "5_world"

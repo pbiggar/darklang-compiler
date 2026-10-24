@@ -1,0 +1,2058 @@
+// TODO:
+// alias PT = LanguageTools.ProgramTypes
+// alias RT = Stdlib.RuntimeTypes
+
+// TODO: update all of the 'namePart's to nameToStrings with fn inputs
+
+// CLEANUP split into a few files - easier to manage, at this point.
+// i.e. common, typeReference, expr, declarations, packages, sourceFile
+module Darklang.PrettyPrinter.ProgramTypes
+
+
+/// Formats a description string as doc comments
+/// Returns empty string if description is empty
+// @compiler blocked: missing-implementation
+let formatDocComment (description: String) : String =
+  if description == "" then
+    ""
+  else
+    description
+    |> Stdlib.String.split "\n"
+    |> Stdlib.List.map (fun line -> $"/// {line}")
+    |> Stdlib.String.join "\n"
+    |> fun s -> s + "\n"
+
+
+/// A description as `///` lines, ending in a hard line break, or nothing when there is no text.
+///
+/// The break is HARD on purpose: `///` runs to the end of the line, so a doc rendered onto the same
+/// line as the thing it documents would comment that thing out. This is the form used inside a
+/// declaration -- for a field, a case or a parameter -- where the surrounding doc may otherwise be
+/// laid out on one line.
+// @compiler blocked: missing-implementation
+let inlineDocDoc (description: String) : Stdlib.Option.Option<Stdlib.Pretty.Doc> =
+  if description == "" then
+    Stdlib.Option.Option.None
+  else
+    description
+    |> Stdlib.String.split "\n"
+    |> Stdlib.List.map (fun line -> Stdlib.Pretty.text $"/// {line}")
+    |> fun docs -> Stdlib.Pretty.join docs Stdlib.Pretty.hardLine
+    |> fun doc ->
+      Stdlib.Option.Option.Some(
+        Stdlib.Pretty.concat doc Stdlib.Pretty.hardLine
+      )
+
+
+/// <param doc>, with <param description> written above it as `///` lines.
+// @compiler blocked: missing-implementation
+let withInlineDoc
+  (description: String)
+  (doc: Stdlib.Pretty.Doc)
+  : Stdlib.Pretty.Doc =
+  match inlineDocDoc description with
+  | None -> doc
+  | Some docLines -> Stdlib.Pretty.concat docLines doc
+
+
+/// Format a hash for display when PM lookup fails.
+// @compiler blocked: missing-implementation
+let shortHash (hash: LanguageTools.ProgramTypes.Hash) : String =
+  $"<hash:{Darklang.LanguageTools.ProgramTypes.hashToShort hash}>"
+
+module NameResolutionError =
+  // @compiler blocked: missing-implementation
+  let source (originalName: List<String>) : String =
+    Stdlib.String.join originalName "."
+
+  // @compiler blocked: missing-implementation
+  let error
+    (originalName: List<String>)
+    (nre: LanguageTools.ProgramTypes.NameResolutionError)
+    : String =
+    match nre with
+    | NotFound -> Stdlib.String.join originalName "." + " not found"
+    | InvalidName -> Stdlib.String.join originalName "." + " is not a valid name"
+
+
+// Context for relative name resolution - when we know what module we're currently in,
+// we can shorten names that share the same prefix
+// @compiler blocked: missing-implementation
+type Context =
+  { branchId: Uuid
+    /// The module we're printing from, owner-first (`["Darklang", "Stdlib", "Option"]`), or empty for
+    /// "no context". A path rather than a dotted string, because shortening compares segments and
+    /// `PickContext` wants a path too; the two used to disagree and be converted by splitting on ".".
+    currentModule: List<String>
+    /// Used to resolve ESelf and EArg expressions when pretty-printing function bodies.
+    /// When Some, contains (functionName, argMap) where argMap maps parameter names to indices.
+    currentFunction: Stdlib.Option.Option<(String * Dict<String, Int>)>
+
+    /// Columns available. Layout decisions are made against this; it is a field rather than something
+    /// looked up so that printing stays reproducible and a caller can print for a pane.
+    width: Int
+
+    /// The location this definition is being shown under, when the caller knows it.
+    ///
+    /// Only `FQ*.Package.atDefinition` can use it: that is the one lookup whose hash
+    /// is the subject's own. A name inside the body resolves against its own
+    /// candidates, where this location does not appear.
+    preferredLocation:
+      Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation>
+
+    /// Live values: what a call produced the last time this code ran, keyed by the call's
+    /// expression id (as text), already rendered. A call with an entry prints with `// = <value>`
+    /// after it. Empty everywhere but the editor's panes.
+    liveValues: Dict<String, String>
+
+    /// May a live value change the LAYOUT?
+    ///
+    /// A comment cannot sit in the middle of a line, so showing what each stage of a
+    /// pipe produced means breaking the pipe one stage per line. `dark traces show`
+    /// and the workbench's Inspect pane want that. The LSP must not have it: its
+    /// inlay hints are found by printing twice, once with values and once without,
+    /// and zipping the two line for line, so a print that gains LINES when it gains
+    /// values yields no hints at all.
+    breakForValues: Bool }
+
+module Context =
+  // @compiler blocked: missing-implementation
+  let forBranch (branchId: Uuid) : Context =
+    Context
+      { branchId = branchId
+        currentModule = []
+        currentFunction = Stdlib.Option.Option.None
+        width = 80
+        preferredLocation = Stdlib.Option.Option.None
+        liveValues = Stdlib.Dict.empty
+        breakForValues = false }
+
+  // @compiler blocked: missing-implementation
+  val forMain = forBranch Darklang.SCM.Branch.mainBranchId
+
+  /// A context anchored at `path` (owner-first, e.g. `["Darklang", "Stdlib", "Option"]`).
+  ///
+  /// References inside a printed definition are then spelled the way someone standing in that module
+  /// would say them. Anything that knows which module it is showing should use this rather than
+  /// `forBranch`, whose `currentModule` is None and so forces every name to its full path.
+  // @compiler blocked: missing-implementation
+  let forModule (branchId: Uuid) (path: List<String>) : Context =
+    Context
+      { branchId = branchId
+        currentModule = path
+        currentFunction = Stdlib.Option.Option.None
+        width = 80
+        preferredLocation = Stdlib.Option.Option.None
+        liveValues = Stdlib.Dict.empty
+        breakForValues = false }
+
+  // @compiler blocked: missing-implementation
+  let toPickContext (ctx: Context) : LanguageTools.PackageManager.PickContext =
+    LanguageTools.PackageManager.PickContext
+      { currentModule = ctx.currentModule
+        preferredLocation = ctx.preferredLocation }
+
+// @compiler blocked: missing-implementation
+let packageNameWithContext
+  (ctx: Context)
+  (owner: String)
+  (modules: List<String>)
+  (name: String)
+  : String =
+  PrettyPrinter.shortenName ctx.currentModule owner modules name
+
+
+// CLEANUP: this function exists for backwards compatibility
+// Prefer using packageNameWithContext with a proper Context
+// @compiler blocked: missing-implementation
+let packageName
+  (owner: String)
+  (modules: List<String>)
+  (name: String)
+  : String =
+  packageNameWithContext Context.forMain owner modules name
+
+
+module FQTypeName =
+  module Package =
+    // @compiler blocked: missing-implementation
+    let atDefinition
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQTypeName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Type.locations ctx.branchId hash) with
+      | Some l -> l.name
+      | None -> shortHash hash
+
+    // @compiler blocked: missing-implementation
+    let fullForReference
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQTypeName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Type.locations ctx.branchId hash) with
+      | Some l ->
+        packageNameWithContext ctx l.owner l.modules l.name
+      | None -> shortHash hash
+
+
+  // @compiler blocked: missing-implementation
+  let fullForReference
+    (ctx: Context)
+    (t: LanguageTools.ProgramTypes.FQTypeName.FQTypeName)
+    : String =
+    match t with
+    | Package p ->
+      FQTypeName.Package.fullForReference ctx p
+
+
+module FQTraitName =
+  module Package =
+    // @compiler blocked: missing-implementation
+    let atDefinition
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQTraitName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Trait.locations ctx.branchId hash) with
+      | Some l -> l.name
+      | None -> shortHash hash
+
+    // @compiler blocked: missing-implementation
+    let fullForReference
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQTraitName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Trait.locations ctx.branchId hash) with
+      | Some l -> packageNameWithContext ctx l.owner l.modules l.name
+      | None -> shortHash hash
+
+
+module FQValueName =
+  module Builtin =
+    // @compiler blocked: missing-implementation
+    let fullForReference
+      (t: LanguageTools.ProgramTypes.FQValueName.Builtin)
+      : String =
+      let namePart = t.name
+
+      let versionPart =
+        if t.version == 0l then
+          ""
+        else
+          $"_v{Stdlib.toString t.version}"
+
+      $"Builtin.{namePart}{versionPart}"
+
+
+  module Package =
+    // @compiler blocked: missing-implementation
+    let atDefinition
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQValueName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Value.locations ctx.branchId hash) with
+      | Some l -> l.name
+      | None -> shortHash hash
+
+    // @compiler blocked: missing-implementation
+    let fullForReference
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQValueName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Value.locations ctx.branchId hash) with
+      | Some l ->
+        packageNameWithContext ctx l.owner l.modules l.name
+      | None -> shortHash hash
+
+
+
+  // @compiler blocked: missing-implementation
+  let fullForReference
+    (ctx: Context)
+    (t: LanguageTools.ProgramTypes.FQValueName.FQValueName)
+    : String =
+    match t with
+    | Builtin b ->
+      FQValueName.Builtin.fullForReference b
+    | Package p ->
+      FQValueName.Package.fullForReference ctx p
+
+
+module FQFnName =
+  module Builtin =
+    // @compiler blocked: missing-implementation
+    let fullForReference
+      (t: LanguageTools.ProgramTypes.FQFnName.Builtin)
+      : String =
+      let namePart = t.name
+
+      let versionPart =
+        if t.version == 0l then
+          ""
+        else
+          $"_v{Stdlib.toString t.version}"
+
+      $"Builtin.{namePart}{versionPart}"
+
+
+  module Package =
+    // @compiler blocked: missing-implementation
+    let atDefinition
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQFnName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Function.locations ctx.branchId hash) with
+      | Some l -> l.name
+      | None -> shortHash hash
+
+    // @compiler blocked: missing-implementation
+    let fullForReference
+      (ctx: Context)
+      (hash: LanguageTools.ProgramTypes.FQFnName.Package)
+      : String =
+      match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.Function.locations ctx.branchId hash) with
+      | Some l ->
+        packageNameWithContext ctx l.owner l.modules l.name
+      | None -> shortHash hash
+
+
+  // @compiler blocked: missing-implementation
+  let fullForReference
+    (ctx: Context)
+    (t: LanguageTools.ProgramTypes.FQFnName.FQFnName)
+    : String =
+    match t with
+    | Builtin b ->
+      FQFnName.Builtin.fullForReference b
+    | Package p ->
+      FQFnName.Package.fullForReference ctx p
+    | TraitMethod tm ->
+      // A trait's hash is not a type's, so it needs the trait's own locations. The RT printer
+      // already knew this; without it a trait method prints as a 64-character hash.
+      $"{FQTraitName.Package.fullForReference ctx tm.trait_}.{tm.method_}"
+
+
+/// Display helpers for NameResolution.
+///
+/// Package refs always carry their location (captured at resolve time,
+/// kept current by AstTransformer across renames). If `location` is None
+/// on a Package ref, something upstream skipped the resolver — we print
+/// the raw hash so the anomaly is visible rather than papered over.
+module NameResolution =
+  // @compiler blocked: missing-implementation
+  let typeName
+    (ctx: Context)
+    (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTypeName.FQTypeName>)
+    : String =
+    match nr.resolved with
+    | Ok r ->
+      match r.name with
+      | Package hash ->
+        match r.location with
+        | Some loc -> packageNameWithContext ctx loc.owner loc.modules loc.name
+        | None -> Darklang.LanguageTools.ProgramTypes.hashToString hash
+    | Error _ -> NameResolutionError.source nr.originalName
+
+  // @compiler blocked: missing-implementation
+  let traitName
+    (ctx: Context)
+    (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTraitName.FQTraitName>)
+    : String =
+    match nr.resolved with
+    | Ok r ->
+      match r.name with
+      | Package hash ->
+        match r.location with
+        | Some loc -> packageNameWithContext ctx loc.owner loc.modules loc.name
+        | None -> Darklang.LanguageTools.ProgramTypes.hashToString hash
+    | Error _ -> NameResolutionError.source nr.originalName
+
+  // @compiler blocked: missing-implementation
+  let fnName
+    (ctx: Context)
+    (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQFnName.FQFnName>)
+    : String =
+    match nr.resolved with
+    | Ok r ->
+      match r.name with
+      | Builtin b -> FQFnName.Builtin.fullForReference b
+      | Package hash ->
+        match r.location with
+        | Some loc -> packageNameWithContext ctx loc.owner loc.modules loc.name
+        | None -> Darklang.LanguageTools.ProgramTypes.hashToString hash
+      | TraitMethod tm ->
+        // The location is the TRAIT's; the method is a field of it. Which implementation it
+        // resolved to is not printed: the source said `Show.show`, and that is still what it
+        // means; `dark view --resolved` is where a hash belongs.
+        match r.location with
+        | Some loc ->
+          (packageNameWithContext ctx loc.owner loc.modules loc.name) + "." + tm.method_
+        | None ->
+          (Darklang.LanguageTools.ProgramTypes.hashToString tm.trait_) + "." + tm.method_
+    | Error _ -> NameResolutionError.source nr.originalName
+
+  // @compiler blocked: missing-implementation
+  let valueName
+    (ctx: Context)
+    (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQValueName.FQValueName>)
+    : String =
+    match nr.resolved with
+    | Ok r ->
+      match r.name with
+      | Builtin b -> FQValueName.Builtin.fullForReference b
+      | Package hash ->
+        match r.location with
+        | Some loc -> packageNameWithContext ctx loc.owner loc.modules loc.name
+        | None -> Darklang.LanguageTools.ProgramTypes.hashToString hash
+    | Error _ -> NameResolutionError.source nr.originalName
+
+
+/// Render a type reference, parenthesizing function types when required.
+// @compiler blocked: missing-implementation
+let typeReferenceDocWithFnParens
+  (ctx: Context)
+  (fnNeedsParens: Bool)
+  (t: LanguageTools.ProgramTypes.TypeReference)
+  : Stdlib.Pretty.Doc =
+  let txt = Stdlib.Pretty.text
+
+  let angled (name: String) (inners: List<Stdlib.Pretty.Doc>) : Stdlib.Pretty.Doc =
+    Stdlib.Pretty.concat
+      (txt name)
+      (wrapExprs "<" ">" "," Stdlib.Pretty.softLine inners)
+
+  match t with
+  | TStream inner -> angled "Stream" [ typeReferenceDocWithFnParens ctx false inner ]
+  | TList inner -> angled "List" [ typeReferenceDocWithFnParens ctx false inner ]
+  | TDict(key, value) ->
+    angled
+      "Dict"
+      [ typeReferenceDocWithFnParens ctx false key
+        typeReferenceDocWithFnParens ctx false value ]
+
+  | TTuple(first, second, theRest) ->
+    let parts =
+      (Stdlib.List.append [ first, second ] theRest)
+      // Preserve function types nested in the tuple.
+      |> Stdlib.List.map (fun item -> typeReferenceDocWithFnParens ctx true item)
+    let separator = Stdlib.Pretty.concat (txt " *") Stdlib.Pretty.line
+    Stdlib.Pretty.group (parens (Stdlib.Pretty.join parts separator))
+
+  | TCustomType(typ, args) ->
+    let head = txt (NameResolution.typeName ctx typ)
+    match args with
+    | [] -> head
+    | args ->
+      Stdlib.Pretty.concat
+        head
+        (wrapExprs
+          "<"
+          ">"
+          ","
+          Stdlib.Pretty.softLine
+          (args
+           |> Stdlib.List.map (fun a ->
+             typeReferenceDocWithFnParens ctx false a)))
+
+  | TFn(args, ret) ->
+    let parts =
+      // Preserve nested functions rather than flattening the arrow chain.
+      (Stdlib.List.append args [ ret ])
+      |> Stdlib.List.map (fun a -> typeReferenceDocWithFnParens ctx true a)
+    let doc =
+      Stdlib.Pretty.group (
+        Stdlib.Pretty.join
+          parts
+          (Stdlib.Pretty.concat (txt " ->") Stdlib.Pretty.line))
+    if fnNeedsParens then parens doc else doc
+
+  | other -> txt (typeReferenceFlat ctx other)
+
+
+// @compiler blocked: missing-implementation
+let typeReferenceDoc
+  (ctx: Context)
+  (t: LanguageTools.ProgramTypes.TypeReference)
+  : Stdlib.Pretty.Doc =
+  typeReferenceDocWithFnParens ctx false t
+
+
+// @compiler blocked: missing-implementation
+let typeReferenceFlatAtPrecedence
+  (ctx: Context)
+  (fnNeedsParens: Bool)
+  (t: LanguageTools.ProgramTypes.TypeReference)
+  : String =
+  match t with
+  | TVariable varName -> "'" + varName
+
+  | TUnit -> "Unit"
+  | TBool -> "Bool"
+  | TInt8 -> "Int8"
+  | TUInt8 -> "UInt8"
+  | TInt16 -> "Int16"
+  | TUInt16 -> "UInt16"
+  | TInt32 -> "Int32"
+  | TUInt32 -> "UInt32"
+  | TInt64 -> "Int64"
+  | TUInt64 -> "UInt64"
+  | TInt128 -> "Int128"
+  | TUInt128 -> "UInt128"
+  | TInt -> "Int"
+  | TFloat -> "Float"
+  | TChar -> "Char"
+  | TString -> "String"
+  | TDateTime -> "DateTime"
+  | TUuid -> "Uuid"
+  | TBlob -> "Blob"
+
+  | TStream inner -> $"Stream<{typeReferenceFlatAtPrecedence ctx false inner}>"
+
+  | TList inner ->
+    $"List<{typeReferenceFlatAtPrecedence ctx false inner}>"
+
+  | TTuple(first, second, theRest) ->
+    (Stdlib.List.append [ first, second ] theRest)
+    |> Stdlib.List.map (fun item ->
+      typeReferenceFlatAtPrecedence ctx true item)
+    |> Stdlib.String.join " * "
+    |> fun parts -> "(" + parts + ")"
+
+  | TDict(key, value) ->
+    let k = typeReferenceFlatAtPrecedence ctx false key
+    let v = typeReferenceFlatAtPrecedence ctx false value
+    $"Dict<{k}, {v}>"
+
+  | TCustomType(typ, args) ->
+    let argsPart =
+      match args with
+      | [] -> ""
+      | args ->
+        args
+        |> Stdlib.List.map (fun arg ->
+          typeReferenceFlatAtPrecedence ctx false arg)
+        |> Stdlib.String.join ", "
+        |> fun parts -> $"<{parts}>"
+
+    let typeNamePart = NameResolution.typeName ctx typ
+
+    $"{typeNamePart}{argsPart}"
+
+  | TFn(args, ret) ->
+    let argPart =
+      args
+      |> Stdlib.List.map (fun arg ->
+        typeReferenceFlatAtPrecedence ctx true arg)
+      |> Stdlib.String.join " -> "
+
+    let rendered =
+      $"{argPart} -> {typeReferenceFlatAtPrecedence ctx true ret}"
+
+    if fnNeedsParens then $"({rendered})" else rendered
+
+
+// @compiler blocked: missing-implementation
+let typeReferenceFlat
+  (ctx: Context)
+  (t: LanguageTools.ProgramTypes.TypeReference)
+  : String =
+  typeReferenceFlatAtPrecedence ctx false t
+
+
+// @compiler blocked: missing-implementation
+let typeReference
+  (ctx: Context)
+  (t: LanguageTools.ProgramTypes.TypeReference)
+  : String =
+  typeReferenceFlat ctx t
+
+
+// @compiler blocked: missing-implementation
+let typeArgumentsDoc
+  (ctx: Context)
+  (args: List<LanguageTools.ProgramTypes.TypeReference>)
+  : Stdlib.Pretty.Doc =
+  match args with
+  | [] -> Stdlib.Pretty.empty
+  | args ->
+    let docs = args |> Stdlib.List.map (fun arg -> typeReferenceDoc ctx arg)
+    wrapExprs "<" ">" "," Stdlib.Pretty.softLine docs
+
+
+// @compiler blocked: missing-implementation
+let letPattern (lp: LanguageTools.ProgramTypes.LetPattern) : String =
+  match lp with
+  | LPUnit _id -> "()"
+  | LPVariable(_id, name) -> name
+  | LPWildcard _id -> "_"
+  | LPTuple(_id, first, second, theRest) ->
+    (Stdlib.List.append [ first, second ] theRest)
+    |> Stdlib.List.map (fun item -> letPattern item)
+    |> Stdlib.String.join ", "
+    |> fun parts -> "(" + parts + ")"
+
+// @compiler blocked: missing-implementation
+let matchPattern (mp: LanguageTools.ProgramTypes.MatchPattern) : String =
+  match mp with
+  | MPVariable(_id, name) -> name
+
+  | MPUnit _id -> "()"
+
+  | MPBool(_id, b) -> Stdlib.toString b
+
+  | MPInt8(_id, i) -> (Stdlib.toString i) + "y"
+  | MPUInt8(_id, i) -> (Stdlib.toString i) + "uy"
+  | MPInt16(_id, i) -> (Stdlib.toString i) + "s"
+  | MPUInt16(_id, i) -> (Stdlib.toString i) + "us"
+  | MPInt32(_id, i) -> (Stdlib.toString i) + "l"
+  | MPUInt32(_id, i) -> (Stdlib.toString i) + "ul"
+  | MPInt64(_id, i) -> (Stdlib.toString i) + "L"
+  | MPUInt64(_id, i) -> (Stdlib.toString i) + "UL"
+  | MPInt128(_id, i) -> (Stdlib.toString i) + "Q"
+  | MPUInt128(_id, i) -> (Stdlib.toString i) + "Z"
+  | MPInt(_id, i) -> Stdlib.toString i
+
+  | MPFloat(_id, sign, whole, remainder) ->
+    let remainderPart = PrettyPrinter.processRemainder remainder
+    $"{PrettyPrinter.sign sign}{whole}.{remainderPart}"
+
+  | MPChar(_id, c) -> $"'{PrettyPrinter.escapeCharLiteral c}'"
+  | MPString(_id, s) -> $"\"{PrettyPrinter.escapeSpecialCharacters s}\""
+
+  | MPList(_id, items) ->
+    items
+    |> Stdlib.List.map (fun item -> matchPattern item)
+    |> Stdlib.String.join ", "
+    |> fun parts -> "[" + parts + "]"
+
+  | MPListCons(_id, head, tail) ->
+    let headPart = matchPattern head
+    let tailPart = matchPattern tail
+    $"{headPart} :: {tailPart}"
+
+  | MPTuple(_, first, second, theRest) ->
+    (Stdlib.List.append [ first, second ] theRest)
+    |> Stdlib.List.map (fun item -> matchPattern item)
+    |> Stdlib.String.join ", "
+    |> fun parts -> "(" + parts + ")"
+
+  | MPEnum(_id, caseName, fieldPats) ->
+    match fieldPats with
+    | [] -> $"{caseName}"
+    | fieldPats ->
+      let fieldPart =
+        fieldPats
+        |> Stdlib.List.map (fun pat -> matchPattern pat)
+        |> Stdlib.String.join ", "
+
+      $"{caseName}({fieldPart})"
+
+  | MPOr(_id, patterns) ->
+    patterns
+    |> Stdlib.List.map (fun pat -> matchPattern pat)
+    |> Stdlib.String.join " | "
+
+
+// @compiler blocked: missing-implementation
+let binaryOperation (b: LanguageTools.ProgramTypes.BinaryOperation) : String =
+  match b with
+  // CLEANUP consider surrounding with spaces
+  | BinOpAnd -> "&&"
+  | BinOpOr -> "||"
+
+// @compiler blocked: missing-implementation
+let infixFnName (i: LanguageTools.ProgramTypes.InfixFnName) : String =
+  match i with
+  | ArithmeticPlus -> "+"
+  | ArithmeticMinus -> "-"
+  | ArithmeticMultiply -> "*"
+  | ArithmeticDivide -> "/"
+  | ArithmeticModulo -> "%"
+  | ArithmeticPower -> "**"
+  | BitwiseAnd -> "&"
+  | BitwiseOr -> "|"
+  | BitwiseXor -> "^"
+  | ShiftLeft -> "<<"
+  | ShiftRight -> ">>"
+  | ComparisonGreaterThan -> ">"
+  | ComparisonGreaterThanOrEqual -> ">="
+  | ComparisonLessThan -> "<"
+  | ComparisonLessThanOrEqual -> "<="
+  | ComparisonEquals -> "=="
+  | ComparisonNotEquals -> "!="
+  // `++` is no longer an operator; an expression stored before that prints as the `+` it now
+  // means, so what comes back out of `view` still parses.
+  | StringConcat -> "+"
+
+// @compiler blocked: missing-implementation
+let infix (i: LanguageTools.ProgramTypes.Infix) : String =
+  match i with
+  | InfixFnCall i -> infixFnName i
+  | BinOp b -> binaryOperation b
+
+// @compiler blocked: missing-implementation
+let stringSegment (ctx: Context) (s: LanguageTools.ProgramTypes.StringSegment) : String =
+  match s with
+  // Inside `$"..."` a brace opens an interpolation, so a literal one is written doubled.
+  | StringText text ->
+    PrettyPrinter.escapeSpecialCharacters text
+    |> fun t -> Stdlib.String.replaceAll t "{" "{{"
+    |> fun t -> Stdlib.String.replaceAll t "}" "}}"
+  | StringInterpolation interpolationExpr -> $"{{{expr ctx interpolationExpr}}}"
+
+/// Parenthesize a Doc and indent its broken layout past the opening paren.
+// @compiler blocked: missing-implementation
+let parens (d: Stdlib.Pretty.Doc) : Stdlib.Pretty.Doc =
+  Stdlib.Pretty.concat
+    (Stdlib.Pretty.text "(")
+    (Stdlib.Pretty.concat (Stdlib.Pretty.nest 1 d) (Stdlib.Pretty.text ")"))
+
+
+/// Render an application argument with any required parentheses.
+// @compiler blocked: missing-implementation
+let applyArg (ctx: Context) (arg: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.Doc =
+  let inner = exprDoc ctx arg
+  if applyArgNeedsParens arg then parens inner else inner
+
+
+/// The ` // = value` a live value adds after an expression, or nothing at all.
+///
+/// Zero columns wide for layout (`Styled` measures only its middle), so adding one
+/// never moves the code it sits after.
+// @compiler blocked: missing-implementation
+let valueSuffix (ctx: Context) (id: Int64) : Stdlib.Pretty.Doc =
+  match Stdlib.Dict.get ctx.liveValues (Stdlib.toString id) with
+  // A line suffix, not inline text: a `)` or `,` the enclosing expression prints after this
+  // call has to land before the comment, not inside it.
+  | Some value -> Stdlib.Pretty.lineSuffix $" // = {value}"
+  | None -> Stdlib.Pretty.text ""
+
+
+/// A pipe stage's own expression id, which is what its value is keyed by. Every
+/// stage carries one through the desugaring (`EPipeFnCall(id, ...)` becomes
+/// `EApply(id, ...)`), which is why the values are already there to print.
+// @compiler blocked: missing-implementation
+let pipeExprId (p: LanguageTools.ProgramTypes.PipeExpr) : Int64 =
+  match p with
+  | EPipeVariable(id, _, _) -> id
+  | EPipeLambda(id, _, _) -> id
+  | EPipeInfix(id, _, _, _) -> id
+  | EPipeFnCall(id, _, _, _, _) -> id
+  | EPipeEnum(id, _, _, _) -> id
+
+
+// @compiler blocked: missing-implementation
+let pipeExprDoc (ctx: Context) (p: LanguageTools.ProgramTypes.PipeExpr) : Stdlib.Pretty.Doc =
+  let txt (s: String) : Stdlib.Pretty.Doc = Stdlib.Pretty.text s
+
+  let applied (head: Stdlib.Pretty.Doc) (args: List<LanguageTools.ProgramTypes.Expr>) : Stdlib.Pretty.Doc =
+    match args with
+    | [] -> head
+    | args -> Stdlib.Pretty.hang 2 head (args |> Stdlib.List.map (fun a -> applyArg ctx a))
+
+  match p with
+  | EPipeVariable(_id, varName, exprs) ->
+    match exprs with
+    | [] -> txt varName
+    | exprs -> parens (applied (txt varName) exprs)
+
+  | EPipeLambda(_id, pats, body) ->
+    let argsPart =
+      pats
+      |> Stdlib.List.map (fun lp -> letPattern lp)
+      |> Stdlib.String.join " "
+
+    // A bare lambda would swallow the remaining pipe stages.
+    parens (
+      Stdlib.Pretty.hang 2 (txt $"fun {argsPart} ->") [ exprDoc ctx body ])
+
+  | EPipeInfix(_id, infixOp, e, _) ->
+    Stdlib.Pretty.concat (txt $"({infix infixOp}) ") (applyArg ctx e)
+
+  | EPipeFnCall(_id, fnName, typeArgs, args, _) ->
+    let fnNamePart = NameResolution.fnName ctx fnName
+    let head =
+      Stdlib.Pretty.concat (txt fnNamePart) (typeArgumentsDoc ctx typeArgs)
+    applied head args
+
+  | EPipeEnum(_id, typeName, caseName, fields) ->
+    let typeNamePart = NameResolution.typeName ctx typeName
+    let head = txt $"{typeNamePart}.{caseName}"
+
+    // Multiple fields share one paren pair: `Case(a, b)`.
+    match fields with
+    | [] -> head
+    | fields ->
+      let parts = fields |> Stdlib.List.map (fun f -> exprDoc ctx f)
+      Stdlib.Pretty.concat head (wrapExprs "(" ")" "," Stdlib.Pretty.softLine parts)
+
+
+/// Text that may already contain newlines, as a Doc.
+///
+/// Splitting on the newlines matters: a `Text` holding one would be measured as though it were a single
+/// long line, so an enclosing group could decide it fits and then emit something several lines tall.
+/// As `hardLine`s, the group is forced to break, which is the truth.
+// @compiler blocked: missing-implementation
+let docOfText (s: String) : Stdlib.Pretty.Doc =
+  s
+  |> Stdlib.String.split "\n"
+  |> Stdlib.List.map (fun l -> Stdlib.Pretty.text l)
+  |> Stdlib.Pretty.join Stdlib.Pretty.hardLine
+
+
+/// Binding power of an infix operator, and whether it associates right.
+///
+/// Mirrors `infixBindingPower` in `LibParser/Parser.fs`, loosest to tightest:
+///   1 `||`  2 `&&`  3 comparisons  4 `|`  5 `^`  6 `&`  7 `<< >>`  8 `@` (right)
+///   9 `+ -`  10 `* / %`  11 `**` (right)
+/// If that table moves, this has to move with it, or the printer starts emitting parens that change
+/// what the parser builds.
+// @compiler blocked: missing-implementation
+let infixPower (i: LanguageTools.ProgramTypes.Infix) : (Int * Bool) =
+  match i with
+  | BinOp BinOpOr -> (1, false)
+  | BinOp BinOpAnd -> (2, false)
+  | InfixFnCall op ->
+    match op with
+    | ComparisonEquals
+    | ComparisonNotEquals
+    | ComparisonLessThan
+    | ComparisonGreaterThan
+    | ComparisonLessThanOrEqual
+    | ComparisonGreaterThanOrEqual -> (3, false)
+    | BitwiseOr -> (4, false)
+    | BitwiseXor -> (5, false)
+    | BitwiseAnd -> (6, false)
+    | ShiftLeft
+    | ShiftRight -> (7, false)
+    | ArithmeticPlus
+    | ArithmeticMinus
+    | StringConcat -> (9, false)
+    | ArithmeticMultiply
+    | ArithmeticDivide
+    | ArithmeticModulo -> (10, false)
+    | ArithmeticPower -> (11, true)
+
+
+/// How tightly an expression binds, for deciding whether it needs parentheses inside a larger one.
+///
+/// 0 is for the constructs that swallow whatever follows them -- an `if`, a `match`, a lambda -- which
+/// always need wrapping when they appear inside something else. 100 is everything self-delimiting: a
+/// literal, a variable, a record, an application. Application binds tighter than any operator, so
+/// `factorial n * 2L` needs no parens around the call, which is the main thing the old printer got
+/// wrong by bracketing every operand unconditionally.
+// @compiler blocked: missing-implementation
+let exprPower (e: LanguageTools.ProgramTypes.Expr) : Int =
+  match e with
+  | EInfix(_, op, _, _, _) ->
+    let (p, _) = infixPower op
+    p
+  | EIf(_, _, _, _) -> 0
+  | EMatch(_, _, _) -> 0
+  | ELet(_, _, _, _) -> 0
+  | ELambda(_, _, _) -> 0
+  | EPipe(_, _, _) -> 0
+  | EStatement(_, _, _) -> 0
+  | _ -> 100
+
+
+/// Whether an operand of an infix expression has to be parenthesised.
+///
+/// Looser than its parent always does. At equal power it depends on the side: `a - b - c` groups left,
+/// so a right operand of the same power needs parens to mean anything else; `2 ** 3 ** 2` groups right,
+/// so the left one does.
+// @compiler blocked: missing-implementation
+let infixOperandNeedsParens
+  (operand: LanguageTools.ProgramTypes.Expr)
+  (parentPower: Int)
+  (parentIsRightAssoc: Bool)
+  (isRightOperand: Bool)
+  : Bool =
+  let p = exprPower operand
+
+  if p < parentPower then
+    true
+  else if p == parentPower then
+    if parentIsRightAssoc then Stdlib.Bool.not isRightOperand else isRightOperand
+  else
+    false
+
+
+/// Does printing `e` leave a bitwise-or bare in a match-arm body?
+// @compiler blocked: missing-implementation
+let hasBareBitwiseOr (e: LanguageTools.ProgramTypes.Expr) : Bool =
+  match e with
+  | EInfix(_, InfixFnCall BitwiseOr, _, _, _) -> true
+
+  | EInfix(_, op, left, right, _) ->
+    let (power, rightAssoc) = infixPower op
+
+    let bareSide (operand: LanguageTools.ProgramTypes.Expr) (isRight: Bool) : Bool =
+      if infixOperandNeedsParens operand power rightAssoc isRight then
+        false
+      else
+        hasBareBitwiseOr operand
+
+    (bareSide left false) || (bareSide right true)
+
+  | EIf(_, cond, thenExpr, elseExpr) ->
+    (hasBareBitwiseOr cond)
+    || (hasBareBitwiseOr thenExpr)
+    || (match elseExpr with
+        | Some e -> hasBareBitwiseOr e
+        | None -> false)
+
+  | ELet(_, _, rhs, body) -> (hasBareBitwiseOr rhs) || (hasBareBitwiseOr body)
+
+  | EStatement(_, first, next) -> (hasBareBitwiseOr first) || (hasBareBitwiseOr next)
+
+  | ELambda(_, _, body) -> hasBareBitwiseOr body
+
+  // A nested match prints its own arms on their own rows, indented past this one,
+  // so only its SUBJECT shares a line with the enclosing arm.
+  | EMatch(_, arg, _) -> hasBareBitwiseOr arg
+
+  // A pipe's segments are each `|> …`; a bare `|` can only come from the head.
+  | EPipe(_, first, _) -> hasBareBitwiseOr first
+
+  | _ -> false
+
+
+/// Whether an argument in an application has to be parenthesised.
+///
+/// Application is left-associative and binds tightest, so anything that isn't self-delimiting has to be
+/// wrapped or it would be read as further arguments: `f (g x)`, `f (a + b)`, `f (fun x -> x)`.
+// @compiler blocked: missing-implementation
+let applyArgNeedsParens (arg: LanguageTools.ProgramTypes.Expr) : Bool =
+  match arg with
+  | EApply(_, _, _, _) -> true
+  // A lambda prints its own parentheses, so wrapping it again just gives `((fun x -> ...))`.
+  | ELambda(_, _, _) -> false
+  | _ -> (exprPower arg) < 100
+
+
+/// `opening parts... closing`, on one line if it fits and one part per line if it doesn't.
+///
+/// `opener` decides whether the delimiters hug: `softLine` for brackets (`[1, 2]`), `line` for braces
+/// (`{ a = 1 }`). `sep` stays in the output either way, so the broken form still parses.
+// @compiler blocked: missing-implementation
+let wrapExprs
+  (opening: String)
+  (closing: String)
+  (sep: String)
+  (opener: Stdlib.Pretty.Doc)
+  (parts: List<Stdlib.Pretty.Doc>)
+  : Stdlib.Pretty.Doc =
+  match parts with
+  | [] -> Stdlib.Pretty.text (opening + closing)
+  | parts ->
+    let separated =
+      Stdlib.Pretty.join
+        parts
+        (Stdlib.Pretty.concat (Stdlib.Pretty.text sep) Stdlib.Pretty.line)
+
+    Stdlib.Pretty.group (
+      Stdlib.Pretty.concat
+        (Stdlib.Pretty.text opening)
+        (Stdlib.Pretty.concat
+          (Stdlib.Pretty.nest 2 (Stdlib.Pretty.concat opener separated))
+          (Stdlib.Pretty.concat opener (Stdlib.Pretty.text closing))))
+
+
+/// An expression as a Doc: the layouts it could take, for the caller to choose between.
+///
+/// Ported construct by construct. Anything not yet ported falls back to `exprString`, whose output is
+/// spliced in via `docOfText` so it still forces enclosing groups to break correctly -- an unported
+/// child can't make its parent claim to fit.
+// @compiler blocked: missing-implementation
+let exprDoc (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.Doc =
+  let txt (s: String) : Stdlib.Pretty.Doc = Stdlib.Pretty.text s
+
+  match e with
+  // `let x = 1` on one line when it fits; the old printer always broke after the `=`, which turned
+  // every binding into two lines and a chain of four into eight.
+  | ELet(_id, pattern, rhs, body) ->
+    let binding =
+      Stdlib.Pretty.hang 2 (txt $"let {letPattern pattern} =") [ lineDoc ctx rhs ]
+
+    Stdlib.Pretty.concat
+      binding
+      (Stdlib.Pretty.concat Stdlib.Pretty.hardLine (lineDoc ctx body))
+
+  // `| Some v -> Some(fn v)` on the arm's own line when it fits.
+  | EMatch(_id, arg, cases) ->
+    let arms =
+      cases
+      |> Stdlib.List.map (fun case ->
+        let whenPart =
+          match case.whenCondition with
+          | Some cond -> $" when {expr ctx cond}"
+          | None -> ""
+
+        // A bare `|` in the body would be read back as the next ARM, so wrap it.
+        let body =
+          if hasBareBitwiseOr case.rhs then
+            parens (exprDoc ctx case.rhs)
+          else
+            lineDoc ctx case.rhs
+
+        Stdlib.Pretty.group (
+          Stdlib.Pretty.concat
+            (txt $"| {matchPattern case.pat}{whenPart} ->")
+            (Stdlib.Pretty.nest 2 (Stdlib.Pretty.concat Stdlib.Pretty.line body))))
+      |> Stdlib.Pretty.join Stdlib.Pretty.hardLine
+
+    Stdlib.Pretty.concat
+      (txt $"match {expr ctx arg} with")
+      (Stdlib.Pretty.concat Stdlib.Pretty.hardLine arms)
+
+  // `if c then a else b` on one line when it fits. An `else if` chain keeps the `else if` together
+  // rather than indenting a whole nested if under it.
+  | EIf(_id, cond, thenBranch, elseBranch) ->
+    // `if a then if b then c else d` is ambiguous on one line: the parser attaches `else d` to
+    // the inner `if`, even if it was written for the outer one. Breaking the outer `if` puts
+    // `else` on its own line at the outer `if`'s indentation, which the parser reads correctly.
+    let thenSep =
+      match thenBranch with
+      | EIf(_, _, _, _) -> Stdlib.Pretty.hardLine
+      | _ -> Stdlib.Pretty.line
+
+    let head =
+      Stdlib.Pretty.concat
+        (txt $"if {expr ctx cond} then")
+        (Stdlib.Pretty.nest 2 (Stdlib.Pretty.concat thenSep (exprDoc ctx thenBranch)))
+
+    match elseBranch with
+    | None -> Stdlib.Pretty.group head
+    | Some eb ->
+      match eb with
+      | EIf(_, _, _, _) ->
+        Stdlib.Pretty.group (
+          Stdlib.Pretty.concat
+            head
+            (Stdlib.Pretty.concat
+              Stdlib.Pretty.line
+              (Stdlib.Pretty.concat (txt "else ") (exprDoc ctx eb))))
+      | _ ->
+        Stdlib.Pretty.group (
+          Stdlib.Pretty.concat
+            head
+            (Stdlib.Pretty.concat
+              Stdlib.Pretty.line
+              (Stdlib.Pretty.concat
+                (txt "else")
+                (Stdlib.Pretty.nest 2 (
+                  Stdlib.Pretty.concat Stdlib.Pretty.line (exprDoc ctx eb))))))
+
+  // `xs |> List.length` on one line when it fits; longer chains keep one stage per line.
+  | EPipe(_id, e, pipeExprs) ->
+    // Each stage carries its own value, which is the thing you actually want from a
+    // pipe: what came out of step two, not only what the whole thing answered.
+    //
+    // Only where the layout may change, though. A comment cannot sit in the middle
+    // of a line, so annotating the stages means one stage per line, and a caller
+    // that needs the lines to stay put (the LSP) gets the pipe exactly as it printed
+    // before.
+    let annotate =
+      ctx.breakForValues
+      && (pipeExprs
+          |> Stdlib.List.any (fun pe ->
+            let key = Stdlib.toString (pipeExprId pe)
+            Stdlib.Option.isSome (Stdlib.Dict.get ctx.liveValues key)))
+
+    let stages =
+      pipeExprs
+      |> Stdlib.List.map (fun pe ->
+        let stage = Stdlib.Pretty.concat (txt "|> ") (pipeExprDoc ctx pe)
+
+        if annotate then
+          Stdlib.Pretty.concat stage (valueSuffix ctx (pipeExprId pe))
+        else
+          stage)
+      // A hard line, not a soft one, on the annotated path: a soft line is only a
+      // break if the group it is in decides to break, and an `// = value` is zero
+      // columns wide, so an enclosing group would happily flatten the pipe back onto
+      // one line with the comments swallowing it.
+      |> Stdlib.Pretty.join (
+        if annotate then Stdlib.Pretty.hardLine else Stdlib.Pretty.line)
+
+    // Low-power heads would swallow the pipe into their final branch.
+    let head =
+      match e with
+      | ELambda(_, _, _) -> exprDoc ctx e
+      | _ -> if (exprPower e) == 0 then parens (exprDoc ctx e) else exprDoc ctx e
+
+    let sep =
+      if annotate then Stdlib.Pretty.hardLine else Stdlib.Pretty.line
+
+    let doc = Stdlib.Pretty.concat head (Stdlib.Pretty.concat sep stages)
+
+    // Grouping is what lets a short pipe sit on one line, which is where a comment
+    // would eat the rest of it.
+    if annotate then doc else Stdlib.Pretty.group doc
+
+  // Parenthesise only where precedence or associativity requires it. The old printer wrapped both
+  // operands unconditionally, which turned `n * (factorial n - 1L)` into `(n) * ((factorial n) - (1L))`
+  // and meant printing its own output kept adding brackets.
+  | EInfix(_id, infixOp, left, right, _) ->
+    let (power, rightAssoc) = infixPower infixOp
+
+    let side (e: LanguageTools.ProgramTypes.Expr) (isRight: Bool) : Stdlib.Pretty.Doc =
+      let inner = exprDoc ctx e
+
+      if infixOperandNeedsParens e power rightAssoc isRight then
+        parens inner
+      else
+        inner
+
+    Stdlib.Pretty.group (
+      Stdlib.Pretty.concat
+        (side left false)
+        (Stdlib.Pretty.concat
+          (txt $" {infix infixOp} ")
+          (side right true)))
+
+  | EApply(_id, fnName, typeArgs, args) ->
+    let head =
+      Stdlib.Pretty.concat (exprDoc ctx fnName) (typeArgumentsDoc ctx typeArgs)
+
+    let argDocs = args |> Stdlib.List.map (fun arg -> applyArg ctx arg)
+
+    match argDocs with
+    | [] -> head
+    | argDocs ->
+      Stdlib.Pretty.hang
+        2
+        head
+        argDocs
+
+  // Collections: one line when they fit, one element per line when they don't. They never broke before,
+  // at any length, so a forty-element list was a single four-hundred-column line.
+  //
+  // Brackets hug their contents (`softLine`, so `[1, 2]` gains no inner spaces) while braces keep theirs
+  // (`line`, so a record reads `T { a = 1 }`). Separators stay explicit either way, which is what makes
+  // the broken form parse back.
+  | EList(_id, items) ->
+    let parts = items |> Stdlib.List.map (fun i -> exprDoc ctx i)
+    wrapExprs "[" "]" "," Stdlib.Pretty.softLine parts
+
+  | ETuple(_id, first, second, theRest) ->
+    let parts =
+      (Stdlib.List.append [ first, second ] theRest)
+      |> Stdlib.List.map (fun i -> exprDoc ctx i)
+    wrapExprs "(" ")" "," Stdlib.Pretty.softLine parts
+
+  | ERecord(_id, typeName, typeArgs, fields) ->
+    let parts =
+      fields
+      |> Stdlib.List.map (fun pair ->
+        let (name, value) = pair
+        Stdlib.Pretty.concat
+          (txt $"{PrettyPrinter.formatFieldName name} = ")
+          (exprDoc ctx value))
+
+    let head =
+      Stdlib.Pretty.concat
+        (txt (NameResolution.typeName ctx typeName))
+        (Stdlib.Pretty.concat (typeArgumentsDoc ctx typeArgs) (txt " "))
+
+    Stdlib.Pretty.concat head (wrapExprs "{" "}" "," Stdlib.Pretty.line parts)
+
+  // Dicts and enum payloads break like the other collections. A lambda's body is nested and hard-lined,
+  // since `fun x ->` followed by its body on the same line only reads well when the body is tiny, and
+  // the group above it already decides that. `EStatement` is always a hard line: that is what it means.
+  | EDict(_id, pairs) ->
+    let parts =
+      pairs
+      |> Stdlib.List.map (fun pair ->
+        let (key, value) = pair
+        Stdlib.Pretty.concat
+          (Stdlib.Pretty.concat (exprDoc ctx key) (txt ": "))
+          (exprDoc ctx value))
+
+    Stdlib.Pretty.concat (txt "Dict ") (wrapExprs "{" "}" "," Stdlib.Pretty.line parts)
+
+  | EEnum(_id, typeName, typeArgs, caseName, fields) ->
+    let typeNamePart = NameResolution.typeName ctx typeName
+
+    // A bare, unqualified case (no type name) prints as just the case name; the `.` only separates a
+    // present type name from its case.
+    let sep = if typeNamePart == "" then "" else "."
+    let head =
+      Stdlib.Pretty.concat
+        (txt typeNamePart)
+        (Stdlib.Pretty.concat
+          (typeArgumentsDoc ctx typeArgs)
+          (txt $"{sep}{caseName}"))
+
+    match fields with
+    | [] -> head
+    | fields ->
+      let parts = fields |> Stdlib.List.map (fun f -> exprDoc ctx f)
+      Stdlib.Pretty.concat head (wrapExprs "(" ")" "," Stdlib.Pretty.softLine parts)
+
+  | ELambda(_id, pats, body) ->
+    let patsPart =
+      pats
+      |> Stdlib.List.map (fun pat -> letPattern pat)
+      |> Stdlib.String.join " "
+
+    // Grouped, so a short lambda stays on one line. It used to break unconditionally, which cost two
+    // lines for `(fun x -> x + 1L)` and pushed the body of every `List.map` down a line for nothing.
+    // The closing paren goes after a SOFT line, which is nothing when the lambda fits on one
+    // line and a break when it does not. It has to be there: a multi-line body ends with an
+    // expression that `lineDoc` may annotate, and a bare `)` after that annotation lands inside
+    // the comment -- `Stdlib.String.length line // = 14)` -- so the rendered code is wrong and
+    // will not parse.
+    //
+    // Soft rather than conditional on whether there ARE values: the editor's inlay hints print
+    // this twice, once with values and once without, and zip the two line for line. A break
+    // that appears only when a value does would shift every line below it in one of the two.
+    Stdlib.Pretty.group (
+      Stdlib.Pretty.concat
+        (txt $"(fun {patsPart} ->")
+        (Stdlib.Pretty.concat
+          (Stdlib.Pretty.nest 2 (
+            Stdlib.Pretty.concat Stdlib.Pretty.line (exprDoc ctx body)))
+          (Stdlib.Pretty.concat Stdlib.Pretty.softLine (txt ")"))))
+
+  | EStatement(_id, first, next) ->
+    Stdlib.Pretty.concat
+      (lineDoc ctx first)
+      (Stdlib.Pretty.concat Stdlib.Pretty.hardLine (lineDoc ctx next))
+
+  | e -> docOfText (exprString ctx e)
+
+
+/// An expression that ends its line: a `let`'s right-hand side, a block's last expression, a
+/// statement, a match arm's body. When the editor has a live value for the call there, it goes
+/// after the code as `// = value`. Only here: a value beside a call nested in an argument or an
+/// interpolated string would land in the middle of the code, and the comment would eat the rest
+/// of the line (`if c then f x // = 1 else g` loses its `else`). A call anywhere else is printed
+/// bare.
+// @compiler blocked: missing-implementation
+let lineDoc (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.Doc =
+  let doc = exprDoc ctx e
+
+  match e with
+  | EApply(id, _, _, _) -> Stdlib.Pretty.concat doc (valueSuffix ctx id)
+  // An infix expression is a call and reads as one: `let total = price * qty // = 140`.
+  // Its value was not recorded at all until PT2RT started emitting a trace instruction for
+  // it, so there was nothing to print here and the arm did not exist.
+  | EInfix(id, _, _, _, _) -> Stdlib.Pretty.concat doc (valueSuffix ctx id)
+  | _ -> doc
+
+
+// @compiler blocked: missing-implementation
+let expr (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
+  Stdlib.Pretty.render ctx.width (exprDoc ctx e)
+
+
+/// `expr`, for a function's whole body: the body's last expression ends a line, so a live value
+/// for it is shown.
+// @compiler blocked: missing-implementation
+let bodyExpr (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
+  Stdlib.Pretty.render ctx.width (lineDoc ctx e)
+
+
+/// The original string-building printer, still handling every construct the Doc layer hasn't taken over.
+// @compiler blocked: missing-implementation
+let exprString (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
+  match e with
+  | EUnit _id -> "()"
+
+  | EBool(_id, b) -> Stdlib.toString b
+
+  | EInt8(_id, i) -> Stdlib.toString i + "y"
+  | EUInt8(_id, i) -> Stdlib.toString i + "uy"
+  | EInt16(_id, i) -> Stdlib.toString i + "s"
+  | EUInt16(_id, i) -> Stdlib.toString i + "us"
+  | EInt32(_id, i) -> Stdlib.toString i + "l"
+  | EUInt32(_id, i) -> Stdlib.toString i + "ul"
+  | EInt64(_id, i) -> (Stdlib.toString i) + "L"
+  | EUInt64(_id, i) -> (Stdlib.toString i) + "UL"
+  | EInt128(_id, i) -> Stdlib.toString i + "Q"
+  | EUInt128(_id, i) -> Stdlib.toString i + "Z"
+  | EInt(_id, i) -> Stdlib.toString i
+
+  | EFloat(_id, sign, whole, remainder) ->
+    let signPart = PrettyPrinter.sign sign
+    let remainderPart = PrettyPrinter.processRemainder remainder
+    $"{signPart}{whole}.{remainderPart}"
+
+  | EChar(_id, c) -> "'" + (PrettyPrinter.escapeCharLiteral c) + "'"
+
+  | EString(_id, segments) ->
+    match segments with
+    | [] -> "\"\""
+    | [ StringText text ] -> $"\"{PrettyPrinter.escapeSpecialCharacters text}\""
+    | segments ->
+      let inner =
+        segments
+        |> Stdlib.List.map (fun segment -> stringSegment ctx segment)
+        |> Stdlib.String.join ""
+      $"$\"{inner}\""
+
+
+  // structures of data
+  | EDict(_id, pairs) ->
+    let pairPart =
+      pairs
+      |> Stdlib.List.map (fun pair ->
+        let (key, value) = pair
+        $"{expr ctx key}: {expr ctx value}")
+      |> Stdlib.String.join ", "
+      |> fun parts -> "{ " + parts + " }"
+
+    $"Dict {pairPart}"
+
+
+  | EEnum(_id, typeName, typeArgs, caseName, fields) ->
+    let typeNamePart = NameResolution.typeName ctx typeName
+
+    let typeArgsPart =
+      match typeArgs with
+      | [] -> ""
+      | _ ->
+        typeArgs
+        |> Stdlib.List.map (fun typeArg ->
+          typeReference ctx typeArg)
+        |> Stdlib.String.join ", "
+        |> fun parts -> $"<{parts}>"
+
+    // A bare, unqualified enum case (no type name) prints as just the case name —
+    // e.g. an unresolved `TestDB` — not `.TestDB`. The leading `.` only separates a
+    // present type name from its case (`Result.Ok`, `Generic<Int64>.A`).
+    let sep = if typeNamePart == "" then "" else "."
+
+    match fields with
+    | [] -> $"{typeNamePart}{typeArgsPart}{sep}{caseName}"
+    | fields ->
+      let fieldPart =
+        fields
+        |> Stdlib.List.map (fun field -> expr ctx field)
+        |> Stdlib.String.join ", "
+      $"{typeNamePart}{typeArgsPart}{sep}{caseName}({fieldPart})"
+
+
+  // declaring and accessing variables
+  | EUnwrap(_id, operand) ->
+    let inner = expr ctx operand
+    match operand with
+    | EVariable(_, _) | EArg(_, _) | ERecordFieldAccess(_, _, _)
+    | EUnwrap(_, _) -> inner + "?"
+    | _ -> "(" + inner + ")?"
+
+  | ERecordFieldAccess(_id, e, fieldName) ->
+    let exprPart = expr ctx e
+
+    // TODO: only sometimes need to wrap exprPart in parens
+    match e with
+    | EVariable(_, _)
+    | EUnwrap(_, _)
+    | ERecordFieldAccess(_, _, _) ->
+      $"{exprPart}.{PrettyPrinter.formatAccessedFieldName fieldName}"
+    | _ -> $"({exprPart}).{PrettyPrinter.formatAccessedFieldName fieldName}"
+
+  | EVariable(_id, name) -> name
+
+  | EArg(_id, index) ->
+    // Find the parameter name that corresponds to this index
+    match ctx.currentFunction with
+    | Some((_fnName, argMap)) ->
+      argMap
+      |> Stdlib.Dict.toList
+      |> Stdlib.List.findFirst (fun (name, idx) -> idx == index)
+      |> Stdlib.Option.map (fun (name, _) -> name)
+      |> Stdlib.Option.withDefault $"earg{Stdlib.toString index}"
+    | None -> $"earg{Stdlib.toString index}"
+
+  // control flow
+  | ELambda(_id, pats, body) ->
+    let patsPart =
+      pats
+      |> Stdlib.List.map (fun pat -> letPattern pat)
+      |> Stdlib.String.join " "
+
+    let bodyPart = expr ctx body
+
+    $"(fun {patsPart} ->\n{PrettyPrinter.indent bodyPart})"
+
+  | EFnName(_id, fnName, _) ->
+    NameResolution.fnName ctx fnName
+
+  // LanguageTools.ID *
+  // record: LanguageTools.ProgramTypes.Expr *
+  // updates: List<String * LanguageTools.ProgramTypes.Expr>
+  | ERecordUpdate(_id, record, updates) ->
+    let recordPart = expr ctx record
+
+    let updatePart =
+      updates
+      |> Stdlib.List.map (fun pair ->
+        let (fieldName, value) = pair
+        $"{PrettyPrinter.formatFieldName fieldName} = {expr ctx value}")
+      |> Stdlib.String.join ", "
+
+    // TODO: don't always need the parens
+
+    $"{{ {recordPart} with {updatePart} }}"
+
+  | EValue(_id, value) ->
+    NameResolution.valueName ctx value
+
+  | EStatement (_id, first, next) ->
+    let firstPart = expr ctx first
+    let nextPart = expr ctx next
+    $"{firstPart}\n{nextPart}"
+
+  | ESelf _id ->
+    match ctx.currentFunction with
+    | Some((functionName, _argMap)) -> functionName
+    // This should never happen - ESelf should only appear within a function body
+    // CLEANUP: consider making this a runtime error instead
+    | None -> "ESelf"
+
+  // Everything above is a real case; this arm only fires if `Expr` gains one the printer wasn't taught.
+  // It used to dump the whole expression as JSON into the middle of the source, which buries the
+  // problem in output nobody can read. Say what happened instead, in one line that stands out.
+  | _expr -> "<expression this printer doesn't handle yet>"
+
+// CLEANUP this isn't currently used
+// if/when we uncomment this, take note that the `m` argument is a function
+// that we may not fully yet support (esp in name-resolution)
+// let deprecation<'name>
+//   (m: 'name -> String)
+//   (d: LanguageTools.ProgramTypes.Deprecation)
+//   : String =
+//   match d with
+//   | NotDeprecated -> "NotDeprecated"
+//   | RenamedTo name -> $"RenamedTo {m name}"
+//   | ReplacedBy name -> $"ReplacedBy {m name}"
+//   | DeprecatedBecause reason -> $"DeprecatedBecause {reason}"
+
+module TypeDeclaration =
+  // @compiler blocked: missing-implementation
+  let recordFieldDoc
+    (ctx: Context)
+    (d: LanguageTools.ProgramTypes.TypeDeclaration.RecordField)
+    : Stdlib.Pretty.Doc =
+    withInlineDoc
+      d.description
+      (Stdlib.Pretty.concat
+        (Stdlib.Pretty.text $"{PrettyPrinter.formatFieldName d.name}: ")
+        (typeReferenceDoc ctx d.typ))
+
+  // @compiler blocked: missing-implementation
+  let recordField
+    (ctx: Context)
+    (d: LanguageTools.ProgramTypes.TypeDeclaration.RecordField)
+    : String =
+    Stdlib.Pretty.render ctx.width (TypeDeclaration.recordFieldDoc ctx d)
+
+  // @compiler blocked: missing-implementation
+  let enumFieldDoc
+    (ctx: Context)
+    (d: LanguageTools.ProgramTypes.TypeDeclaration.EnumField)
+    : Stdlib.Pretty.Doc =
+    // Function fields need parens within the enum case's `*` product.
+    let typ = typeReferenceDocWithFnParens ctx true d.typ
+
+    match d.label with
+    | None -> typ
+    | Some label ->
+      Stdlib.Pretty.concat
+        (Stdlib.Pretty.text $"{PrettyPrinter.formatFieldName label}: ")
+        typ
+
+  // @compiler blocked: missing-implementation
+  let enumField
+    (ctx: Context)
+    (d: LanguageTools.ProgramTypes.TypeDeclaration.EnumField)
+    : String =
+    Stdlib.Pretty.render ctx.width (TypeDeclaration.enumFieldDoc ctx d)
+
+  // @compiler blocked: missing-implementation
+  let enumCaseDoc
+    (ctx: Context)
+    (c: LanguageTools.ProgramTypes.TypeDeclaration.EnumCase)
+    : Stdlib.Pretty.Doc =
+    match c.fields with
+    | [] -> withInlineDoc c.description (Stdlib.Pretty.text ("| " + c.name))
+    | fields ->
+      let fieldPart =
+        fields
+        |> Stdlib.List.map (fun field ->
+          TypeDeclaration.enumFieldDoc ctx field)
+        |> fun docs ->
+          Stdlib.Pretty.join
+            docs
+            (Stdlib.Pretty.concat
+              (Stdlib.Pretty.text " *")
+              Stdlib.Pretty.line)
+        |> Stdlib.Pretty.group
+
+      withInlineDoc
+        c.description
+        (Stdlib.Pretty.hang 2 (Stdlib.Pretty.text $"| {c.name} of") [ fieldPart ])
+
+  // @compiler blocked: missing-implementation
+  let enumCase
+    (ctx: Context)
+    (c: LanguageTools.ProgramTypes.TypeDeclaration.EnumCase)
+    : String =
+    Stdlib.Pretty.render ctx.width (TypeDeclaration.enumCaseDoc ctx c)
+
+
+// @compiler blocked: missing-implementation
+let customTypeDoc
+  (ctx: Context)
+  (d: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
+  : Stdlib.Pretty.Doc =
+  match d.definition with
+  | Alias typeRef -> typeReferenceDoc ctx typeRef
+
+  | Record fields ->
+    let fieldsPart =
+      fields
+      |> Stdlib.List.map (fun field ->
+        TypeDeclaration.recordFieldDoc ctx field)
+      |> fun docs -> Stdlib.Pretty.join docs Stdlib.Pretty.hardLine
+
+    Stdlib.Pretty.concat
+      (Stdlib.Pretty.text "{ ")
+      (Stdlib.Pretty.concat
+        (Stdlib.Pretty.nest 2 fieldsPart)
+        (Stdlib.Pretty.text " }"))
+
+  | Enum cases ->
+    cases
+    |> Stdlib.List.map (fun case ->
+      TypeDeclaration.enumCaseDoc ctx case)
+    |> fun docs -> Stdlib.Pretty.join docs Stdlib.Pretty.hardLine
+
+
+// @compiler blocked: missing-implementation
+let customType
+  (ctx: Context)
+  (d: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
+  : String =
+  Stdlib.Pretty.render ctx.width (customTypeDoc ctx d)
+
+
+
+/// `<'a: Show + Compare, 'b>`: each type param followed by its bounds, if any.
+// @compiler blocked: missing-implementation
+let typeParamsWithBounds
+  (ctx: Context)
+  (typeParams: List<String>)
+  (bounds: List<LanguageTools.ProgramTypes.Bound>)
+  : String =
+  match typeParams with
+  | [] -> ""
+  | _ ->
+    typeParams
+    |> Stdlib.List.map (fun typeParam ->
+      let own =
+        bounds
+        |> Stdlib.List.filter (fun b -> b.param == typeParam)
+        |> Stdlib.List.map (fun b ->
+          let name = NameResolution.traitName ctx b.trait_.trait_
+          match b.trait_.typeArgs with
+          | [] -> name
+          | args ->
+            let argsPart =
+              args
+              |> Stdlib.List.map (fun a -> typeReference ctx a)
+              |> Stdlib.String.join ", "
+            $"{name}<{argsPart}>")
+      match own with
+      | [] -> $"'{typeParam}"
+      | _ -> $"'{typeParam}: " + (Stdlib.String.join own " + "))
+    |> Stdlib.String.join ", "
+    |> fun parts -> $"<{parts}>"
+
+
+// @compiler blocked: missing-implementation
+let packageType
+  (ctx: Context)
+  (p: LanguageTools.ProgramTypes.PackageType.PackageType)
+  : String =
+  // TODO: take care of deprecated
+  let namePart = FQTypeName.Package.atDefinition ctx p.hash
+
+  let typeParamPart =
+    typeParamsWithBounds ctx p.declaration.typeParams p.declaration.bounds
+
+  let definitionWidth = Stdlib.max 1 (ctx.width - 2)
+  let defPart =
+    let doc = customTypeDoc ctx p.declaration
+    PrettyPrinter.indent (Stdlib.Pretty.render definitionWidth doc)
+
+  let docComment = formatDocComment p.description
+
+  $"{docComment}type {namePart}{typeParamPart} =\n{defPart}"
+
+
+// @compiler blocked: missing-implementation
+let packageValue
+  (ctx: Context)
+  (p: LanguageTools.ProgramTypes.PackageValue.PackageValue)
+  : String =
+  let namePart = FQValueName.Package.atDefinition ctx p.hash
+  let bodyPart = expr ctx p.body
+
+  let docComment = formatDocComment p.description
+
+  $"{docComment}val {namePart} = {bodyPart}"
+
+
+module PackageLocation =
+  /// A location as seen from `currentModule`.
+  ///
+  /// The plain `packageLocation` below stays fully qualified, and that is right where each line stands
+  /// alone and may be from any owner: `show` and `ops` list ops across the whole store, and a shortened
+  /// name there would be ambiguous. Anywhere the reader has a place -- browsing a module, reading one
+  /// item's references -- the full path is the noise it looks like.
+  // @compiler blocked: missing-implementation
+  let packageLocationIn
+    (currentModule: List<String>)
+    (loc: LanguageTools.ProgramTypes.PackageLocation)
+    : String =
+    PrettyPrinter.shortenName currentModule loc.owner loc.modules loc.name
+
+  // @compiler blocked: missing-implementation
+  let packageLocation (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
+    let modulesPart =
+      match loc.modules with
+      | [] -> ""
+      | modules -> (Stdlib.String.join modules ".") + "."
+
+    $"{loc.owner}.{modulesPart}{loc.name}"
+
+
+// @compiler blocked: missing-implementation
+let packageTest
+  (ctx: Context)
+  (test: LanguageTools.ProgramTypes.PackageTest.PackageTest)
+  : String =
+  let name =
+    match
+      Darklang.LanguageTools.PackageManager.pickLocation
+        (Context.toPickContext ctx)
+        (LanguageTools.PackageManager.Test.locations ctx.branchId test.hash)
+  with
+  | Some location -> location.name
+  | None -> "test_" + (LanguageTools.ProgramTypes.hashToShort test.hash)
+  let docComment = formatDocComment test.description
+  let body = expr ctx test.body
+  match test.expectedError with
+  | None -> $"{docComment}test {name} = {body}"
+  | Some expected ->
+    let (keyword, message) =
+      match expected with
+      | RuntimeError message -> ("raises", message)
+    let expectation =
+      $"=> {keyword} \"{PrettyPrinter.escapeSpecialCharacters message}\""
+    $"{docComment}test {name} =\n{PrettyPrinter.indent body}\n{PrettyPrinter.indent expectation}"
+
+
+module PackageFn =
+  // @compiler blocked: missing-implementation
+  let parameter
+    (ctx: Context)
+    (p: LanguageTools.ProgramTypes.PackageFn.Parameter)
+    : String =
+    // No `///` here: this is the one-line form (a signature in a listing), and a doc comment runs to
+    // the end of the line, so writing one would comment out the rest of the signature.
+    // `parameterDoc` is the form that renders back to source and does carry them.
+    //
+    // `()` in a declaration parses as one parameter named `_` of type Unit, so print that shape back as `()`.
+    // The general `(name: Type)` form gave `(_: Unit)`, which the parser then rejected with "expected a
+    // parameter name, found '_'" - so every nullary function printed to source that wouldn't parse again.
+    // That broke editing one in the workbench, where the buffer is prefilled from here and saved through the
+    // parser: you had to retype the signature before it would save.
+    let isUnitPlaceholder =
+      match p.typ with
+      | TUnit -> p.name == "_"
+      | _ -> false
+
+    if isUnitPlaceholder then
+      "()"
+    else
+      $"({p.name}: {typeReference ctx p.typ})"
+
+  /// Render a function parameter with a breakable type.
+  // @compiler blocked: missing-implementation
+  let parameterDoc
+    (ctx: Context)
+    (p: LanguageTools.ProgramTypes.PackageFn.Parameter)
+    : Stdlib.Pretty.Doc =
+    let isUnitPlaceholder =
+      match p.typ with
+      | TUnit -> p.name == "_"
+      | _ -> false
+
+    if isUnitPlaceholder then
+      Stdlib.Pretty.text "()"
+    else
+      parens (
+        withInlineDoc
+          p.description
+          (Stdlib.Pretty.hang
+            2
+            (Stdlib.Pretty.text $"{p.name}:")
+            [ typeReferenceDoc ctx p.typ ]))
+
+
+  // @compiler blocked: missing-implementation
+  let signature
+    (ctx: Context)
+    (f: LanguageTools.ProgramTypes.PackageFn.PackageFn)
+    : String =
+    let params =
+      f.parameters
+      |> Stdlib.List.map (fun p ->
+        PackageFn.parameter ctx p)
+      |> Stdlib.String.join ", "
+
+    let returnType =
+      typeReference ctx f.returnType
+
+    params + " -> " + returnType
+
+
+// @compiler blocked: missing-implementation
+let packageFn
+  (ctx: Context)
+  (p: LanguageTools.ProgramTypes.PackageFn.PackageFn)
+  : String =
+  // TODO: handle `deprecated`
+  let namePart = FQFnName.Package.atDefinition ctx p.hash
+
+  let typeParamPart = typeParamsWithBounds ctx p.typeParams p.bounds
+
+  // Group the whole header so parameters and the return type break together.
+  let headerDoc =
+    let txt = Stdlib.Pretty.text
+
+    let params =
+      p.parameters |> Stdlib.List.map (fun param -> PackageFn.parameterDoc ctx param)
+
+    // `softLine` keeps the colon next to the last parameter only in flat layout.
+    Stdlib.Pretty.group (
+      Stdlib.Pretty.concat
+        (txt $"let {namePart}{typeParamPart}")
+        (Stdlib.Pretty.nest 2 (
+          Stdlib.Pretty.concatAll (
+            Stdlib.List.flatten
+              [ params |> Stdlib.List.map (fun d -> Stdlib.Pretty.concat Stdlib.Pretty.line d)
+                [ Stdlib.Pretty.softLine
+                  txt (":" + (LanguageTools.Permissions.ceilingRow p.permissionCeiling) + " ")
+                  typeReferenceDoc ctx p.returnType
+                  txt " =" ] ]))))
+
+  let argMap =
+    p.parameters
+    |> Stdlib.List.indexedMap (fun i param ->
+      (param.name, i))
+    |> Stdlib.List.fold Stdlib.Dict.empty (fun acc (name, idx) ->
+      Stdlib.Dict.set acc name idx)
+
+  // Account for the indentation added after rendering.
+  let contextWithFn =
+    { ctx with
+        currentFunction = Stdlib.Option.Option.Some((namePart, argMap))
+        width = Stdlib.max 1 (ctx.width - 2) }
+
+  let bodyPart = bodyExpr contextWithFn p.body
+
+  let docComment = formatDocComment p.description
+
+  let headerPart = Stdlib.Pretty.render ctx.width headerDoc
+
+  $"{docComment}{headerPart}\n{PrettyPrinter.indent bodyPart}"
+
+
+/// `trait Show<'a> =` then one method signature per line.
+// @compiler blocked: missing-implementation
+let packageTrait
+  (ctx: Context)
+  (t: LanguageTools.ProgramTypes.Trait.Trait)
+  : String =
+  let namePart = FQTraitName.Package.atDefinition ctx t.hash
+  let typeParamPart = typeParamsWithBounds ctx t.typeParams t.bounds
+  let methods =
+    t.methods
+    |> Stdlib.List.map (fun m ->
+      let params =
+        m.parameters
+        |> Stdlib.List.map (fun p -> $"({p.name}: {typeReference ctx p.typ})")
+        |> Stdlib.String.join " "
+      let ownTypeParams = typeParamsWithBounds ctx m.typeParams []
+      let doc = formatDocComment m.description
+      $"{doc}let {m.name}{ownTypeParams} {params} :{LanguageTools.Permissions.ceilingRow m.permissionCeiling} {typeReference ctx m.returnType}")
+    |> Stdlib.String.join "\n"
+  let docComment = formatDocComment t.description
+  $"{docComment}trait {namePart}{typeParamPart} =\n{PrettyPrinter.indent methods}"
+
+
+/// `impl<'a: Show> Show<Args> for List<'a> =`, then each method: the declaration itself when the
+/// method's fn was written in the block, and `let m = Some.Fn` when it names one that already
+/// existed. Both round-trip.
+// @compiler blocked: missing-implementation
+let packageImpl
+  (ctx: Context)
+  (i: LanguageTools.ProgramTypes.TraitImpl.TraitImpl)
+  : String =
+  let typeParamPart = typeParamsWithBounds ctx i.typeParams i.bounds
+  let traitPart =
+    let name = NameResolution.traitName ctx i.trait_
+    match i.traitTypeArgs with
+    | [] -> name
+    | args ->
+      let argsPart = args |> Stdlib.List.map (fun a -> typeReference ctx a) |> Stdlib.String.join ", "
+      $"{name}<{argsPart}>"
+  // A method declared in the block lives beneath the impl's own path and prints
+  // bare; an alias of a fn elsewhere prints in full, so `let append = append`
+  // cannot happen when the target is `Stdlib.String.append`.
+  let implPath =
+    match Darklang.LanguageTools.PackageManager.pickLocation (Context.toPickContext ctx) (LanguageTools.PackageManager.TraitImpl.locations ctx.branchId i.hash) with
+    | Some l -> Stdlib.List.flatten [ [ l.owner ], l.modules, [ l.name ] ]
+    | None -> []
+  // A method whose fn lives under the impl's own path was WRITTEN here, so it prints as the
+  // declaration the author wrote. Printing the alias line for those would give `let d = d`,
+  // which says nothing and does not parse back. A method that names a fn elsewhere prints as that alias.
+  let methods =
+    i.methods
+    |> Stdlib.List.map (fun (name, fn) ->
+      match fn.resolved with
+      | Ok r ->
+        let declaredHere =
+          match r.location with
+          | Some loc -> (Stdlib.List.append [ loc.owner ] loc.modules) == implPath
+          | None -> false
+
+        if declaredHere then
+          match r.name with
+          | Package hash ->
+            (match LanguageTools.PackageManager.Function.get hash with
+             | Some f -> packageFn ctx f
+             | None -> $"let {name} = {NameResolution.fnName ctx fn}")
+          | _ -> $"let {name} = {NameResolution.fnName ctx fn}"
+        else
+          $"let {name} = {NameResolution.fnName { ctx with currentModule = [] } fn}"
+      | Error _ -> $"let {name} = <unresolved: {NameResolution.fnName ctx fn}>")
+    |> Stdlib.String.join "\n\n"
+  let docComment = formatDocComment i.description
+  $"{docComment}impl{typeParamPart} {traitPart} for {typeReference ctx i.self} =\n{PrettyPrinter.indent methods}"
+
+
+/// The source of one stored item, whichever kind it is. `None` means the store does not have it;
+/// the wording for that is the caller's, since a browser says "not stored here" and a CLI screen
+/// says "not stored locally".
+///
+/// Every screen that shows an item used to ask this for itself, five copies of fetch-by-kind and
+/// print-with-the-matching-printer. Three of the five had three arms, so the LSP refused to open a
+/// trait's file, `v` on a trait row in `dark propagate` raised, and the package server answered 500.
+// @compiler blocked: missing-implementation
+let sourceOf
+  (ctx: Context)
+  (kind: LanguageTools.ProgramTypes.ItemKind)
+  (hash: LanguageTools.ProgramTypes.Hash)
+  : Stdlib.Option.Option<String> =
+  match kind with
+  | Type ->
+    LanguageTools.PackageManager.Type.get hash
+    |> Stdlib.Option.map (fun t -> PrettyPrinter.ProgramTypes.packageType ctx t)
+  | Fn ->
+    LanguageTools.PackageManager.Function.get hash
+    |> Stdlib.Option.map (fun f -> PrettyPrinter.ProgramTypes.packageFn ctx f)
+  | Value ->
+    LanguageTools.PackageManager.Value.get hash
+    |> Stdlib.Option.map (fun v -> PrettyPrinter.ProgramTypes.packageValue ctx v)
+  | Trait ->
+    LanguageTools.PackageManager.Trait.get hash
+    |> Stdlib.Option.map (fun t -> PrettyPrinter.ProgramTypes.packageTrait ctx t)
+  | TraitImpl ->
+    LanguageTools.PackageManager.TraitImpl.get hash
+    |> Stdlib.Option.map (fun i -> PrettyPrinter.ProgramTypes.packageImpl ctx i)
+  | Test ->
+    LanguageTools.PackageManager.Test.get hash
+    |> Stdlib.Option.map (fun t -> PrettyPrinter.ProgramTypes.packageTest ctx t)
+
+
+module BuiltinFn =
+  // @compiler blocked: missing-implementation
+  let signature (branchId: Uuid) (f: LanguageTools.BuiltinFunction) : String =
+    // CLEANUP: it's odd that we have to call the runtime pretty-printer here.
+    // Potential solution: update RuntimeTypes (.fs) such that BuiltInFn's returnType and parameters use PT TypeReferences.
+    // Main blocker: "RT comes before PT" in LibExecution, and it'd take some wrangling to get it all compiling again if we did that.
+
+    let parameters =
+      f.parameters
+      |> Stdlib.List.map (fun p ->
+          let params = PrettyPrinter.RuntimeTypes.typeReference branchId p.``type``
+          $"({p.name} : {params})")
+      |> Stdlib.String.join ", "
+
+    parameters + " -> " + (PrettyPrinter.RuntimeTypes.typeReference branchId f.returnType)
+
+
+module PackageOp =
+  // @compiler blocked: missing-implementation
+  let packageOp
+    (branchId: Uuid)
+    (op: LanguageTools.ProgramTypes.PackageOp)
+    : String =
+    let ctx = Context.forBranch branchId
+    match op with
+    | AddType typ ->
+      let name =
+        FQTypeName.Package.atDefinition ctx typ.hash
+
+      let typeParamPart =
+        match typ.declaration.typeParams with
+        | [] -> ""
+        | params ->
+          params
+          |> Stdlib.List.map (fun p -> "'" + p)
+          |> Stdlib.String.join ", "
+          |> fun parts -> $"<{parts}>"
+
+      let kindPart =
+        match typ.declaration.definition with
+        | Alias _ -> "alias"
+        | Record _ -> "record"
+        | Enum _ -> "enum"
+
+      $"AddType {name}{typeParamPart} ({kindPart})"
+
+    | AddFn fn ->
+      let name =
+        FQFnName.Package.atDefinition ctx fn.hash
+
+      let signature = PackageFn.signature ctx fn
+
+      $"AddFn {name}: {signature}  [{LanguageTools.ProgramTypes.hashToShort fn.hash}]"
+
+    | AddValue value ->
+      let name = FQValueName.Package.atDefinition ctx value.hash
+      // Show what the value IS. A fn's line carries its signature, so you can tell one from another; a value
+      // had only its name, which is the least interesting thing about it in a list of a thousand.
+      // One line: a commit listing is for scanning, and `show` on the item is where you read it properly.
+      let source =
+        expr ctx value.body
+        |> Stdlib.String.split "\n"
+        |> Stdlib.List.map (fun l -> Stdlib.String.trim l)
+        |> Stdlib.List.filter (fun l -> l != "")
+        |> Stdlib.String.join " "
+
+      let source =
+        if Stdlib.String.length source > 48 then
+          (Stdlib.String.slice source 0 48) + "..."
+        else
+          source
+
+      // The hash is what a SetName below points AT, so showing it lets you read a commit as the pairs it
+      // actually is — content added here, name bound to it there — rather than a list of unrelated lines.
+      $"AddValue {name} = {source}  [{LanguageTools.ProgramTypes.hashToShort value.hash}]"
+
+    | AddTrait t ->
+      let name = FQTraitName.Package.atDefinition ctx t.hash
+      let methods = t.methods |> Stdlib.List.map (fun m -> m.name) |> Stdlib.String.join ", "
+      $"AddTrait {name} ({methods})  [{LanguageTools.ProgramTypes.hashToShort t.hash}]"
+
+    | AddTraitImpl i ->
+      let traitName = NameResolution.traitName ctx i.trait_
+      $"AddTraitImpl {traitName} for {typeReference ctx i.self}  [{LanguageTools.ProgramTypes.hashToShort i.hash}]"
+
+    | AddTest test ->
+      let source =
+        expr ctx test.body
+        |> Stdlib.String.split "\n"
+        |> Stdlib.List.map Stdlib.String.trim
+        |> Stdlib.List.filter (fun line -> line != "")
+        |> (fun lines -> Stdlib.String.join lines " ")
+      $"AddTest {source}  [{LanguageTools.ProgramTypes.hashToShort test.hash}]"
+
+    | SetName(loc, target, _) ->
+      let path = PackageLocation.packageLocation loc
+      let kind =
+        match target with
+        | PackageType _ -> "Type"
+        | PackageValue _ -> "Value"
+        | PackageFn _ -> "Fn"
+        | PackageTrait _ -> "Trait"
+        | PackageTraitImpl _ -> "Impl"
+        | PackageTest _ -> "Test"
+      // Name the hash it binds. "SetName Fn -> Some.Path" said which name changed but not what it now means,
+      // so an Add and the SetName that named it were two lines with nothing tying them together.
+      let hash = LanguageTools.ProgramTypes.Reference.hash target
+      $"SetName {path} to {kind} of [{LanguageTools.ProgramTypes.hashToShort hash}]"
+
+    | Unbind(loc, previous) ->
+      let path = PackageLocation.packageLocation loc
+      let was =
+        match previous with
+        | Some h -> $" (was [{LanguageTools.ProgramTypes.hashToShort h}])"
+        | None -> ""
+      $"Unbind {path}{was}"
+
+    | Deprecate(target, kind, _message, _restating) ->
+      let kindStr =
+        match kind with
+        | SupersededBy _ -> "superseded-by"
+        | Harmful -> "harmful"
+        | Obsolete -> "obsolete"
+      // Was just "Deprecate (obsolete)" — the kind, and no hint WHAT got deprecated.
+      let hash = LanguageTools.ProgramTypes.Reference.hash target
+      $"Deprecate [{LanguageTools.ProgramTypes.hashToShort hash}] ({kindStr})"
+
+    | Undeprecate(target, _restating) ->
+      let hash = LanguageTools.ProgramTypes.Reference.hash target
+      $"Undeprecate [{LanguageTools.ProgramTypes.hashToShort hash}]"
+
+    | UpdateDoc(location, part, text, _previous, _restating) ->
+      let path = PackageLocation.packageLocation location
+      // The first line of it, and only that: an op listing is for scanning, and a doc comment is
+      // the one op payload with no length limit at all.
+      let firstLine =
+        match Stdlib.String.split (Stdlib.String.trim text) "\n" with
+        | line :: _ -> line
+        | [] -> ""
+
+      let summary =
+        if Stdlib.String.length firstLine > 40 then
+          (Stdlib.String.slice firstLine 0 40) + "..."
+        else if firstLine == "" then
+          "(cleared)"
+        else
+          firstLine
+
+      // Which PART, because four parts of one name are four different edits and a listing that
+      // named only the name showed them as four identical lines.
+      let which = LanguageTools.ProgramTypes.DocPart.describe part
+
+      $"UpdateDoc {path} {which}: {summary}"
+
+    | Decision(id, location, reason, kind) ->
+      let name = PackageLocation.packageLocation location
+      let why = if reason == "" then "" else $" ({reason})"
+
+      match kind with
+      | Override target ->
+        let hash = LanguageTools.ProgramTypes.Reference.hash target
+        $"Override #{id} {name} -> [{LanguageTools.ProgramTypes.hashToShort hash}]{why}"
+      | Ack findingId -> $"Ack {findingId} {name}{why}"
+    // A commit that lands a branch carries this op, so without an arm here `dark show` and
+    // `dark commits` raise on exactly the commits a person most wants to read.
+    | BranchEvent(eventBranchId, event, _at) ->
+      let what =
+        match event with
+        | Merged _ -> "merged into its parent"
+        | Archived -> "archived"
+
+      // Show the NAME, same as everywhere else a branch is user-facing.
+      let who = Darklang.SCM.PackageOps.branchName eventBranchId
+
+      $"BranchEvent {who} {what}"

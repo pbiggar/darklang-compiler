@@ -196,7 +196,7 @@ let materializeReachablePackageValueCatalog (baseContext : X.pipelineContext)
   let genericDefs =
     M.fold M.add localGenericDefs baseContext.X.genericFuncDefs
   in
-  let specialization =
+  let* specialization =
     Monomorphization.specializeFromSpecs
       (C.programSymbols typedProgram)
       genericDefs

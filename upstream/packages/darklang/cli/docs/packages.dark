@@ -1,0 +1,38 @@
+module Darklang.Cli.Docs.Packages
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Packages
+
+## Structure
+  Owner.Module.SubModule.name
+  Darklang.Stdlib.List.map
+  MyOrg.MyApp.Utils.helper
+
+## Navigate
+  tree              # see hierarchy
+  nav <path>        # go to module
+  ls                # list contents
+  search <term>     # find anything
+
+## Create
+  nav MyOrg.MyApp   # go to your module
+  fn name           # create function
+  type name         # create type
+  val name          # create value
+
+## Use
+  Stdlib.List.map list fn
+  Stdlib.Json.parse<T> str
+
+`PACKAGE.` is internal runtime/debug notation and is never valid in Dark source
+or search queries. Write `Stdlib.List.map` (preferred) or the full source name
+`Darklang.Stdlib.List.map`, never `PACKAGE.Darklang.Stdlib.List.map`.
+
+## Files
+  packages/<owner>/<module>/<file>.dark
+
+## Stdlib vs Builtin
+  Stdlib: packages/darklang/stdlib/*.dark
+  Builtins: F# in backend/src/Builtins/
+  Use `builtins` to list all builtins"""

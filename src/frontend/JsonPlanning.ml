@@ -562,6 +562,7 @@ let rec ensureSerializer (env : env) typ (state : state) =
           params =
             checkedParams (args [ (writerId, writerType); (valueId, typ) ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = Local writerId;
           recursion = None;
         }
@@ -632,6 +633,7 @@ and ensureListSerializer (env : env) elemType (state : state) =
                    (binding "__first", AST.TBool);
                  ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = local "__writer" bindings;
           recursion = None;
         }
@@ -706,6 +708,7 @@ and ensureDictSerializer (env : env) valueType (state : state) =
                    (binding "__first", AST.TBool);
                  ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = local "__writer" bindings;
           recursion = None;
         }
@@ -953,8 +956,29 @@ and serializeBody (env : env) typ value writer (state : state) =
               state []
           in
           Ok (matchExpr (value, cases), nextState))
+  | AST.TDict (keyType, valueType) ->
+      let entries =
+        TypeApp
+          ( resolveFunction env "Darklang.Stdlib.Dict.toList",
+            checkedTypeArgs [ keyType; valueType ],
+            N.singleton value )
+      in
+      let failure =
+        RuntimeError
+          ("Unsupported type in JSON: "
+          ^ CheckingDiagnostics.typeToString typ
+          ^ ". Some types are not supported in Json serialization")
+      in
+      Ok
+        ( matchExpr
+            ( entries,
+              [
+                makeCase (PList []) (writerRaw env writer (StringLiteral "{}"));
+                makeCase PWildcard failure;
+              ] ),
+          state )
   | AST.TFunction _ | AST.TBlob | AST.TInternalRawPtr | AST.TNever
-  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ | AST.TDict _ ->
+  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ ->
       Error
         ("Unsupported type in JSON: "
         ^ CheckingDiagnostics.typeToString typ
@@ -1007,6 +1031,7 @@ let rec ensureDecoder (env : env) typ (state : state) =
                    (binding "__path", pathType);
                  ]);
           returnType = checkedType (resultType typ);
+          bodyType = checkedType (resultType typ);
           body = RuntimeError "unfinished JSON decoder";
           recursion = None;
         }
@@ -1096,6 +1121,7 @@ and ensureListDecoder (env : env) elemType (state : state) =
                    (binding "__index", AST.TInt64);
                  ]);
           returnType = checkedType (resultType listType);
+          bodyType = checkedType (resultType listType);
           body = RuntimeError "unfinished JSON list decoder";
           recursion = None;
         }
@@ -1238,6 +1264,7 @@ and ensureDictDecoder (env : env) valueType (state : state) =
                    (binding "__dict", dictType);
                  ]);
           returnType = checkedType (resultType dictType);
+          bodyType = checkedType (resultType dictType);
           body = RuntimeError "unfinished JSON dictionary decoder";
           recursion = None;
         }
@@ -1881,6 +1908,12 @@ let rec mapExpr rewrite symbols expr =
     | Closure (name, captures) ->
         let captures, next = mapList captures symbols in
         (Closure (name, captures), next)
+    | ReturnScope (target, typ, value) ->
+        let value, next = mapExpr rewrite symbols value in
+        (ReturnScope (target, typ, value), next)
+    | EarlyReturn (target, value) ->
+        let value, next = mapExpr rewrite symbols value in
+        (EarlyReturn (target, value), next)
     | BoundaryRender (renderer, value) ->
         let value, next = mapExpr rewrite symbols value in
         (BoundaryRender (renderer, value), next)
@@ -1913,6 +1946,8 @@ let rewriteProgramWithSession (session : planningSession option)
       | UnaryOp (_, a)
       | TupleAccess (a, _)
       | RecordAccess (a, _)
+      | ReturnScope (_, _, a)
+      | EarlyReturn (_, a)
       | BoundaryRender (_, a) ->
           capture a collected
       | Let (_, a, b) | RecursiveLet (_, a, b) ->

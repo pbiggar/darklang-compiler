@@ -13,8 +13,9 @@ interpreter contracts. Effect-row names come from the translated
 Keep compiler concerns after the parser boundary in `frontend/WrittenChecking`:
 name resolution, native typing, symbol allocation and lowering do not belong in
 the translated productions. In particular, `?` remains `EUnwrap`; converting it
-to `Builtin.unwrap` would replace early return with an exception. Its native
-execution support is tracked separately in the language ledger.
+to `Builtin.unwrap` would replace early return with an exception. Native checking
+retains lexical return scopes through lambda preparation, then ANF lowering
+turns propagation into constructor branches and exit joins.
 
 Host adaptations are UTF-8 scalar scanning, OCaml numeric representations and
 collections, and catching `Stack_overflow` where .NET checks available stack.

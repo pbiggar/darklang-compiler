@@ -358,6 +358,7 @@ let rawMemoryIntrinsics =
       (TDict (TVar "k", TVar "v"));
     fn "__hash" [ "k" ] [ TVar "k" ] TInt64;
     fn "__key_eq" [ "k" ] [ TVar "k"; TVar "k" ] TBool;
+    fn "__dict_check_key" [ "k" ] [ TVar "k" ] (TVar "k");
     fn "__compare" [ "a" ] [ TVar "a"; TVar "a" ] TInt64;
     fn "__sort_precedes" [ "a" ] [ TVar "a"; TVar "a" ] TBool;
     fn "__list_empty" [ "a" ] [] (TList (TVar "a"));

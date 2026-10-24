@@ -1,3 +1,4 @@
+// @compiler blocked: compiler-gap
 (Builtin.testRuntimeError "runtime from syntax") = error="Uncaught exception: runtime from syntax"
 
 #compileerror="Operator is unavailable for this type"

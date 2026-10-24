@@ -35,7 +35,7 @@ let __queueCrypto (space: Stdlib.__QuicSpace.State) (bytes: Blob) (base: Int64) 
       |> Stdlib.Result.andThen (fun next -> Stdlib.__QuicServer.__queueCrypto next bytes base (offset + size))
 
 let __bounded (space: Stdlib.__QuicSpace.State) (opened: Stdlib.__QuicCrypto.Opened) (now: Int64) (limit: Int64) : Stdlib.Result.Result<Stdlib.__QuicSpace.State, String> =
-  Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (fun frames ->
+  Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage |> Stdlib.Result.andThen (fun frames ->
     if Stdlib.List.any frames (fun frame -> match frame with | Crypto crypto -> crypto.offset > limit || Stdlib.Blob.__byteLength crypto.bytes > limit - crypto.offset | _ -> false) then Error "QUIC server handshake CRYPTO limit exceeded"
     else Stdlib.__QuicSpace.handshake space opened now)
 

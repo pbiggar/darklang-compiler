@@ -1,0 +1,1176 @@
+module Darklang.LanguageTools.ProgramTypes
+
+
+/// Used to name where type/function/etc lives, eg a User module, or a Package module.
+// @compiler replace: packages/darklang/languageTools/programTypes.dark#Darklang.LanguageTools.ProgramTypes.PackageLocation reason=compiler-implementation
+type PackageLocation =
+  { owner: String
+    modules: List<String>
+    name: String }
+
+
+/// A successfully resolved name and (where applicable) the package
+/// location that resolved it.
+///
+/// `location` is the matched fully-qualified location after `namesToTry`
+/// expansion — `Some` for resolved package items, `None` for builtins
+/// (and for resolved package items where no location was captured).
+/// Carrying it alongside the resolved hash lets downstream consumers
+/// skip a post-hoc lookup: dep-edge inserts, propagation rewrites,
+/// SCC hash substitution, and deferred refresh after a package moves.
+// @compiler blocked: missing-implementation
+type ResolvedName<'a> =
+  { name: 'a
+    location: Stdlib.Option.Option<PackageLocation> }
+
+
+module FQTypeName =
+  // @compiler blocked: missing-implementation
+  type Package = Hash
+  // @compiler blocked: missing-implementation
+  type FQTypeName = Package of Package
+
+/// A trait, by content hash. A trait is its own item kind (`Trait.Trait`).
+module FQTraitName =
+  // @compiler blocked: missing-implementation
+  type Package = Hash
+  // @compiler blocked: missing-implementation
+  type FQTraitName = Package of Package
+
+module FQValueName =
+  // @compiler blocked: missing-implementation
+  type Builtin = { name: String, version: Int32 }
+  // @compiler blocked: missing-implementation
+  type Package = Hash
+
+  // @compiler blocked: missing-implementation
+  type FQValueName =
+    | Builtin of Builtin
+    | Package of Package
+
+module FQFnName =
+  // @compiler blocked: missing-implementation
+  type Builtin = { name: String, version: Int32 }
+  // @compiler blocked: missing-implementation
+  type Package = Hash
+
+  /// How much of a trait call's implementation the save could say. Three states, not
+  /// two: a call waiting for its caller's type argument is not the same as one
+  /// nobody could work out, and an Option said both with the same value.
+  // @compiler blocked: missing-implementation
+  type ImplChoice =
+    /// The save picked it; stored code goes on running it
+    | Chosen of ResolvedName<Package>
+    /// The self type is this type param of the item the call sits in, so the
+    /// implementation is whatever the caller's type argument implies, and the
+    /// caller records it.
+    | FromTypeParam of String
+    /// Nothing to say. Only code parsed and run without being saved gets here.
+    | Unknown
+
+  /// What a CALL worked out for one of the callee's bounds: for the callee's type
+  /// param `param` owing `trait_`, what this call's type argument implies.
+  // @compiler blocked: missing-implementation
+  type BoundImpl =
+    { param: String
+      trait_: FQTraitName.Package
+      /// One entry per method of the trait: the callee's body may call any of them
+      method_: String
+      choice: ImplChoice }
+
+  /// A trait method call: the trait, the method name (`ToString.toString`), and how
+  /// much the save could say about which implementation runs.
+  // @compiler blocked: missing-implementation
+  type TraitMethod =
+    { trait_: FQTraitName.Package
+      method_: String
+      implFn: ImplChoice }
+
+  // @compiler blocked: missing-implementation
+  type FQFnName =
+    | Builtin of Builtin
+    | Package of Package
+    | TraitMethod of TraitMethod
+
+
+// @compiler blocked: missing-implementation
+type NameResolutionError =
+  | NotFound
+  | InvalidName
+
+/// `originalName` is the user-typed name (a list of qualifiers).
+/// `resolved` is the resolved name (or the resolution error). The Ok
+/// payload bundles the resolved name with its package location so
+/// "location without resolution" is unrepresentable.
+// @compiler blocked: missing-implementation
+type NameResolution<'a> =
+  { originalName: List<String>
+    resolved: Stdlib.Result.Result<ResolvedName<'a>, NameResolutionError> }
+
+
+/// Darklang's available types (int, List<T>, user-defined types, etc.)
+// @compiler blocked: missing-implementation
+type TypeReference =
+  // A named variable, eg `a` in `List<a>`, matches anything
+  | TVariable of String
+
+  | TUnit
+  | TBool
+  | TInt8
+  | TUInt8
+  | TInt16
+  | TUInt16
+  | TInt32
+  | TUInt32
+  | TInt64
+  | TUInt64
+  | TInt128
+  | TUInt128
+  | TInt
+  | TFloat
+  | TChar
+  | TString
+  | TDateTime
+  | TUuid
+  | TBlob
+  | TStream of TypeReference
+
+  | TList of TypeReference
+  | TTuple of TypeReference * TypeReference * List<TypeReference>
+  | TDict of key: TypeReference * value: TypeReference
+
+  | TCustomType of
+    NameResolution<FQTypeName.FQTypeName> *
+    typeArgs: List<TypeReference>
+
+
+  // TODO: this should be an NEList
+  | TFn of List<TypeReference> * TypeReference
+
+
+
+// @compiler blocked: missing-implementation
+type LetPattern =
+  | LPUnit of ID
+  | LPVariable of ID * name: String
+  | LPWildcard of ID
+  | LPTuple of
+    ID *
+    first: LetPattern *
+    second: LetPattern *
+    theRest: List<LetPattern>
+
+
+/// Used for pattern matching in a match statement
+// @compiler blocked: missing-implementation
+type MatchPattern =
+  | MPVariable of ID * String
+
+  | MPUnit of ID
+  | MPBool of ID * Bool
+  | MPInt8 of ID * Int8
+  | MPUInt8 of ID * UInt8
+  | MPInt16 of ID * Int16
+  | MPUInt16 of ID * UInt16
+  | MPInt32 of ID * Int32
+  | MPUInt32 of ID * UInt32
+  | MPInt64 of ID * Int64
+  | MPUInt64 of ID * UInt64
+  | MPInt128 of ID * Int128
+  | MPUInt128 of ID * UInt128
+  | MPInt of ID * Int
+  | MPFloat of ID * Sign * String * String
+  | MPChar of ID * String
+  | MPString of ID * String
+
+  | MPList of ID * List<MatchPattern>
+  | MPListCons of ID * head: MatchPattern * tail: MatchPattern
+
+  | MPTuple of ID * MatchPattern * MatchPattern * List<MatchPattern>
+
+  | MPEnum of ID * caseName: String * fieldPats: List<MatchPattern>
+
+  | MPOr of ID * List<MatchPattern>
+
+// @compiler blocked: missing-implementation
+type BinaryOperation =
+  | BinOpAnd
+  | BinOpOr
+
+
+// @compiler blocked: missing-implementation
+type InfixFnName =
+  | ArithmeticPlus
+  | ArithmeticMinus
+  | ArithmeticMultiply
+  | ArithmeticDivide
+  | ArithmeticModulo
+  | ArithmeticPower
+  | BitwiseAnd
+  | BitwiseOr
+  | BitwiseXor
+  | ShiftLeft
+  | ShiftRight
+  | ComparisonGreaterThan
+  | ComparisonGreaterThanOrEqual
+  | ComparisonLessThan
+  | ComparisonLessThanOrEqual
+  | ComparisonEquals
+  | ComparisonNotEquals
+  | StringConcat
+
+// @compiler blocked: missing-implementation
+type Infix =
+  | InfixFnCall of InfixFnName
+  | BinOp of BinaryOperation
+
+
+// @compiler blocked: missing-implementation
+type StringSegment =
+  | StringText of String
+  | StringInterpolation of Expr
+
+
+// @compiler blocked: missing-implementation
+type PipeExpr =
+  | EPipeVariable of ID * String * List<Expr>
+
+  | EPipeLambda of ID * List<LetPattern> * Expr
+
+  | EPipeInfix of ID * Infix * Expr * FQFnName.ImplChoice
+
+  | EPipeFnCall of
+    ID *
+    NameResolution<FQFnName.FQFnName> *
+    typeArgs: List<TypeReference> *
+    args: List<Expr> *
+    /// As `EFnName`: what this call worked out for the callee's bounds.
+    boundImpls: List<FQFnName.BoundImpl>
+
+  | EPipeEnum of
+    ID *
+    typeName: NameResolution<FQTypeName.FQTypeName> *
+    caseName: String *
+    fields: List<Expr>
+
+
+// @compiler blocked: missing-implementation
+type MatchCase =
+  { pat: MatchPattern
+    whenCondition: Stdlib.Option.Option<Expr>
+    rhs: Expr }
+
+
+
+/// Expressions - the main part of the language.
+// @compiler blocked: missing-implementation
+type Expr =
+  | EUnit of ID
+
+  // simple data
+
+  | EBool of ID * Bool
+
+  | EInt8 of ID * Int8
+  | EUInt8 of ID * UInt8
+  | EInt16 of ID * Int16
+  | EUInt16 of ID * UInt16
+  | EInt32 of ID * Int32
+  | EUInt32 of ID * UInt32
+  | EInt64 of ID * Int64
+  | EUInt64 of ID * UInt64
+  | EInt128 of ID * Int128
+  | EUInt128 of ID * UInt128
+  | EInt of ID * Int
+
+  // Allow the user to have arbitrarily big numbers, even if they don't make sense as
+  // floats. The float is split as we want to preserve what the user entered.
+  // Strings are used as numbers lose the leading zeros (eg 7.00007)
+  | EFloat of ID * Sign * String * String
+
+  /// A character is an Extended Grapheme Cluster (hence why we use a String). This
+  /// is equivalent to one screen-visible "character" in Unicode.
+  | EChar of ID * String
+
+  | EString of ID * List<StringSegment>
+
+
+  // structures of data
+  | EList of ID * List<Expr>
+
+  | EDict of ID * List<Expr * Expr>
+
+  | ETuple of ID * Expr * Expr * List<Expr>
+
+  | ERecord of
+    ID *
+    typeName: NameResolution<FQTypeName.FQTypeName> *
+    typeArgs: List<TypeReference> *
+    fields: List<String * Expr>
+
+  | EEnum of
+    ID *
+    typeName: NameResolution<FQTypeName.FQTypeName> *
+    typeArgs : List<TypeReference> *
+    caseName: String *
+    fields: List<Expr>
+
+  // declaring and accessing variables
+  | ELet of ID * LetPattern * Expr * Expr
+  | ERecordFieldAccess of ID * Expr * String
+  | EVariable of ID * String
+  | EArg of ID * Int
+  | EValue of ID * NameResolution<FQValueName.FQValueName>
+
+  // control flow
+  | EUnwrap of ID * Expr
+  | EIf of
+    ID *
+    cond: Expr *
+    thenExpr: Expr *
+    elseExpr: Stdlib.Option.Option<Expr>
+
+  | EMatch of ID * arg: Expr * cases: List<MatchCase>
+
+  | EPipe of ID * Expr * List<PipeExpr>
+
+
+  // function calls
+  /// `a + b`. `implFn` is what a trait-method name carries: the fn the implementation chosen
+  /// when this was SAVED names for the operator's method, so the operator goes on meaning what
+  /// it meant. `Unknown` for the operators that are no trait method (`==`, `!=`, `&&`, `||`)
+  /// and where the operand type is only known at run time.
+  | EInfix of
+    ID *
+    Infix *
+    Expr *
+    Expr *
+    implFn: FQFnName.ImplChoice
+
+  | ELambda of ID * List<LetPattern> * Expr
+
+  // TODO do typeArgs actually apply here?
+  // they definitely don't _always_ make sense.
+  | EApply of ID * Expr * typeArgs: List<TypeReference> * args: List<Expr>
+
+  | EFnName of ID * NameResolution<FQFnName.FQFnName> * List<FQFnName.BoundImpl>
+
+  | ERecordUpdate of ID * record: Expr * updates: List<String * Expr>
+
+  | EStatement of ID * first: Expr * next: Expr
+
+  | ESelf of ID
+
+module Expr =
+  // @compiler blocked: missing-implementation
+  let toID (expr: Expr) : ID =
+    match expr with
+    | EUnit id
+    | EBool(id, _)
+    | EInt8(id, _)
+    | EUInt8(id, _)
+    | EInt16(id, _)
+    | EUInt16(id, _)
+    | EInt32(id, _)
+    | EUInt32(id, _)
+    | EInt64(id, _)
+    | EUInt64(id, _)
+    | EInt128(id, _)
+    | EUInt128(id, _)
+    | EInt(id, _)
+    | EFloat(id, _, _, _)
+    | EChar(id, _)
+    | EString(id, _)
+    | ELet(id, _, _, _)
+    | EIf(id, _, _, _)
+    | EInfix(id, _, _, _, _)
+    | ELambda(id, _, _)
+    | ERecordFieldAccess(id, _, _)
+    | EUnwrap(id, _)
+    | EVariable(id, _)
+    | EArg(id, _)
+    | EValue(id, _)
+    | EFnName(id, _, _)
+    | EApply(id, _, _, _)
+    | EList(id, _)
+    | EDict(id, _)
+    | ETuple(id, _, _, _)
+    | EPipe(id, _, _)
+    | ERecord(id, _, _, _)
+    | EEnum(id, _, _, _, _)
+    | EMatch(id, _, _)
+    | ERecordUpdate(id, _, _)
+    | EStatement(id, _, _)
+    | ESelf id -> id
+
+
+// Used to mark whether a function/type has been deprecated, and if so,
+// details about possible replacements/alternatives, and reasoning
+// @compiler blocked: missing-implementation
+type Deprecation<'name> =
+  | NotDeprecated
+
+  /// The exact same thing is available under a new, preferred name
+  | RenamedTo of 'name
+
+  /// This has been deprecated and has a replacement we can suggest
+  | ReplacedBy of 'name
+
+  /// This has been deprecated and not replaced, provide a message for the user
+  | DeprecatedBecause of String
+
+
+// @compiler blocked: missing-implementation
+let parsePackageLocation (nameToParse: String): PackageLocation =
+  let parts = Stdlib.String.split nameToParse "."
+  match parts with
+  | owner :: rest ->
+    let rev = Stdlib.List.reverse rest
+    match rev with
+    | name :: rest ->
+      PackageLocation
+        { owner = owner
+          modules = Stdlib.List.reverse rest
+          name = name }
+    | [] ->
+      // CLEANUP: This case should be handled better
+      // Just an owner name with no module/entity name
+      // Return a location pointing to the owner itself
+      PackageLocation
+        { owner = owner
+          modules = []
+          name = "" }
+  | [] ->
+    // Empty name (shouldn't happen, but handle it)
+    PackageLocation { owner = "", modules = [], name = "" }
+
+// @compiler blocked: missing-implementation
+type BranchID = Uuid
+
+/// Content-addressed hash for package items (hex-encoded SHA-256)
+// @compiler replace: packages/darklang/languageTools/programTypes.dark#Darklang.LanguageTools.ProgramTypes.Hash reason=compiler-implementation
+type Hash = | Hash of String
+
+// @compiler replace: packages/darklang/languageTools/programTypes.dark#Darklang.LanguageTools.ProgramTypes.hashToString reason=compiler-implementation
+let hashToString (hash: Hash) : String =
+  match hash with
+  | Hash h -> h
+
+/// First 8 hex chars, for human-readable display
+// @compiler blocked: missing-implementation
+let hashToShort (hash: Hash) : String =
+  let h = hashToString hash
+  Stdlib.String.first h 8
+
+/// The hash of a piece of PROSE, which is not content and so is not hashed the way an item is.
+///
+/// `UpdateDoc.previous` names the text it replaces, and naming it needs a way to say WHICH text
+/// without carrying it. Same construction as an item hash (SHA-256, lowercase hex) so the two are
+/// indistinguishable in a column, and deliberately not the same function: an item hash is over a
+/// canonical serialization and this is over the bytes of a string. Must agree with
+/// `LibExecution.ProgramTypes.Hash.ofText`, which is what reads it back.
+// @compiler blocked: missing-implementation
+let hashOfText (text: String) : Hash =
+  (Stdlib.Blob.toHex (Stdlib.Crypto.sha256 (Stdlib.String.toBlob text)))
+  |> Stdlib.String.toLowercase
+  |> Hash.Hash
+
+/// A package entity paired with its location
+// @compiler blocked: missing-implementation
+type LocatedItem<'entity> =
+  { entity: 'entity
+    location: PackageLocation }
+
+
+/// A trait named from a bound or an impl, plus type args for any non-self params.
+// @compiler blocked: missing-implementation
+type TraitRef =
+  { trait_: NameResolution<FQTraitName.FQTraitName>
+    typeArgs: List<TypeReference> }
+
+/// `'a: Show` on a fn or type declaration
+// @compiler blocked: missing-implementation
+type Bound =
+  { param: String
+    trait_: TraitRef }
+
+
+/// A stdlib-, user-, or package- defined type (an alias, record, or enum)
+module TypeDeclaration =
+  // @compiler blocked: missing-implementation
+  type RecordField =
+    { name: String
+      typ: TypeReference
+      description: String }
+
+  // @compiler blocked: missing-implementation
+  type EnumField =
+    { typ: TypeReference
+      label: Stdlib.Option.Option<String>
+      description: String }
+
+  // @compiler blocked: missing-implementation
+  type EnumCase =
+    { name: String
+      fields: List<EnumField>
+      description: String }
+
+  // @compiler blocked: missing-implementation
+  type Definition =
+    | Alias of TypeReference
+    | Record of List<RecordField>
+    | Enum of List<EnumCase>
+
+  // @compiler blocked: missing-implementation
+  type TypeDeclaration =
+    { typeParams: List<String>
+      /// `type Set<'a: Compare> = ...`
+      bounds: List<Bound>
+      definition: Definition }
+
+
+
+
+// Package space
+module PackageType =
+  // @compiler blocked: missing-implementation
+  type PackageType =
+    { hash: FQTypeName.Package
+      declaration: TypeDeclaration.TypeDeclaration
+      description: String }
+
+module PackageValue =
+  // @compiler blocked: missing-implementation
+  type PackageValue =
+    { hash: FQValueName.Package
+      body: Expr
+      description: String }
+
+module PackageFn =
+  // @compiler blocked: missing-implementation
+  type Parameter =
+    { name: String
+      typ: TypeReference
+      description: String }
+
+  // @compiler blocked: missing-implementation
+  type PackageFn =
+    { hash: FQFnName.Package
+      body: Expr
+      typeParams: List<String>
+      parameters: List<Parameter>
+      returnType: TypeReference
+      description: String
+      /// The author's ceiling on what this function and everything it calls
+      /// may do at runtime, from the `:{…}` row on the declaration. It only
+      /// restricts; granting stays with the instance, run and package layers.
+      ///
+      ///   None          no row was written: no function layer is added
+      ///   Some []       `:{}`: effect-free, every host effect inside is denied
+      ///   Some [Http, …] `:{Http, …}`: only these; anything else inside is denied
+      ///
+      /// Part of the content hash and of the upgrade contract, so changing the
+      /// row is a new version that `permissions update` asks about.
+      permissionCeiling: Option<List<LanguageTools.Permissions.Effect>>
+      /// `'a: Show + Compare` on the type params; part of the content hash. Checked
+      /// at fn entry by the interpreter and statically by the at-rest checker.
+      bounds: List<Bound> }
+
+
+/// A trait: a set of fn signatures over one open type. Its own item kind.
+module Trait =
+  /// One method's signature; no body (the impls have those).
+  ///
+  /// The ceiling is DECLARED and stored and hashed with the trait, and nothing enforces it
+  /// against an implementation yet, so an impl may do more than the method allows. See the
+  /// F# mirror for the detail.
+  // @compiler blocked: missing-implementation
+  type Method =
+    { name: String
+      typeParams: List<String>
+      /// `let convert<'b: Compare> (v: 'a) : 'b`: what the method's own type params owe, on
+      /// top of the trait's bound on the self type
+      bounds: List<Bound>
+      parameters: List<PackageFn.Parameter>
+      returnType: TypeReference
+      permissionCeiling: Option<List<LanguageTools.Permissions.Effect>>
+      description: String }
+
+  // @compiler blocked: missing-implementation
+  type Trait =
+    { hash: FQTraitName.Package
+      /// The first is the self type
+      typeParams: List<String>
+      /// Supertraits, as bounds on the params
+      bounds: List<Bound>
+      methods: List<Method>
+      description: String }
+
+
+/// An impl: how one type does a trait. Its own item kind, named at
+/// `<module>[.<Type>].<Trait>`, with its method fns as ordinary fns beneath it.
+module TraitImpl =
+  // @compiler blocked: missing-implementation
+  type TraitImpl =
+    { hash: Hash
+      trait_: NameResolution<FQTraitName.FQTraitName>
+      /// The trait's non-self type args
+      traitTypeArgs: List<TypeReference>
+      /// What the impl is for: `Point`, `Int64`, `List<'a>`
+      self: TypeReference
+      /// `impl<'a: Show> Show for List<'a>`: the impl's own params and bounds
+      typeParams: List<String>
+      bounds: List<Bound>
+      /// method name and the fn that implements it, in the trait's order
+      methods: List<String * NameResolution<FQFnName.FQFnName>>
+      description: String }
+
+module PackageTest =
+  // @compiler blocked: missing-implementation
+  type ExpectedError =
+    | RuntimeError of String
+
+  /// Named executable package content. It is deliberately not callable from
+  /// production expressions; the test runner evaluates its body directly.
+  // @compiler blocked: missing-implementation
+  type PackageTest =
+    { hash: Hash
+      body: Expr
+      description: String
+      expectedError: Option<ExpectedError> }
+
+
+/// The kind of package item (function, type, value, trait, impl, or test)
+// @compiler blocked: missing-implementation
+type ItemKind =
+  | Fn
+  | Type
+  | Value
+  | Trait
+  | TraitImpl
+  | Test
+
+module ItemKind =
+  /// The spelling that goes in a database column, a URL and an op bundle. The one place it is
+  /// written on this side, because it is a round trip: a second copy that disagreed about `impl`
+  /// versus `traitImpl` would read back someone else's rows as the wrong kind. It has to agree
+  /// with `PT.ItemKind.toString` in F#, which writes the same column from the fold.
+  // @compiler blocked: missing-implementation
+  let toString (k: ItemKind) : String =
+    match k with
+    | Fn -> "fn"
+    | Type -> "type"
+    | Value -> "value"
+    | Trait -> "trait"
+    | TraitImpl -> "impl"
+    | Test -> "test"
+
+  /// `None` for anything `toString` would not have written. A blanket arm here is how a kind
+  /// nobody anticipated becomes a function: the copy in `SCM.Deps` fell through to `Fn`.
+  // @compiler blocked: missing-implementation
+  let fromString (s: String) : Stdlib.Option.Option<ItemKind> =
+    match s with
+    | "fn" -> Stdlib.Option.Option.Some ItemKind.Fn
+    | "type" -> Stdlib.Option.Option.Some ItemKind.Type
+    | "value" -> Stdlib.Option.Option.Some ItemKind.Value
+    | "trait" -> Stdlib.Option.Option.Some ItemKind.Trait
+    | "impl" -> Stdlib.Option.Option.Some ItemKind.TraitImpl
+    | "test" -> Stdlib.Option.Option.Some ItemKind.Test
+    | _ -> Stdlib.Option.Option.None
+
+/// A reference to a specific package item by content hash.
+/// Collapses (Hash * ItemKind) pairs into one shape; leaves room for future
+/// growth (RefBuiltin, RefExternal, ...).
+// @compiler blocked: missing-implementation
+type Reference =
+  | PackageType of Hash
+  | PackageValue of Hash
+  | PackageFn of Hash
+  | PackageTrait of Hash
+  | PackageTraitImpl of Hash
+  | PackageTest of Hash
+
+module Reference =
+  // @compiler blocked: missing-implementation
+  let hash (r: Reference) : Hash =
+    match r with
+    | PackageType h -> h
+    | PackageValue h -> h
+    | PackageFn h -> h
+    | PackageTrait h -> h
+    | PackageTraitImpl h -> h
+    | PackageTest h -> h
+
+  // @compiler blocked: missing-implementation
+  let kind (r: Reference) : ItemKind =
+    match r with
+    | PackageType _ -> ItemKind.Type
+    | PackageValue _ -> ItemKind.Value
+    | PackageFn _ -> ItemKind.Fn
+    | PackageTrait _ -> ItemKind.Trait
+    | PackageTraitImpl _ -> ItemKind.TraitImpl
+    | PackageTest _ -> ItemKind.Test
+
+  // @compiler blocked: missing-implementation
+  let fromHashAndKind (h: Hash) (k: ItemKind) : Reference =
+    match k with
+    | Type -> Reference.PackageType h
+    | Value -> Reference.PackageValue h
+    | Fn -> Reference.PackageFn h
+    | Trait -> Reference.PackageTrait h
+    | TraitImpl -> Reference.PackageTraitImpl h
+    | Test -> Reference.PackageTest h
+
+/// Why a package item has been deprecated. Author-supplied metadata on the
+/// Deprecate op; consumers decide how loud to be.
+// @compiler blocked: missing-implementation
+type DeprecationKind =
+  /// A different item (different hash) should be used instead.
+  | SupersededBy of replacement: Reference
+  /// Actively dangerous — runtime halts on invocation by default.
+  | Harmful
+  /// Don't use this anymore (catch-all).
+  | Obsolete
+
+/// A single repoint: what propagation moved. Reported back to the caller; NOT an op.
+// @compiler blocked: missing-implementation
+type PropagateRepoint =
+  { location: PackageLocation
+    fromRef: Reference
+    toRef: Reference }
+
+
+/// What happened to a branch. A closed set, so a type rather than a string. Both cases are monotonic:
+/// applying one twice, or out of order, lands in the same place. Rename is absent because it is
+/// last-writer-wins and `branches` records no stamp to arbitrate with.
+// @compiler blocked: missing-implementation
+type BranchEventKind =
+  /// The ids of the ops the merge moved. A peer holding more of the branch than the merger saw (its own
+  /// unpushed edits) keeps those on the branch.
+  | Merged of ops: List<Uuid>
+  | Archived
+
+/// What a `Decision` DID. The shared part of a decision (who, where, why) lives on the op; this is the
+/// part that varies, so a decision that binds a name and one that only closes a finding can't be
+/// confused for each other.
+// @compiler blocked: missing-implementation
+type DecisionKind =
+  /// Bind this name to THIS version, the one the fold didn't pick. Its own case rather than another
+  /// SetName because ops are content-addressed: re-authoring the losing SetName produces the op that
+  /// already exists and folds nothing. Binds with source='resolution' and closes the conflict as
+  /// `overridden`.
+  | Override of target: Reference
+  /// A standing finding has been seen and accepted. Closes it as `acked`, and binds nothing.
+  | Ack of findingId: String
+/// WHICH piece of prose an `UpdateDoc` sets: the declaration's own, or one named part of it.
+///
+/// The nested parts are the point. A doc on a field, a case or a parameter is outside the identity
+/// hash too, so before these there was no op that could carry an edit to one.
+// @compiler blocked: missing-implementation
+type DocPart =
+  | WholeItem
+  | RecordField of fieldName: String
+  | EnumCase of caseName: String
+  /// By POSITION, not name: a parameter's name is not in the identity hash, so a name would not
+  /// survive the version it was written against. Field and case names ARE hashed.
+  | Parameter of parameterIndex: Int
+
+module DocPart =
+  /// The part a stored key names ("item", "record-field:x", "parameter:0"), or None for one this
+  /// build cannot read. Must agree with `LibDB.Docs.partKey`, which writes them.
+  // @compiler blocked: missing-implementation
+  let fromKey (key: String) : Stdlib.Option.Option<DocPart> =
+    match Stdlib.String.split key ":" with
+    | [ "item" ] -> Stdlib.Option.Option.Some DocPart.WholeItem
+    | [ "record-field", name ] -> Stdlib.Option.Option.Some(DocPart.RecordField name)
+    | [ "enum-case", name ] -> Stdlib.Option.Option.Some(DocPart.EnumCase name)
+    | [ "parameter", index ] ->
+      Stdlib.Int.parse index
+      |> Stdlib.Result.toOption
+      |> Stdlib.Option.map (fun i -> DocPart.Parameter i)
+    | _ -> Stdlib.Option.Option.None
+
+  /// How it reads in a listing: which part of the declaration is being described.
+  // @compiler blocked: missing-implementation
+  let describe (p: DocPart) : String =
+    match p with
+    | WholeItem -> "the item"
+    | RecordField name -> $"field {name}"
+    | EnumCase name -> $"case {name}"
+    | Parameter index -> $"parameter {Stdlib.toString (index + 1)}"
+
+
+// @compiler blocked: missing-implementation
+type PackageOp =
+  | AddType of PackageType.PackageType
+  | AddValue of PackageValue.PackageValue
+  | AddFn of PackageFn.PackageFn
+  | AddTrait of Trait.Trait
+  | AddTraitImpl of TraitImpl.TraitImpl
+  | AddTest of PackageTest.PackageTest
+  /// Bind a name (location) to a piece of content (target).
+  ///
+  /// `previous` is the hash this binding REPLACED, or None when the location was empty (or when whoever
+  /// authored it had no store to ask, which is true of the parsers). Two SetNames for one location that
+  /// BOTH name no predecessor are two independent creations, which is a conflict; one that names the
+  /// other's hash is an ordinary edit, which is not.
+  | SetName of
+      location: PackageLocation *
+      target: Reference *
+      previous: Stdlib.Option.Option<Hash>
+  /// A name stops existing. Unlists whatever is live at the location and nothing else: the content stays
+  /// reachable by hash. `previous` is the hash it unbound. Not a Deprecate, which is about content and would
+  /// mark every other name on the same body; a deprecated name still resolves, an unbound one does not.
+  | Unbind of location: PackageLocation * previous: Stdlib.Option.Option<Hash>
+  /// Author-initiated deprecation annotation on a specific hash.
+  ///
+  /// `restating` is empty except on the restatement path, same hole as `UpdateDoc`'s one axis over:
+  /// `Deprecate` and `Undeprecate` are each other's inverse, so saying one again after the other
+  /// produces the op that said it the first time. It matters more on `Undeprecate`, which carries
+  /// nothing else, so without it there is exactly one possible undeprecate per item for all time.
+  | Deprecate of
+      target: Reference *
+      kind: DeprecationKind *
+      message: String *
+      restating: Stdlib.Option.Option<String>
+  /// Clear any prior deprecation on a target.
+  | Undeprecate of target: Reference * restating: Stdlib.Option.Option<String>
+  /// What the thing at a NAME says about itself, or one named part of it.
+  ///
+  /// Scoped to a location, not to content, and that is the point: content is shared. Ten names hold
+  /// `type ParseError = | BadFormat | OutOfRange`, and what `Int64.ParseError` means is not what
+  /// `UInt64.ParseError` means. The declaration's own `///` still travels in the item and is the
+  /// fallback; this is how one name says something else.
+  ///
+  /// `previous` is the hash of the text being replaced, None when there was nothing there. It is
+  /// what lets two people editing one doc comment produce a recorded conflict rather than one of
+  /// them losing their words silently. `restating` is empty except on the restatement path.
+  | UpdateDoc of
+      location: PackageLocation *
+      part: DocPart *
+      text: String *
+      previous: Stdlib.Option.Option<Hash> *
+      restating: Stdlib.Option.Option<String>
+  /// A human's judgment about a NAME, recorded so that it travels. Overriding a binding and acking a
+  /// finding are one class of act -- someone decided something about a location, and it has to hold on
+  /// every machine -- so they are one op differing by `kind`. `id` is what makes each decision distinct,
+  /// and idempotence is the caller's choice of what to put in it. `reason` is carried, never interpreted.
+  | Decision of
+      id: String *
+      location: PackageLocation *
+      reason: String *
+      kind: DecisionKind
+  /// Something that happened to a BRANCH rather than to a name. Merged ops travel on their own, since
+  /// they become main ops; the FACT of the merge does not, so without this a colleague's copy of a branch
+  /// goes on listing it as live work after you land it.
+  | BranchEvent of branchId: Uuid * event: BranchEventKind * at: String
+
+
+module Search =
+  /// The type of entity to search for
+  // @compiler blocked: missing-implementation
+  type EntityType =
+    | Type
+    | Module
+    | Fn
+    | Value
+    | Trait
+    | TraitImpl
+    | Test
+
+  /// How deep to search in the module hierarchy
+  // @compiler blocked: missing-implementation
+  type SearchDepth =
+    | OnlyDirectDescendants
+    | AllDescendants
+
+  /// Query parameters for searching packages
+  // @compiler blocked: missing-implementation
+  type SearchQuery =
+    {
+      /// i.e. "Darklang.Stdlib"
+      currentModule: List<String>
+
+      /// i.e. "List" or "map"
+      text: String
+
+      searchDepth: SearchDepth
+
+      /// empty list implies 'any'
+      entityTypes: List<EntityType>
+
+      /// if true, require exact matches for names and modules instead of fuzzy matching
+      exactMatch: Bool
+    }
+
+  /// Results from a package search
+  // @compiler blocked: missing-implementation
+  type SearchResults =
+    { submodules: List<List<String>> // [ [ "List"], ["String", "List"] ]
+      types : List<LocatedItem<ProgramTypes.PackageType.PackageType>>
+      values : List<LocatedItem<ProgramTypes.PackageValue.PackageValue>>
+      fns : List<LocatedItem<ProgramTypes.PackageFn.PackageFn>>
+      traits : List<LocatedItem<ProgramTypes.Trait.Trait>>
+      impls : List<LocatedItem<ProgramTypes.TraitImpl.TraitImpl>>
+      tests : List<LocatedItem<ProgramTypes.PackageTest.PackageTest>> }
+
+
+
+
+/// Functionality written in Dark stored and managed outside of user space
+///
+/// Note: It may be tempting to think the `getX` fns shouldn't return Options,
+/// but there's a chance of Local <-> Cloud not being fully in sync,
+/// for whatever reasons.
+///
+/// Visibility rules:
+/// - Approved items are visible to everyone
+module PackageManager =
+  // @compiler blocked: missing-implementation
+  type PackageManager =
+    { findType: (BranchID * PackageLocation) -> Stdlib.Option.Option<FQTypeName.Package>
+      findValue: (BranchID * PackageLocation) -> Stdlib.Option.Option<FQValueName.Package>
+      findFn: (BranchID * PackageLocation) -> Stdlib.Option.Option<FQFnName.Package>
+      findTrait: (BranchID * PackageLocation) -> Stdlib.Option.Option<FQTraitName.Package>
+
+      getType:
+        FQTypeName.Package -> Stdlib.Option.Option<PackageType.PackageType>
+      getValue:
+        FQValueName.Package
+          -> Stdlib.Option.Option<PackageValue.PackageValue>
+      getFn: FQFnName.Package -> Stdlib.Option.Option<PackageFn.PackageFn>
+      getTrait: FQTraitName.Package -> Stdlib.Option.Option<Trait.Trait>
+
+      search: (BranchID * Search.SearchQuery) -> Search.SearchResults }
+
+
+  /// Allows you to side-load a few 'extras' in-memory, along
+  /// the normal fetching functionality. (Mostly helpful for tests)
+  // @compiler blocked: missing-implementation
+  let withExtras
+    (pm: PackageManager.PackageManager)
+    (types: List<LocatedItem<PackageType.PackageType>>)
+    (values: List<LocatedItem<PackageValue.PackageValue>>)
+    (fns: List<LocatedItem<PackageFn.PackageFn>>)
+    : PackageManager.PackageManager =
+    PackageManager.PackageManager
+      { findType =
+          fun (branchId, location) ->
+            match types |> Stdlib.List.findFirst (fun t -> t.location == location) with
+            | Some t -> Stdlib.Option.Option.Some t.entity.hash
+            | None -> pm.findType (branchId, location)
+        findValue =
+          fun (branchId, location) ->
+            match values |> Stdlib.List.findFirst (fun v -> v.location == location) with
+            | Some v -> Stdlib.Option.Option.Some v.entity.hash
+            | None -> pm.findValue (branchId, location)
+        findFn =
+          fun (branchId, location) ->
+            match fns |> Stdlib.List.findFirst (fun f -> f.location == location) with
+            | Some f -> Stdlib.Option.Option.Some f.entity.hash
+            | None -> pm.findFn (branchId, location)
+
+        getType =
+          fun id ->
+            match types |> Stdlib.List.findFirst (fun t -> t.entity.hash == id) with
+            | Some t -> Stdlib.Option.Option.Some t.entity
+            | None -> pm.getType id
+        getValue =
+          fun id ->
+            match values |> Stdlib.List.findFirst (fun v -> v.entity.hash == id) with
+            | Some v -> Stdlib.Option.Option.Some v.entity
+            | None -> pm.getValue id
+        getFn =
+          fun id ->
+            match fns |> Stdlib.List.findFirst (fun f -> f.entity.hash == id) with
+            | Some f -> Stdlib.Option.Option.Some f.entity
+            | None -> pm.getFn id
+
+        findTrait = pm.findTrait
+        getTrait = pm.getTrait
+
+        search = pm.search }
+
+
+  /// Create a PackageManager from PackageOps, combining with an existing PM
+  // @compiler blocked: missing-implementation
+  let withExtraOps
+    (basePM: PackageManager.PackageManager)
+    (ops: List<PackageOp>)
+    : PackageManager.PackageManager =
+    let typesByID =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | AddType t -> Stdlib.Option.Option.Some((t.hash, t))
+        | _ -> Stdlib.Option.Option.None)
+
+    let valuesByID =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | AddValue v -> Stdlib.Option.Option.Some((v.hash, v))
+        | _ -> Stdlib.Option.Option.None)
+
+    let fnsByID =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | AddFn f -> Stdlib.Option.Option.Some((f.hash, f))
+        | _ -> Stdlib.Option.Option.None)
+
+    let traitsByID =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | AddTrait t -> Stdlib.Option.Option.Some((t.hash, t))
+        | _ -> Stdlib.Option.Option.None)
+
+    let traitLocationMap =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | SetName (loc, PackageTrait hash, _) -> Stdlib.Option.Option.Some((loc, hash))
+        | _ -> Stdlib.Option.Option.None)
+
+    let typeLocationMap =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | SetName (loc, PackageType hash, _) -> Stdlib.Option.Option.Some((loc, hash))
+        | _ -> Stdlib.Option.Option.None)
+
+    let valueLocationMap =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | SetName (loc, PackageValue hash, _) -> Stdlib.Option.Option.Some((loc, hash))
+        | _ -> Stdlib.Option.Option.None)
+
+    let fnLocationMap =
+      ops
+      |> Stdlib.List.filterMap (fun op ->
+        match op with
+        | SetName (loc, PackageFn hash, _) -> Stdlib.Option.Option.Some((loc, hash))
+        | _ -> Stdlib.Option.Option.None)
+
+    // Create PackageManager that looks up in ops first, then falls back to basePM
+    PackageManager.PackageManager
+      { findType =
+          fun (branchId, location) ->
+            match typeLocationMap
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (loc, _) = tuple
+                    loc == location) with
+            | Some tuple ->
+              let (_, id) = tuple
+              Stdlib.Option.Option.Some id
+            | None -> basePM.findType (branchId, location)
+
+        findValue =
+          fun (branchId, location) ->
+            match valueLocationMap
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (loc, _) = tuple
+                    loc == location) with
+            | Some tuple ->
+              let (_, id) = tuple
+              Stdlib.Option.Option.Some id
+            | None -> basePM.findValue (branchId, location)
+
+        findFn =
+          fun (branchId, location) ->
+            match fnLocationMap
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (loc, _) = tuple
+                    loc == location) with
+            | Some tuple ->
+              let (_, id) = tuple
+              Stdlib.Option.Option.Some id
+            | None -> basePM.findFn (branchId, location)
+
+        getType =
+          fun id ->
+            match typesByID
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (tid, _) = tuple
+                    tid == id) with
+            | Some tuple ->
+              let (_, t) = tuple
+              Stdlib.Option.Option.Some t
+            | None -> basePM.getType id
+
+        getValue =
+          fun id ->
+            match valuesByID
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (vid, _) = tuple
+                    vid == id) with
+            | Some tuple ->
+              let (_, v) = tuple
+              Stdlib.Option.Option.Some v
+            | None -> basePM.getValue id
+
+        getFn =
+          fun id ->
+            match fnsByID
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (fid, _) = tuple
+                    fid == id) with
+            | Some tuple ->
+              let (_, f) = tuple
+              Stdlib.Option.Option.Some f
+            | None -> basePM.getFn id
+
+        findTrait =
+          fun (branchId, location) ->
+            match traitLocationMap
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (loc, _) = tuple
+                    loc == location) with
+            | Some tuple ->
+              let (_, id) = tuple
+              Stdlib.Option.Option.Some id
+            | None -> basePM.findTrait (branchId, location)
+
+        getTrait =
+          fun id ->
+            match traitsByID
+                  |> Stdlib.List.findFirst (fun tuple ->
+                    let (tid, _) = tuple
+                    tid == id) with
+            | Some tuple ->
+              let (_, t) = tuple
+              Stdlib.Option.Option.Some t
+            | None -> basePM.getTrait id
+
+        search = basePM.search }
+
+
+// @compiler blocked: missing-implementation
+type Definitions =
+  { types: List<PackageType.PackageType>
+    values: List<PackageValue.PackageValue>
+    fns: List<PackageFn.PackageFn>
+    traits: List<Trait.Trait>
+    impls: List<TraitImpl.TraitImpl>
+    // TODO db and handlers
+    exprs: List<Expr * List<String>> }
+
+module SourceFile =
+  // @compiler blocked: missing-implementation
+  type Declaration =
+    | Type of PackageType.PackageType
+    | Value of PackageValue.PackageValue
+    | Function of PackageFn.PackageFn
+    | Trait of Trait.Trait
+    /// The impl item; its method fns are separate `Function` declarations
+    | Impl of TraitImpl.TraitImpl
+    | Test of PackageTest.PackageTest
+    // db and handlers
+    | Module of Definitions // re-evaluate if this makes sense to be here
+
+  // @compiler blocked: missing-implementation
+  type SourceFile =
+    { declarations: List<Declaration>
+      exprsToEval: List<Expr> }

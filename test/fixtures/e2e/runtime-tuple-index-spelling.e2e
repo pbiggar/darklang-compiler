@@ -1,0 +1,6 @@
+// Tuple indices retain their source spelling until validation.
+(1L, 2L).01 = compileerror="Tuple index '01' is out of bounds"
+(1L, 2L).001 = compileerror="Tuple index '001' is out of bounds"
+(1L, 2L).1 = 1L
+(1L, 2L).2 = 2L
+(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L).10 = 10L

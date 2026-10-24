@@ -349,14 +349,18 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
             match NonEmptyList.tryFromList (List.rev reversed) with
             | None -> Error ("Function '" ^ name ^ "' requires a parameter")
             | Some params ->
+                let returnTarget, symbols =
+                  C.allocateBinding "?return" symbols
+                in
                 map
-                  (fun (_, body, symbols) ->
+                  (fun (bodyType, body, symbols) ->
                     ( ({
                          C.id = signature.id;
                          name;
                          typeParams = signature.typeParams;
                          params;
                          returnType = C.checkedType signature.return;
+                         bodyType = C.checkedType bodyType;
                          body;
                          recursion = None;
                        }
@@ -365,11 +369,10 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
                   (checkExpression
                      {
                        globals with
+                       returnBoundary = Some (returnTarget, signature.return);
                        modulePath = path;
                        typeParams = S.of_list signature.typeParams;
                        bounds = signature.bounds;
-                       currentFunction =
-                         Some (signature.id, name, signature.typeParams);
                      }
                      locals symbols (Some signature.return) fn.WT.body)))
 
@@ -546,7 +549,6 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                   allowInternal;
                   modulePath = [];
                   typeParams = S.empty;
-                  currentFunction = None;
                 }
               in
               bind (WrittenTraitSupport.prepareBounds initialGlobals items)

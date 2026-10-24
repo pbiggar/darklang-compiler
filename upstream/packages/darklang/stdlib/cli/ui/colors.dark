@@ -1,0 +1,226 @@
+module Darklang.Stdlib.Cli.UI.Colors
+
+// Basic colors and formatting
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.reset reason=compiler-implementation
+val reset = "\u001b[0m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bold reason=compiler-implementation
+val bold = "\u001b[1m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.dim reason=compiler-implementation
+val dim = "\u001b[2m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.italic reason=compiler-implementation
+val italic = "\u001b[3m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.underline reason=compiler-implementation
+val underline = "\u001b[4m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.reverse reason=compiler-implementation
+val reverse = "\u001b[7m"
+
+// Standard colors
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.black reason=compiler-implementation
+val black = "\u001b[30m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.red reason=compiler-implementation
+val red = "\u001b[31m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.green reason=compiler-implementation
+val green = "\u001b[32m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.yellow reason=compiler-implementation
+val yellow = "\u001b[33m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.blue reason=compiler-implementation
+val blue = "\u001b[34m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.magenta reason=compiler-implementation
+val magenta = "\u001b[35m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.cyan reason=compiler-implementation
+val cyan = "\u001b[36m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.white reason=compiler-implementation
+val white = "\u001b[37m"
+
+// Bright colors
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightBlack reason=compiler-implementation
+val brightBlack = "\u001b[90m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightRed reason=compiler-implementation
+val brightRed = "\u001b[91m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightGreen reason=compiler-implementation
+val brightGreen = "\u001b[92m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightYellow reason=compiler-implementation
+val brightYellow = "\u001b[93m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightBlue reason=compiler-implementation
+val brightBlue = "\u001b[94m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightMagenta reason=compiler-implementation
+val brightMagenta = "\u001b[95m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightCyan reason=compiler-implementation
+val brightCyan = "\u001b[96m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brightWhite reason=compiler-implementation
+val brightWhite = "\u001b[97m"
+
+// Background colors
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgBlack reason=compiler-implementation
+val bgBlack = "\u001b[40m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgRed reason=compiler-implementation
+val bgRed = "\u001b[41m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgGreen reason=compiler-implementation
+val bgGreen = "\u001b[42m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgYellow reason=compiler-implementation
+val bgYellow = "\u001b[43m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgBlue reason=compiler-implementation
+val bgBlue = "\u001b[44m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgMagenta reason=compiler-implementation
+val bgMagenta = "\u001b[45m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgCyan reason=compiler-implementation
+val bgCyan = "\u001b[46m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.bgWhite reason=compiler-implementation
+val bgWhite = "\u001b[47m"
+
+// Extended 256-colors (foreground)
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.pink reason=compiler-implementation
+val pink = "\x1b[38;5;213m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.purple reason=compiler-implementation
+val purple = "\x1b[38;5;141m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.orange reason=compiler-implementation
+val orange = "\x1b[38;5;208m"
+
+// Background colors
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.grayBg reason=compiler-implementation
+val grayBg = "\x1b[48;5;236m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.purpleBg reason=compiler-implementation
+val purpleBg = "\x1b[48;5;61m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.magentaBg reason=compiler-implementation
+val magentaBg = "\x1b[48;5;134m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.lightPinkBg reason=compiler-implementation
+val lightPinkBg = "\x1b[48;5;218m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.pinkBg reason=compiler-implementation
+val pinkBg = "\x1b[48;5;176m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.blueBg reason=compiler-implementation
+val blueBg = "\x1b[48;5;38m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.greenBg reason=compiler-implementation
+val greenBg = "\x1b[48;5;115m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.yellowBg reason=compiler-implementation
+val yellowBg = "\x1b[48;5;229m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.brownBg reason=compiler-implementation
+val brownBg = "\x1b[48;5;180m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.orangeBg reason=compiler-implementation
+val orangeBg = "\x1b[48;5;222m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.peachBg reason=compiler-implementation
+val peachBg = "\x1b[48;5;216m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.salmonBg reason=compiler-implementation
+val salmonBg = "\x1b[48;5;223m"
+// Faint washes for diff lines - a tint behind normally-highlighted code, not
+// a colour of its own. 24-bit, because the 256-colour cube has no green or
+// red darker than 22/52, which read as solid bars; a terminal without
+// truecolour ignores these and shows the line with no wash, which is fine.
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.faintGreenBg reason=compiler-implementation
+val faintGreenBg = "\x1b[48;2;24;44;30m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.faintRedBg reason=compiler-implementation
+val faintRedBg = "\x1b[48;2;52;28;32m"
+
+// Semantic colors for CLI elements
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.commandColor reason=compiler-implementation
+val commandColor = "\u001b[34m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.argumentColor reason=compiler-implementation
+val argumentColor = "\u001b[32m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.keywordColor reason=compiler-implementation
+val keywordColor = "\u001b[35m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.stringColor reason=compiler-implementation
+val stringColor = "\u001b[33m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.numberColor reason=compiler-implementation
+val numberColor = "\u001b[36m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.commentColor reason=compiler-implementation
+val commentColor = "\u001b[90m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.errorColor reason=compiler-implementation
+val errorColor = "\u001b[31m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.warningColor reason=compiler-implementation
+val warningColor = "\u001b[33m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.successColor reason=compiler-implementation
+val successColor = "\u001b[32m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.infoColor reason=compiler-implementation
+val infoColor = "\u001b[34m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.hintColor reason=compiler-implementation
+val hintColor = "\u001b[2m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.promptColor reason=compiler-implementation
+val promptColor = "\u001b[97m"
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.logoColor reason=compiler-implementation
+val logoColor = "\u001b[90m"
+
+// Interactive viewing colors
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.primary reason=compiler-implementation
+val primary = "\u001b[94m"       // bright blue for primary elements
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.muted reason=compiler-implementation
+val muted = "\u001b[90m"         // dim gray for secondary text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.accent reason=compiler-implementation
+val accent = "\u001b[93m"        // bright yellow for highlights
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.selection reason=compiler-implementation
+val selection = "\u001b[103;30m" // yellow background with black text for selection
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.completionSelection reason=compiler-implementation
+val completionSelection = "\u001b[44;97m" // blue background with white text
+
+// Helper functions for applying colors
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.colorize reason=compiler-implementation
+let colorize (color: String) (text: String) : String =
+  $"{color}{text}{reset}"
+
+/// Leave text as it is. For picking a styling function conditionally without a special case.
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.plain reason=compiler-implementation
+let plain (text: String) : String = text
+
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.boldText reason=compiler-implementation
+let boldText (text: String) : String = colorize bold text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.dimText reason=compiler-implementation
+let dimText (text: String) : String = colorize dim text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.mutedText reason=compiler-implementation
+let mutedText (text: String) : String = colorize muted text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.command reason=compiler-implementation
+let command (text: String) : String = colorize commandColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.argument reason=compiler-implementation
+let argument (text: String) : String = colorize argumentColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.keyword reason=compiler-implementation
+let keyword (text: String) : String = colorize keywordColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.string reason=compiler-implementation
+let string (text: String) : String = colorize stringColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.number reason=compiler-implementation
+let number (text: String) : String = colorize numberColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.comment reason=compiler-implementation
+let comment (text: String) : String = colorize commentColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.error reason=compiler-implementation
+let error (text: String) : String = colorize errorColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.warning reason=compiler-implementation
+let warning (text: String) : String = colorize warningColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.success reason=compiler-implementation
+let success (text: String) : String = colorize successColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.info reason=compiler-implementation
+let info (text: String) : String = colorize infoColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.hint reason=compiler-implementation
+let hint (text: String) : String = colorize hintColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.prompt reason=compiler-implementation
+let prompt (text: String) : String = colorize promptColor text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.logo reason=compiler-implementation
+let logo (text: String) : String = colorize logoColor text
+// One-shot colourisers, for the times you want a coloured string rather than a code to compose with.
+// These were a second module (`Stdlib.Cli.UI.Color`) with the same names as the codes above, which meant
+// `Color.red` and `Colors.red` were different things one letter apart.
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.redText reason=compiler-implementation
+let redText (text: String) : String = colorize red text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.greenText reason=compiler-implementation
+let greenText (text: String) : String = colorize green text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.yellowText reason=compiler-implementation
+let yellowText (text: String) : String = colorize yellow text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.blueText reason=compiler-implementation
+let blueText (text: String) : String = colorize blue text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.magentaText reason=compiler-implementation
+let magentaText (text: String) : String = colorize magenta text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.cyanText reason=compiler-implementation
+let cyanText (text: String) : String = colorize cyan text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.whiteText reason=compiler-implementation
+let whiteText (text: String) : String = colorize white text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.grayText reason=compiler-implementation
+let grayText (text: String) : String = colorize brightBlack text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.italicText reason=compiler-implementation
+let italicText (text: String) : String = colorize italic text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.underlineText reason=compiler-implementation
+let underlineText (text: String) : String = colorize underline text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.strikethroughText reason=compiler-implementation
+let strikethroughText (text: String) : String = colorize "\u001b[9m" text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.onRed reason=compiler-implementation
+let onRed (text: String) : String = colorize bgRed text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.onGreen reason=compiler-implementation
+let onGreen (text: String) : String = colorize bgGreen text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.onYellow reason=compiler-implementation
+let onYellow (text: String) : String = colorize bgYellow text
+// @compiler replace: packages/darklang/stdlib/cli/ui/colors.dark#Darklang.Stdlib.Cli.UI.Colors.onBlue reason=compiler-implementation
+let onBlue (text: String) : String = colorize bgBlue text

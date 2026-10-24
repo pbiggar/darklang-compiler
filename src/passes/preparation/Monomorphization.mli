@@ -14,7 +14,7 @@ val specializeFromSpecs :
   CheckedAST.symbols ->
   SpecializationIdentity.genericFuncDefs ->
   SpecializationIdentity.SpecSet.t ->
-  SpecializationIdentity.specializationResult
+  (SpecializationIdentity.specializationResult, string) result
 
 val replaceTypeApps : CheckedAST.symbols -> CheckedAST.expr -> CheckedAST.expr
 
@@ -41,6 +41,6 @@ val replaceTypeAppsInProgramWithRegistry :
 val monomorphizeWithGenericFuncDefs :
   SpecializationIdentity.genericFuncDefs ->
   CheckedAST.program ->
-  CheckedAST.program
+  (CheckedAST.program, string) result
 
 val programNeedsLambdaLowering : StringOrder.Set.t -> CheckedAST.program -> bool

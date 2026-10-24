@@ -1,0 +1,24 @@
+// Application arguments retain their boundaries before grouped expressions and unit.
+
+let groupingKeep (value: Int64) (u: Unit) : Int64 = value
+let groupingKeepUnits (first: Unit) (second: Unit) : Int64 = 42L
+let groupingAdd (a: Int64) (b: Int64) : Int64 = a + b
+let groupingInc (n: Int64) : Int64 = n + 1L
+let groupingInvoke (fn: Unit -> Int64) (u: Unit) : Int64 = fn u
+let groupingAnswer (u: Unit) : Int64 = 42L
+let groupingIdentity<'a> (value: a) : a = value
+let groupingKeepString (value: String) (u: Unit) : String = value
+let groupingApply (fn: Int64 -> Unit -> Int64) : Int64 = fn 42L ()
+
+let value = 42L in groupingKeep value () = 42L
+groupingKeep 42L () = 42L
+let value = () in groupingKeepUnits value () = 42L
+let value = 42L in groupingKeep (value) () = 42L
+let value = 20L in groupingAdd value (groupingInc 21L) = 42L
+let value = 20L in groupingAdd value ((fun n -> n + 1L) 21L) = 42L
+groupingInvoke groupingAnswer () = 42L
+groupingKeep (Stdlib.Int64.add 20L 22L) () = 42L
+groupingAnswer () = 42L
+groupingIdentity<Unit> () = ()
+groupingKeepString Stdlib.String.newline () = "\n"
+groupingApply groupingKeep = 42L

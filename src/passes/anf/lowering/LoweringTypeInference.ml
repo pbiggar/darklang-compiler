@@ -119,7 +119,8 @@ let rec inferTypeCore sums names expr environment registry variants functions
   match expr with
   | C.BoundaryRender _ | C.StringLiteral _ | C.InterpolatedString _ ->
       Ok AST.TString
-  | C.RuntimeError _ -> Ok AST.TNever
+  | C.ReturnScope (_, typ, _) -> Ok (C.semanticType typ)
+  | C.EarlyReturn _ | C.RuntimeError _ -> Ok AST.TNever
   | C.UnitLiteral -> Ok AST.TUnit
   | C.Int64Literal _ -> Ok AST.TInt64
   | C.Int128Literal _ -> Ok AST.TInt128

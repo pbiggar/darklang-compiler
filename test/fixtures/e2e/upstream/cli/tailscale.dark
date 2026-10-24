@@ -3,10 +3,15 @@
 // — the MagicDNS peer URL and the identity-header reader — are testable here.
 
 // peerUrl builds the MagicDNS URL a peer is reached at
+// @compiler blocked: compiler-gap
 Darklang.Tailscale.peerUrl "major" "tail-scale" = "https://major.tail-scale.ts.net"
+// @compiler blocked: compiler-gap
 Darklang.Tailscale.peerUrl "laptop" "example" = "https://laptop.example.ts.net"
 
 // loginHeader extracts the injected `Tailscale-User-Login` identity (present, missing, empty cases)
+// @compiler blocked: compiler-gap
 Darklang.Tailscale.loginHeader [("Tailscale-User-Login", "user@example.com"), ("X-Other", "y")] = Stdlib.Option.Option.Some "user@example.com"
+// @compiler blocked: compiler-gap
 Darklang.Tailscale.loginHeader [("X-Other", "y")] = Stdlib.Option.Option.None
+// @compiler blocked: compiler-gap
 Darklang.Tailscale.loginHeader [] = Stdlib.Option.Option.None

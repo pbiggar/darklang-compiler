@@ -62,6 +62,10 @@ and toAtomCore ids sums typeNames inert expr gen env registry variants functions
    Pattern-bound generic values can retain a TVar in the recovered
    TypeMap even though checking established the match result type.
    Give each return path an explicit boundary type before it jumps.
+   A compound argument can hide a match, as JSON parsing does inside a let.
+   Share its continuation instead of multiplying later arguments across arms.
+   Internal representation expressions that lack recoverable types retain
+   their existing branch-local lowering.
 *)
 and toANFBoundAtomCore ids sums typeNames inert expr gen env registry variants
     functions names modules =
@@ -85,49 +89,51 @@ and toANFBoundAtomCore ids sums typeNames inert expr gen env registry variants
             gen )
       in
       match expr with
-      | CheckedAST.Match _ ->
-          let* resultType =
+      | CheckedAST.Match _ | CheckedAST.Let _ -> (
+          match
             LoweringTypeInference.inferTypeCore sums typeNames expr
               (R.typeEnvFromVarEnv env) registry variants functions names
               modules
-          in
-          if K.isSupportedJoinArgumentType resultType then
-            let bound, gen = A.freshVar gen in
-            let* expr, gen =
-              toANFCore ids sums typeNames inert expr gen env registry variants
-                functions names modules
-            in
-            let rec returnsToTypedJumps expr gen =
-              match expr with
-              | A.Return atom ->
-                  let typed, gen = A.freshVar gen in
-                  ( A.Let
-                      ( typed,
-                        A.TypedAtom (atom, resultType),
-                        A.Jump (bound, A.Var typed) ),
+          with
+          | Error _ -> lowerWithBranchLocalBinding ()
+          | Ok resultType ->
+              if K.isSupportedJoinArgumentType resultType then
+                let bound, gen = A.freshVar gen in
+                let* expr, gen =
+                  toANFCore ids sums typeNames inert expr gen env registry
+                    variants functions names modules
+                in
+                let rec returnsToTypedJumps expr gen =
+                  match expr with
+                  | A.Return atom ->
+                      let typed, gen = A.freshVar gen in
+                      ( A.Let
+                          ( typed,
+                            A.TypedAtom (atom, resultType),
+                            A.Jump (bound, A.Var typed) ),
+                        gen )
+                  | A.Jump _ -> (expr, gen)
+                  | A.Join (parameter, continuation, entry) ->
+                      let continuation, gen =
+                        returnsToTypedJumps continuation gen
+                      in
+                      let entry, gen = returnsToTypedJumps entry gen in
+                      (A.Join (parameter, continuation, entry), gen)
+                  | A.Let (id, cexpr, rest) ->
+                      let rest, gen = returnsToTypedJumps rest gen in
+                      (A.Let (id, cexpr, rest), gen)
+                  | A.If (condition, yes, no) ->
+                      let yes, gen = returnsToTypedJumps yes gen in
+                      let no, gen = returnsToTypedJumps no gen in
+                      (A.If (condition, yes, no), gen)
+                in
+                let entry, gen = returnsToTypedJumps expr gen in
+                Ok
+                  ( A.Join
+                      ( { A.id = bound; typ = resultType },
+                        A.Return (A.Var bound),
+                        entry ),
+                    A.Var bound,
                     gen )
-              | A.Jump _ -> (expr, gen)
-              | A.Join (parameter, continuation, entry) ->
-                  let continuation, gen =
-                    returnsToTypedJumps continuation gen
-                  in
-                  let entry, gen = returnsToTypedJumps entry gen in
-                  (A.Join (parameter, continuation, entry), gen)
-              | A.Let (id, cexpr, rest) ->
-                  let rest, gen = returnsToTypedJumps rest gen in
-                  (A.Let (id, cexpr, rest), gen)
-              | A.If (condition, yes, no) ->
-                  let yes, gen = returnsToTypedJumps yes gen in
-                  let no, gen = returnsToTypedJumps no gen in
-                  (A.If (condition, yes, no), gen)
-            in
-            let entry, gen = returnsToTypedJumps expr gen in
-            Ok
-              ( A.Join
-                  ( { A.id = bound; typ = resultType },
-                    A.Return (A.Var bound),
-                    entry ),
-                A.Var bound,
-                gen )
-          else lowerWithBranchLocalBinding ()
+              else lowerWithBranchLocalBinding ())
       | _ -> lowerWithBranchLocalBinding ())

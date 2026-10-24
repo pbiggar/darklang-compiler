@@ -10,6 +10,7 @@ module Errors =
   (let x = MyRecord { col1 = 1L } in x.fieldName) = error="Tried to access field `fieldName`, but it doesn't exist"
 
   #compileerror="Field access requires a record value"
+  // @compiler blocked: compiler-gap
   (Builtin.testRuntimeError "error").fieldName = error="Uncaught exception: error"
 
   #compileerror="Field access requires a record value"

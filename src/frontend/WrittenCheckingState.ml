@@ -10,6 +10,7 @@ type t = {
   flexible : S.t;
   nextVariable : int;
   operators : (AST.binOp * AST.semanticType) list;
+  earlyReturns : AST.bindingId list;
 }
 
 let create symbols =
@@ -19,10 +20,25 @@ let create symbols =
     flexible = S.empty;
     nextVariable = 0;
     operators = [];
+    earlyReturns = [];
   }
 
-let symbols state = state.symbols
 let resolve state = Types.applySubst state.substitution
+
+let markEarlyReturn target state =
+  { state with earlyReturns = target :: state.earlyReturns }
+
+let returnScope target typ body state =
+  if
+    List.exists
+      (fun id -> AST.compareBindingId id target = 0)
+      state.earlyReturns
+  then
+    CheckedAST.ReturnScope
+      (target, CheckedAST.checkedType (resolve state typ), body)
+  else body
+
+let symbols state = state.symbols
 
 let resolveExpression state =
   TypeSubstitution.applySubstToExpr (M.map (resolve state) state.substitution)
@@ -51,6 +67,7 @@ let validateOperator operation = function
       let valid =
         match operation with
         | AST.Add -> integer || typ = AST.TFloat64 || typ = AST.TString
+        | AST.Mod -> integer
         | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor -> integer
         | AST.Pow ->
             (integer || typ = AST.TFloat64)

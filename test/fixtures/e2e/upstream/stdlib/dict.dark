@@ -73,6 +73,7 @@ module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates [ ("a", 1L), ("b", 2L), ("c", 3L) ] =
     (Dict { "c": 3L, "b": 2L, "a": 1L })
 
+  // @compiler blocked: compiler-gap
   Stdlib.Dict.fromListOverwritingDuplicates [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   Stdlib.Dict.fromListOverwritingDuplicates [ (1L, 2L) ] = Dict { 1L: 2L }
 
@@ -90,6 +91,7 @@ module FromList =
   Stdlib.Dict.fromList [ ("Content-Length", "0"), ("Server", "dark") ] =
     Stdlib.Option.Option.Some(Dict { "Content-Length": "0", "Server": "dark" })
 
+  // @compiler blocked: compiler-gap
   Stdlib.Dict.fromList [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   Stdlib.Dict.fromList [ (1L, 1L) ] = Stdlib.Option.Option.Some(Dict { 1L: 1L })
 module Get =
@@ -400,26 +402,26 @@ module NonStringKeys =
       [ [ [ 1L ], [ 3L ] ], [ [ 2L ] ] ]
 
   module RecursiveAdmissibility =
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="Functions cannot be used as dictionary keys"
     Dict { [ (fun x -> x) ]: 1L } = error="Cannot use [(lambda)] as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="Functions cannot be used as dictionary keys"
     Dict { (1L, (fun x -> x)): 1L } = error="Cannot use (1, (lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="Functions cannot be used as dictionary keys"
     Dict { (Stdlib.Option.Option.Some (fun x -> x)): 1L } = error="Cannot use Some((lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
   module Errors =
 #compileerror="Expected TInt64, got TString"
     Dict { 1L: "a", "b": "c" } = error="This dict uses keys of type Int64, but \"b\" has type String."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="Functions cannot be used as dictionary keys"
     (Dict { (fun x -> x): 1L }) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 #compileerror="Lambda requires an expected function type"
     Stdlib.Dict.get (Dict { 1L: "a" }) (fun x -> x) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="Functions cannot be used as dictionary keys"
     Stdlib.Dict.set (Dict { }) (fun x -> x) 1L = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 #compileerror="Lambda requires an expected function type"

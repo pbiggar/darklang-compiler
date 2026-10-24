@@ -1,0 +1,20 @@
+module Darklang.Cli.Clear
+
+
+// @compiler blocked: missing-implementation
+let execute (state: AppState) (args: List<String>) : AppState =
+  Builtin.stdoutClear ()
+  state
+
+
+// @compiler blocked: missing-implementation
+let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
+  []
+
+
+// @compiler blocked: missing-implementation
+let help (_state: AppState) : String =
+  [
+    "Usage: clear"
+    "Clear the terminal screen."
+  ] |> Stdlib.String.join "\n"

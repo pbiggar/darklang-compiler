@@ -1,0 +1,15 @@
+// http3_message_failures.e2e - Typed message, framing, and QPACK wire-error boundaries before FIN.
+let bytes (hex: String) : Blob = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let error (result: Stdlib.Result.Result<Stdlib.__Http3Message.Received, Stdlib.__Http3Wire.Failure>) : Stdlib.Result.Result<Unit, (Stdlib.__Http3Wire.Scope * Int64)> = result |> Stdlib.Result.map (fun _received -> ()) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code))
+let response () : Stdlib.__Http3Message.State = Stdlib.__Http3Message.create (Response false)
+let body () : Stdlib.__Http3Message.State = let state = response () in { state with phase = Body, expected = Some 1L }
+error (Stdlib.__Http3Message.feed (body ()) (bytes "0002")) = Error ((Stream, 270L))
+let state = body () in error (Stdlib.__Http3Message.feed { state with noBody = true } (bytes "0000")) = Error ((Stream, 270L))
+error (Stdlib.__Http3Message.feed (response ()) (bytes "0000")) = Error ((Connection, 261L))
+error (Stdlib.__Http3Message.feed (response ()) (bytes "0400")) = Error ((Connection, 261L))
+error (Stdlib.__Http3Message.feed (response ()) (bytes "0200")) = Error ((Connection, 261L))
+error (Stdlib.__Http3Message.feed (response ()) (bytes "0503000000")) = Error ((Connection, 264L))
+error (Stdlib.__Http3Message.feed (Stdlib.__Http3Message.create Request) (bytes "0503000000")) = Error ((Connection, 261L))
+let state = response () in error (Stdlib.__Http3Message.feed { state with phase = Trailers } (bytes "0100")) = Error ((Connection, 261L))
+let state = body () in error (Stdlib.__Http3Message.feed { state with framing = { state.framing with frames = 16384L } } (bytes "0000")) = Error ((Connection, 263L))
+error (Stdlib.__Http3Message.feed (response ()) (bytes "0101FF")) = Error ((Connection, 512L))

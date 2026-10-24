@@ -1,0 +1,692 @@
+module Darklang.LanguageTools.WrittenTypes
+
+// <aliases>
+// @compiler blocked: missing-implementation
+type Range = Parser.Range
+// <aliases>
+
+/// A name that failed to resolve, with its source location and error details.
+// @compiler blocked: missing-implementation
+type UnresolvedName =
+  (Parser.Range * List<String> * ProgramTypes.NameResolutionError)
+
+// Identifiers
+// @compiler blocked: missing-implementation
+type ModuleIdentifier = { range: Range, name: String }
+
+// @compiler blocked: missing-implementation
+type TypeIdentifier = { range: Range, name: String }
+
+// @compiler blocked: missing-implementation
+type QualifiedTypeIdentifier =
+  {
+    range: Range
+    /// the Range corresponds to the `.` after the module name
+    modules: List<(ModuleIdentifier * Range)>
+    typ: TypeIdentifier
+    typeArgs: List<TypeReference.TypeReference>
+  }
+
+// @compiler blocked: missing-implementation
+type VariableIdentifier = { range: Range, name: String }
+
+// @compiler blocked: missing-implementation
+type ValueIdentifier = { range: Range, name: String }
+
+// @compiler blocked: missing-implementation
+type FnIdentifier = { range: Range, name: String }
+
+// @compiler blocked: missing-implementation
+type QualifiedFnIdentifier =
+  {
+    range: Range
+    /// the range corresponds to the `.` after the module name
+    modules: List<(ModuleIdentifier * Range)>
+    fn: FnIdentifier
+  }
+
+// CLEANUP: Refactor List<String> to List<Range* String> or use a QualifiedTypeIdentifier.
+// Consider removing 'Unresolved' and inlining it where it's used, since all names are unresolved at this stage (wt)
+// @compiler blocked: missing-implementation
+type Name = Unresolved of Range * List<String>
+
+// Types
+module TypeReference =
+  // The first range corresponds to the whole type
+  // @compiler blocked: missing-implementation
+  type Builtin =
+    | TUnit of Range
+    | TBool of Range
+    | TInt8 of Range
+    | TUInt8 of Range
+    | TInt16 of Range
+    | TUInt16 of Range
+    | TInt32 of Range
+    | TUInt32 of Range
+    | TInt64 of Range
+    | TUInt64 of Range
+    | TInt128 of Range
+    | TUInt128 of Range
+    | TInt of Range
+    | TFloat of Range
+    | TChar of Range
+    | TString of Range
+    | TDateTime of Range
+    | TUuid of Range
+    | TBlob of Range
+
+    | TStream of
+      Range *
+      keywordStream: Range *
+      openBracket: Range *
+      typ: TypeReference.TypeReference *
+      closeBracket: Range
+
+    | TList of
+      Range *
+      keywordList: Range *
+      openBracket: Range *
+      typ: TypeReference.TypeReference *
+      closeBracket: Range
+
+    | TDict of
+      Range *
+      keywordDict: Range *
+      openBrace: Range *
+      key: TypeReference.TypeReference *
+      symbolComma: Range *
+      value: TypeReference.TypeReference *
+      closeBrace: Range
+
+    | TTuple of
+      Range *
+      first: TypeReference *
+      symbolAsterisk: Range *
+      second: TypeReference *
+      /// the Range corresponds to the `*` symbol
+      rest: List<(Range * TypeReference)> *
+      openParen: Range *
+      closeParen: Range
+
+    | TFn of
+      Range *
+      /// the Range corresponds to the `->` symbol
+      arguments: List<(TypeReference.TypeReference * Range)> *
+      ret: TypeReference.TypeReference
+
+    | TVariable of
+      Range *
+      symbolSingleQuote: Range *
+      /// the Range corresponds to the `'` symbol
+      name: (Range * String)
+
+
+  // @compiler blocked: missing-implementation
+  type TypeReference =
+    | Builtin of Builtin
+    | QualifiedName of QualifiedTypeIdentifier
+
+// Expressions
+// @compiler blocked: missing-implementation
+type LetPattern =
+  | LPUnit of Range
+  | LPVariable of Range * name: String
+  | LPWildcard of Range
+  | LPTuple of
+    Range *
+    first: LetPattern *
+    symbolComma: Range *
+    second: LetPattern *
+    /// the Range corresponds to the `,` symbol
+    rest: List<(Range * LetPattern)> *
+    symbolOpenParen: Range *
+    symbolCloseParen: Range
+
+
+// @compiler blocked: missing-implementation
+type MatchPattern =
+  | MPUnit of Range
+  | MPBool of Range * Bool
+  | MPInt8 of Range * intPart: (Range * Int8) * suffixPart: Range
+  | MPUInt8 of Range * intPart: (Range * UInt8) * suffixPart: Range
+  | MPInt16 of Range * intPart: (Range * Int16) * suffixPart: Range
+  | MPUInt16 of Range * intPart: (Range * UInt16) * suffixPart: Range
+  | MPInt32 of Range * intPart: (Range * Int32) * suffixPart: Range
+  | MPUInt32 of Range * intPart: (Range * UInt32) * suffixPart: Range
+  | MPInt64 of Range * intPart: (Range * Int64) * suffixPart: Range
+  | MPUInt64 of Range * intPart: (Range * UInt64) * suffixPart: Range
+  | MPInt128 of Range * intPart: (Range * Int128) * suffixPart: Range
+  | MPUInt128 of Range * intPart: (Range * UInt128) * suffixPart: Range
+  | MPInt of Range * intPart: (Range * Int)
+  | MPFloat of Range * Sign * String * String
+  | MPChar of
+    Range *
+    contents: Stdlib.Option.Option<(Range * String)> *
+    symbolOpenQuote: Range *
+    symbolCloseQuote: Range
+  | MPString of
+    Range *
+    contents: Stdlib.Option.Option<(Range * String)> *
+    symbolOpenQuote: Range *
+    symbolCloseQuote: Range
+  | MPList of
+    Range *
+    /// the Range corresponds to the `,` symbol
+    contents: List<(MatchPattern * Stdlib.Option.Option<Range>)> *
+    symbolOpenBracket: Range *
+    symbolCloseBracket: Range
+  | MPListCons of
+    Range *
+    head: MatchPattern *
+    tail: MatchPattern *
+    symbolCons: Range
+  | MPTuple of
+    Range *
+    first: MatchPattern *
+    symbolComma: Range *
+    second: MatchPattern *
+    /// the Range corresponds to the `,` symbol
+    rest: List<(Range * MatchPattern)> *
+    symbolOpenParen: Range *
+    symbolCloseParen: Range
+  | MPVariable of Range * String
+  | MPEnum of
+    Range *
+    caseName: (Range * String) *
+    fieldPats: List<MatchPattern>
+
+  // CLEANUP: handle pipe symbols
+  | MPOr of Range * List<MatchPattern>
+
+  // A recovery hole where a pattern was expected but couldn't be parsed (the
+  // parse carries a diagnostic at this range). Tooling renders around it; it
+  // never reaches execution.
+  | MPError of Range
+
+// @compiler blocked: missing-implementation
+type MatchCase =
+  { pat:
+      /// the Range corresponds to the `|` symbol
+      ( Range *
+        MatchPattern *
+        /// the Range corresponds to the `->` symbol
+        Range)
+    /// the Range corresponds to the `when` keyword
+    whenCondition: Stdlib.Option.Option<(Range * Expr)>
+    rhs: Expr }
+
+
+// @compiler blocked: missing-implementation
+type BinaryOperation =
+  | BinOpAnd
+  | BinOpOr
+
+// @compiler blocked: missing-implementation
+type InfixFnName =
+  | ArithmeticPlus
+  | ArithmeticMinus
+  | ArithmeticMultiply
+  | ArithmeticDivide
+  | ArithmeticModulo
+  | ArithmeticPower
+  | BitwiseAnd
+  | BitwiseOr
+  | BitwiseXor
+  | ShiftLeft
+  | ShiftRight
+  | ComparisonGreaterThan
+  | ComparisonGreaterThanOrEqual
+  | ComparisonLessThan
+  | ComparisonLessThanOrEqual
+  | ComparisonEquals
+  | ComparisonNotEquals
+
+// @compiler blocked: missing-implementation
+type Infix =
+  | InfixFnCall of InfixFnName
+  | BinOp of BinaryOperation
+
+// @compiler blocked: missing-implementation
+type StringSegment =
+  | StringText of Range * String
+  | StringInterpolation of
+    Range *
+    Expr *
+    symbolOpenBrace: Range *
+    symbolCloseBrace: Range
+
+// @compiler blocked: missing-implementation
+type Expr =
+  | EUnit of Range
+  | EBool of Range * Bool
+  | EInt8 of Range * intPart: (Range * Int8) * suffixPart: Range
+  | EUInt8 of Range * intPart: (Range * UInt8) * suffixPart: Range
+  | EInt16 of Range * intPart: (Range * Int16) * suffixPart: Range
+  | EUInt16 of Range * intPart: (Range * UInt16) * suffixPart: Range
+  | EInt32 of Range * intPart: (Range * Int32) * suffixPart: Range
+  | EUInt32 of Range * intPart: (Range * UInt32) * suffixPart: Range
+  | EInt64 of
+    Range *
+    intPart: (Range * Int64) *
+    /// for the L suffix
+    suffixPart: Range
+  | EUInt64 of Range * intPart: (Range * UInt64) * suffixPart: Range
+  | EInt128 of Range * intPart: (Range * Int128) * suffixPart: Range
+  | EUInt128 of Range * intPart: (Range * UInt128) * suffixPart: Range
+  | EInt of Range * intPart: (Range * Int)
+  | EFloat of Range * Sign * String * String
+  | EString of
+    Range *
+    symbolDollarSign: Stdlib.Option.Option<Range> *
+    contents: List<StringSegment> *
+    symbolOpenQuote: Range *
+    symbolCloseQuote: Range
+  | EChar of
+    Range *
+    contents: Stdlib.Option.Option<(Range * String)> *
+    symbolOpenQuote: Range *
+    symbolCloseQuote: Range
+
+  | EList of
+    Range *
+    /// the Range corresponds to the `,` symbol
+    contents: List<(Expr * Stdlib.Option.Option<Range>)> *
+    symbolOpenBracket: Range *
+    symbolCloseBracket: Range
+
+  | EDict of
+    Range *
+    contents: List<(Range * Expr * Range * Expr)> *
+    keywordDict: Range *
+    symbolOpenBrace: Range *
+    symbolCloseBrace: Range
+
+  | ETuple of
+    Range *
+    first: Expr *
+    symbolComma: Range *
+    second: Expr *
+    /// the Range corresponds to the `,` symbol
+    rest: List<(Range * Expr)> *
+    symbolOpenParen: Range *
+    symbolCloseParen: Range
+
+  | ERecord of
+    Range *
+    typeName: QualifiedTypeIdentifier *
+    // fields: List<:, key, value>
+    fields: List<(Range * (Range * String) * Expr)> *
+    symbolOpenBrace: Range *
+    symbolCloseBrace: Range
+
+  | ERecordUpdate of
+    Range *
+    record: Expr *
+    /// the second Range corresponds to the symbol `=`
+    updates: List<((Range * String) * Range * Expr)> *
+    symbolOpenBrace: Range *
+    symbolCloseBrace: Range *
+    keywordWith: Range
+
+  | EEnum of
+    Range *
+    typeName: QualifiedTypeIdentifier *
+    caseName: (Range * String) *
+    fields: List<Expr> *
+    /// between the typeName and the caseName
+    symbolDot: Range
+
+  | ELet of
+    Range *
+    LetPattern *
+    expr: Expr *
+    body: Expr *
+    keywordLet: Range *
+    symbolEquals: Range
+
+  | EUnwrap of Range * Expr * symbolQuestion: Range
+  | EVariable of Range * String
+
+  | ERecordFieldAccess of
+    Range *
+    Expr *
+    fieldName: (Range * String) *
+    symbolDot: Range
+
+  | EIf of
+    Range *
+    cond: Expr *
+    thenExpr: Expr *
+    elseExpr: Stdlib.Option.Option<Expr> *
+    keywordIf: Range *
+    keywordThen: Range *
+    keywordElse: Stdlib.Option.Option<Range>
+
+  | EMatch of
+    Range *
+    expr: Expr *
+    cases: List<MatchCase> *
+    keywordMatch: Range *
+    keywordWith: Range
+
+  /// the Range corresponds to the `|` symbol
+  | EPipe of Range * Expr * List<(Range * PipeExpr)>
+
+  | EInfix of Range * op: (Range * Infix) * left: Expr * right: Expr
+
+  | ELambda of
+    Range *
+    pats: List<LetPattern> *
+    body: Expr *
+    keywordFun: Range *
+    symbolArrow: Range
+
+  | EApply of
+    Range *
+    lhs: Expr *
+    typeArgs: List<TypeReference.TypeReference> *
+    args: List<Expr>
+
+  | EFnName of Range * name: QualifiedFnIdentifier
+
+  | EStatement of Range * first: Expr * next: Expr
+
+  // A recovery hole where an expression was expected but couldn't be parsed
+  // (the parse carries a diagnostic at this range). Tooling renders around it;
+  // it never reaches execution.
+  | EError of Range
+
+// @compiler blocked: missing-implementation
+type PipeExpr =
+  | EPipeInfix of Range * op: (Range * Infix) * Expr
+  | EPipeLambda of
+    Range *
+    pats: List<LetPattern> *
+    body: Expr *
+    keywordFun: Range *
+    symbolArrow: Range
+  | EPipeEnum of
+    Range *
+    typeName: QualifiedTypeIdentifier *
+    caseName: (Range * String) *
+    fields: List<Expr> *
+    /// between the typeName and the caseName
+    symbolDot: Range
+  | EPipeFnCall of
+    Range *
+    fnName: QualifiedFnIdentifier *
+    typeArgs: List<TypeReference.TypeReference> *
+    args: List<Expr>
+  | EPipeVariableOrFnCall of Range * String
+
+
+module Expr =
+  /// Source range covering a whole expression node.
+  // @compiler blocked: missing-implementation
+  let range (expr: Expr) : Range =
+    match expr with
+    | EUnit range -> range
+    | EBool(range, _) -> range
+    | EInt8(range, _, _) -> range
+    | EUInt8(range, _, _) -> range
+    | EInt16(range, _, _) -> range
+    | EUInt16(range, _, _) -> range
+    | EInt32(range, _, _) -> range
+    | EUInt32(range, _, _) -> range
+    | EInt64(range, _, _) -> range
+    | EUInt64(range, _, _) -> range
+    | EInt128(range, _, _) -> range
+    | EUInt128(range, _, _) -> range
+    | EInt(range, _) -> range
+    | EFloat(range, _, _, _) -> range
+    | EString(range, _, _, _, _) -> range
+    | EChar(range, _, _, _) -> range
+    | EList(range, _, _, _) -> range
+    | EDict(range, _, _, _, _) -> range
+    | ETuple(range, _, _, _, _, _, _) -> range
+    | ERecord(range, _, _, _, _) -> range
+    | ERecordUpdate(range, _, _, _, _, _) -> range
+    | EEnum(range, _, _, _, _) -> range
+    | ELet(range, _, _, _, _, _) -> range
+    | EUnwrap(range, _, _) -> range
+    | EVariable(range, _) -> range
+    | ERecordFieldAccess(range, _, _, _) -> range
+    | EIf(range, _, _, _, _, _, _) -> range
+    | EMatch(range, _, _, _, _) -> range
+    | EPipe(range, _, _) -> range
+    | EInfix(range, _, _, _) -> range
+    | ELambda(range, _, _, _, _) -> range
+    | EApply(range, _, _, _) -> range
+    | EFnName(range, _) -> range
+    | EStatement(range, _, _) -> range
+    | EError range -> range
+
+
+// Module declarations
+module ModuleDeclaration =
+  // @compiler blocked: missing-implementation
+  type Declaration =
+    | Type of TypeDeclaration.TypeDeclaration
+    | Function of FnDeclaration.FnDeclaration
+    | Value of ValueDeclaration.ValueDeclaration
+    | Trait of TraitDeclaration.TraitDeclaration
+    | Impl of ImplDeclaration.ImplDeclaration
+    | Test of TestDeclaration.TestDeclaration
+    | SubModule of ModuleDeclaration.ModuleDeclaration
+    // TODO: handle http handler and db
+    | Expr of Expr
+
+  // @compiler blocked: missing-implementation
+  type ModuleDeclaration =
+    { range: Range
+      name: (Range * String)
+      declarations: List<Declaration>
+      keywordModule: Range }
+
+
+// Type declaration
+/// `'a: Show<Int>` in a type-param list: the trait is a type name
+// @compiler blocked: missing-implementation
+type TypeParamBound =
+  { range: Range
+    param: String
+    trait_: QualifiedTypeIdentifier
+    symbolColon: Range }
+
+
+module TypeDeclaration =
+  // @compiler blocked: missing-implementation
+  type RecordField =
+    { range: Range
+      name: (Range * String)
+      typ: TypeReference.TypeReference
+      description: String
+      symbolColon: Range }
+
+  // @compiler blocked: missing-implementation
+  type EnumField =
+    { range: Range
+      typ: TypeReference.TypeReference
+      label: Stdlib.Option.Option<(Range * String)>
+      description: String
+      symbolColon: Stdlib.Option.Option<Range> }
+
+  // @compiler blocked: missing-implementation
+  type EnumCase =
+    { range: Range
+      name: (Range * String)
+      fields: List<EnumField>
+      description: String
+      keywordOf: Stdlib.Option.Option<Range> }
+
+  // @compiler blocked: missing-implementation
+  type Definition =
+    | Alias of TypeReference.TypeReference
+    /// the Range corresponds to the `,` symbol
+    | Record of List<(RecordField * Stdlib.Option.Option<Range>)>
+    /// the Range corresponds to the `|` symbol
+    | Enum of List<(Range * EnumCase)>
+
+  // @compiler blocked: missing-implementation
+  type TypeDeclaration =
+    { range: Range
+      name: TypeIdentifier
+      typeParams: List<(Range * String)>
+      /// `'a: Compare` on the type params
+      bounds: List<TypeParamBound>
+      definition: Definition
+      description: String
+      keywordType: Range
+      symbolEquals: Range }
+
+
+// Value declarations
+module ValueDeclaration =
+  // @compiler blocked: missing-implementation
+  type ValueDeclaration =
+    { range: Range
+      name: ValueIdentifier
+      body: Expr
+      description: String
+      keywordVal: Range
+      symbolEquals: Range }
+
+
+// Named package tests
+module TestDeclaration =
+  // @compiler blocked: missing-implementation
+  type ExpectedError =
+    | RuntimeError of String
+
+  // @compiler blocked: missing-implementation
+  type TestDeclaration =
+    { range: Range
+      name: ValueIdentifier
+      body: Expr
+      expectedError: Option<(Range * ExpectedError)>
+      description: String
+      keywordTest: Range
+      errorKindRange: Option<Range>
+      symbolOutcome: Option<Range>
+      symbolEquals: Range }
+
+
+// Fn declarations
+module FnDeclaration =
+  // @compiler blocked: missing-implementation
+  type UnitParameter = { range: Range }
+
+  // @compiler blocked: missing-implementation
+  type NormalParameter =
+    { range: Range
+      name: VariableIdentifier
+      typ: TypeReference.TypeReference
+      /// The `///` written above the parameter.
+      description: String
+      symbolLeftParen: Range
+      symbolColon: Range
+      symbolRightParen: Range }
+
+  // @compiler blocked: missing-implementation
+  type Parameter =
+    | Unit of UnitParameter
+    | Normal of NormalParameter
+
+
+  // @compiler blocked: missing-implementation
+  type FnDeclaration =
+    { range: Range
+      name: FnIdentifier
+      typeParams: List<(Range * String)>
+      /// `'a: Show + Compare` on the type params, one entry per trait
+      bounds: List<TypeParamBound>
+      parameters: List<Parameter>
+      /// The effect row on the return colon, if one was written. Like
+      /// `typeParams`, these are names as written with their positions; they
+      /// become `Permissions.Effect` values in WrittenTypesToProgramTypes,
+      /// which is where an unknown name is reported. At runtime the row is the
+      /// author's ceiling on the body and everything it calls: it can only
+      /// take away, never grant.
+      ///
+      ///   `: String`              None       no row, no promise
+      ///   `:{} String`            Some []    effect-free: every host effect inside is denied
+      ///   `:{Http, Clock} String` Some [...] only these; anything else inside is denied
+      effects: Option<List<(Range * String)>>
+      returnType: TypeReference.TypeReference
+      body: Expr
+      description: String
+      keywordLet: Range
+      symbolColon: Range
+      symbolEquals: Range }
+
+
+/// `trait Show<'a> = <method signatures>`
+module TraitDeclaration =
+  // @compiler blocked: missing-implementation
+  type Method =
+    { range: Range
+      name: FnIdentifier
+      typeParams: List<(Range * String)>
+      bounds: List<TypeParamBound>
+      parameters: List<FnDeclaration.Parameter>
+      effects: Option<List<(Range * String)>>
+      returnType: TypeReference.TypeReference
+      description: String
+      keywordLet: Range
+      symbolColon: Range }
+
+  // @compiler blocked: missing-implementation
+  type TraitDeclaration =
+    { range: Range
+      name: TypeIdentifier
+      typeParams: List<(Range * String)>
+      bounds: List<TypeParamBound>
+      methods: List<Method>
+      description: String
+      keywordTrait: Range
+      symbolEquals: Range }
+
+
+/// `impl[<'a: B>] Trait<Args> for Type = <method fns or aliases>`
+module ImplDeclaration =
+  // @compiler blocked: missing-implementation
+  type Member =
+    /// A full fn declaration in the block
+    | Method of FnDeclaration.FnDeclaration
+    /// `let name = Existing.fn`: the method is a fn that already exists
+    | Alias of ValueDeclaration.ValueDeclaration
+
+  // @compiler blocked: missing-implementation
+  type ImplDeclaration =
+    { range: Range
+      typeParams: List<(Range * String)>
+      bounds: List<TypeParamBound>
+      trait_: QualifiedTypeIdentifier
+      forType: TypeReference.TypeReference
+      members: List<Member>
+      description: String
+      keywordImpl: Range
+      keywordFor: Range
+      symbolEquals: Range }
+
+
+module SourceFile =
+  // @compiler blocked: missing-implementation
+  type SourceFileDeclaration =
+    | Type of TypeDeclaration.TypeDeclaration
+    | Function of FnDeclaration.FnDeclaration
+    | Value of ValueDeclaration.ValueDeclaration
+    | Trait of TraitDeclaration.TraitDeclaration
+    | Impl of ImplDeclaration.ImplDeclaration
+    | Test of TestDeclaration.TestDeclaration
+    | Module of ModuleDeclaration.ModuleDeclaration
+
+  // @compiler blocked: missing-implementation
+  type SourceFile =
+    { range: Range
+      declarations: List<SourceFile.SourceFileDeclaration>
+      exprsToEval: List<Expr> }
+
+
+// @compiler blocked: missing-implementation
+type ParsedFile = SourceFile of SourceFile.SourceFile

@@ -1,0 +1,240 @@
+/// The `workbench` SubApp: context, workspace nav, body, and key hints.
+/// `dark` with no arguments opens it.
+///
+/// This module is split across files (Dark merges same-named modules; `languageTools` does the same).
+/// This file holds only the CLI integration surface: the SubApp wrapper and the command entry points.
+///
+///   types.dark            State and the other records, view indices, the view registry helpers
+///   loaders.dark          reads for the package tree and SCM
+///   loaders-misc.dark     reads for AI, values, conflicts, branches, docs
+///   detail.dark           the item list, and the text behind the detail/preview pane
+///   render.dark           shared frame primitives and the reader
+///   home.dark             Home's full-width branch overview
+///   views-scm-repl.dark   the SCM and REPL bodies
+///   views-misc.dark       Errors, Builtins, Processes
+///   viewdefs.dark         the extension-view registry
+///   navbar.dark          workspace definitions, the nav strip/overlay, and its keys
+///   chrome.dark           body dispatch, editor, hints, and help overlay
+///   frame-assembly.dark   the chrome around the body, the completion dropdown, viewAtSize
+///   nav.dark              movement and actions; each returns a Step
+///   branches.dark         searchable branch picker and switching
+///   input.dark            the `:` bar and the other single-line input modes
+///   authoring.dark        opening the editor and saving what you wrote
+///   keys.dark             key handling for the modal layers
+///   keys-view.dark        the plain-view key map, and the dispatcher between layers
+///   frame.dark            the shared chrome render helpers (its own module)
+///
+/// Rendering returns spans composed into a diffed `Stdlib.Cli.Tui.View`.
+module Darklang.Cli.Workbench
+
+
+/// Recompute the derived reads after every transition.
+///
+/// The renderer has to be a pure function of state for frame diffing to be
+/// sound, so the badge and peek caches are refreshed here rather than read
+/// while drawing. A sectioned list's cursor is kept off its headers here too,
+/// since any transition can reload the list under it.
+// @compiler blocked: missing-implementation
+let refresh (previous: State) (next: State) : State =
+  // SCM status FIRST: the tree's wip badges read it rather than doing their own draft query, so
+  // refreshing them against last frame's status would draw a dot one keypress behind the truth.
+  // The page LAST: it reads the selection, the peek and the live values the others settle.
+  refreshPreview (
+    fixSelection (
+      refreshLiveValues (refreshPeek (refreshBadges previous (refreshScmStatus previous next)))
+    )
+  )
+
+// @compiler blocked: missing-implementation
+let onKey
+  (state: State)
+  (key: Stdlib.Cli.Stdin.Key.Key)
+  (modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers)
+  (keyChar: Stdlib.Option.Option<String>)
+  : Darklang.Cli.Component.Step<State> =
+  match handleKey state key modifiers keyChar with
+  | Continue s -> Darklang.Cli.Component.Step.Stay s
+  | Exit s -> Darklang.Cli.Component.Step.Exit s
+  // Hand off to a foreground command; the CLI returns to this workbench (state s) when it exits.
+  | Launch(s, cmd) -> Darklang.Cli.Component.Step.Launch({ s with preview = Stdlib.Option.Option.None }, cmd)
+  | ToPrompt s -> Darklang.Cli.Component.Step.ToPrompt s
+
+/// The store changed under the workbench: an edit from another process (the LSP, an agent, a
+/// colleague's pull).
+///
+/// Under `--live` this re-reads the item list, so the detail pane shows the version that is
+/// there now, and the SCM picture. Without it, nothing: you did not ask to follow, and a footer
+/// announcing someone else's edit interrupts you just as much as the reload would. `R` re-reads
+/// when you want it.
+///
+/// The name caches were dropped by the poll that reported the change either way, so the reads
+/// see the store as it is. Your own saves take the authoring path (`authoring.dark`), which
+/// reloads on its own.
+// @compiler blocked: missing-implementation
+let onStoreChanged (state: State) (change: Stdlib.Live.Change) : State =
+  // The item page is a read of the store, so it goes either way; the next frame rebuilds it.
+  let state = { state with preview = Stdlib.Option.Option.None }
+  if state.live then
+    let names =
+      if change.unknown then
+        "more than 500 ops (everything re-run)"
+      else
+        Stdlib.String.join (Stdlib.Live.touchedNames change) ", "
+
+    forceScmRefresh
+      { state with items = reloadItems state, messageKind = MessageKind.Succeeded, message = $"changed elsewhere: {names}" }
+  else
+    // Quiet. Without `--live` you did not ask to hear about someone else's edit, and a footer
+    // that keeps announcing one is the same interruption as the reload, minus the usefulness.
+    // `R` re-reads whenever you want it.
+    state
+
+/// A FUNCTION, not a `val`: a component holds lambdas, and a lambda cannot be stored. Its
+/// instructions live in the execution that created it, so a stored one is a dangling reference that
+/// dies when applied in a later process. Rebuilt per call instead.
+// @compiler blocked: missing-implementation
+let component () : Cli.Component.Component<Cli.Workbench.State> =
+  Darklang.Cli.Component.Component
+    { view = viewAtSize
+      onKey = onKey
+      save = Darklang.Cli.Component.noSave
+      refresh = refresh
+      onStoreChanged = onStoreChanged }
+
+
+// ── CLI command entry ──
+
+/// Build a fresh workbench state.
+///
+/// Separate from `execute` so a state can be constructed without taking over the terminal, which is what
+/// lets the render smoke test exist at all.
+// @compiler blocked: missing-implementation
+let initialState
+  (branchId: Uuid)
+  (accountId: Stdlib.Option.Option<Uuid>)
+  (instanceName: String)
+  (live: Bool)
+  : State =
+  initialStateFrom branchId accountId instanceName live
+    (SCM.Draft.read ())
+
+/// `initialState` over a draft already read. `execute` reads the draft once and hands the same
+/// picture to Home and to the SCM status row; reading it per consumer ran constraint detection twice.
+// @compiler blocked: missing-implementation
+let initialStateFrom
+  (branchId: Uuid)
+  (accountId: Stdlib.Option.Option<Uuid>)
+  (instanceName: String)
+  (live: Bool)
+  (draft: SCM.Draft.Picture)
+  : State =
+  let rootLoc = Packages.PackageLocation.Module []
+  let homeItems = loadHomeItemsFrom branchId draft
+  State
+      { activeView = vHome
+        live = live
+        location = rootLoc
+        items = homeItems
+        selected = selectableRow homeItems 0 1
+        focus = Stdlib.Cli.UI.SplitPane.Focus.First
+        detailScroll = 0
+        reading = Stdlib.Option.Option.None
+        readingIsCode = false
+        input = Stdlib.Option.Option.None
+        editing = Stdlib.Option.Option.None
+        accountId = accountId
+        instanceName = instanceName
+        message = ""
+        messageKind = MessageKind.Succeeded
+        search = emptySearch ()
+        overlay = Overlay.NoOverlay
+        navbarSel = 0
+        wsLast = []
+        back = []
+        completionSel = 0
+        repl = emptyRepl ()
+        matter = emptyMatter ()
+        filter = ""
+        wipNames = []
+        deprecatedNames = []
+        scmStatus = emptyScmStatus ()
+        renderPeek = ""
+        liveValues = Stdlib.Dict.empty
+        preview = Stdlib.Option.Option.None
+        liveFor = ""
+        liveNote = ""
+        branchId = branchId }
+
+
+// @compiler blocked: missing-implementation
+let execute (cliState: Darklang.Cli.AppState) (args: List<String>) : Darklang.Cli.AppState =
+  match Darklang.Stdlib.Cli.Tui.TerminalSupport.current () with
+  | Unavailable reason ->
+    // Don't seize the alternate screen when there's no terminal -- piping `dark` would
+    // dump raw escape sequences into the reader. Report and stop rather than falling
+    // through to the prompt: the no-args path would print the same message twice, and
+    // an explicit `dark wb` would stay silent.
+    Stdlib.printLine
+      (Darklang.Stdlib.Cli.Tui.TerminalSupport.unavailableMessage reason)
+    // Say where to go next. Without a terminal this is a dead end otherwise, and the callers that land
+    // here most often are scripts and agents, which have no way to guess that everything the workbench
+    // does is also a command.
+    Stdlib.printLine
+      (Stdlib.Cli.UI.Colors.hint
+        "  Everything it shows is a command too: `dark help`, or `dark docs for-ai`.")
+    { cliState with isExiting = true }
+  | Available ->
+
+  let branchId = cliState.currentBranchId
+  // Register this instance's UUID on first run (durable in cli-config.json).
+  let _ =
+    match Darklang.Cli.Config.get "instance.id" with
+    | Some _ -> ()
+    | None ->
+      let cfg = Darklang.Cli.Config.readConfig ()
+      let cfg2 = Stdlib.Dict.setOverridingDuplicates cfg "instance.id" (Stdlib.toString (Stdlib.Uuid.generate ()))
+      Darklang.Cli.Config.writeConfig cfg2
+  // Instance name: config override wins, else the machine hostname, else a safe fallback. Config-adjustable.
+  let instanceName =
+    match Darklang.Cli.Config.get "instance.name" with
+    | Some n -> n
+    | None ->
+      match Stdlib.Cli.Sys.hostname () with
+      | Ok h -> h
+      | Error _ -> "this-machine"
+  let draft = SCM.Draft.read ()
+  let state =
+    initialStateFrom
+      branchId
+      cliState.accountID
+      instanceName
+      (Stdlib.List.contains args "--live")
+      draft
+  // Seed the badge cache for the first frame; `presentState` keeps it fresh after that. The view peek needs no
+  // seeding - the first frame is Home, which has no `render` fn to peek at.
+  let (wip, deprecated) = readBadges state
+  let state = { state with wipNames = wip, deprecatedNames = deprecated }
+  // Seed the context row from the same draft Home was built from.
+  let state = { state with scmStatus = scmStatusFrom branchId draft }
+  // Launching is what enters the alternate screen and paints the first frame; from here on the renderer
+  // diffs, so a keystroke rewrites the rows that changed rather than clearing and repainting.
+  Darklang.Cli.Component.launchOrExit cliState (component ()) state
+
+// @compiler blocked: missing-implementation
+let help (_state: Darklang.Cli.AppState) : String =
+  [ "Usage: workbench [--live]"
+    "Open the workbench - a framed, navigable view of your package tree."
+    ""
+    "  --live  reload when something else changes the store. Without it nothing moves"
+    "          until you press `R`."
+    ""
+    "  The strip along the top is every place you can go: Left/Right walk it, Enter goes, Esc backs out."
+    "  1-9 jump to a workspace    S switch branch    tab next pane    ` nav    / find    : command    ? keys    q quit" ]
+  |> Stdlib.String.join "\n"
+
+// @compiler blocked: missing-implementation
+let complete
+  (_state: Darklang.Cli.AppState)
+  (_args: List<String>)
+  : List<Darklang.Cli.Completion.CompletionItem> =
+  []

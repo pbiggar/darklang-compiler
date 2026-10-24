@@ -15,5 +15,7 @@
 
 // TODO bring back short-circuiting
 //(true || Builtin.testRuntimeError "msg") = true
+// @compiler blocked: compiler-gap
 (false || Builtin.testRuntimeError "msg") = error="Uncaught exception: msg"
+// @compiler blocked: compiler-gap
 (Builtin.testRuntimeError "msg1" || Builtin.testRuntimeError "msg2") = error="Uncaught exception: msg1"

@@ -1,0 +1,56 @@
+module Darklang.Stdlib.Retry
+
+
+// @compiler replace: packages/darklang/stdlib/retry.dark#Darklang.Stdlib.Retry.withBackoffLoop reason=compiler-implementation
+let withBackoffLoop
+  (maxAttempts: Int)
+  (attempt: Int)
+  (delayMs: Float)
+  (fn: Unit -> Result.Result<'a, String>)
+  : Result.Result<'a, String> =
+  match fn () with
+  | Ok result -> Stdlib.Result.Result.Ok result
+  | Error e ->
+    if attempt >= maxAttempts then
+      Stdlib.Result.Result.Error e
+    else
+      let _ = Cli.Posix.sleep delayMs
+      withBackoffLoop maxAttempts (attempt + 1) (delayMs * 2.0) fn
+
+
+/// Retry a function up to maxAttempts times with exponential backoff.
+/// Starts with a 100ms delay, doubling each retry.
+/// Returns the first successful result, or the last error.
+// @compiler replace: packages/darklang/stdlib/retry.dark#Darklang.Stdlib.Retry.withBackoff reason=compiler-implementation
+let withBackoff
+  (maxAttempts: Int)
+  (fn: Unit -> Result.Result<'a, String>)
+  : Result.Result<'a, String> =
+  withBackoffLoop maxAttempts 1 100.0 fn
+
+
+// @compiler replace: packages/darklang/stdlib/retry.dark#Darklang.Stdlib.Retry.withFixedDelayLoop reason=compiler-implementation
+let withFixedDelayLoop
+  (maxAttempts: Int)
+  (attempt: Int)
+  (delayMs: Float)
+  (fn: Unit -> Result.Result<'a, String>)
+  : Result.Result<'a, String> =
+  match fn () with
+  | Ok result -> Stdlib.Result.Result.Ok result
+  | Error e ->
+    if attempt >= maxAttempts then
+      Stdlib.Result.Result.Error e
+    else
+      let _ = Cli.Posix.sleep delayMs
+      withFixedDelayLoop maxAttempts (attempt + 1) delayMs fn
+
+
+/// Retry with a fixed delay between attempts.
+// @compiler replace: packages/darklang/stdlib/retry.dark#Darklang.Stdlib.Retry.withFixedDelay reason=compiler-implementation
+let withFixedDelay
+  (maxAttempts: Int)
+  (delayMs: Float)
+  (fn: Unit -> Result.Result<'a, String>)
+  : Result.Result<'a, String> =
+  withFixedDelayLoop maxAttempts 1 delayMs fn

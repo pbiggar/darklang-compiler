@@ -53,3 +53,12 @@ let freshSecondOfPair (): String =
       content)
     (1L, ("inner", 2L))
 freshSecondOfPair () = "inner"
+
+// PR #1 10e2aa2: specializing a source generic must also discover the
+// standard-library specializations reached only through its body.
+type Located<'a> = { entity: 'a, modules: List<String> }
+
+let fullPathOf<'a> (item: Located<'a>): String =
+  [["root"], item.modules] |> Stdlib.List.flatten |> Stdlib.String.join "."
+
+fullPathOf (Located { entity = 5L, modules = ["a", "b"] }) = "root.a.b"

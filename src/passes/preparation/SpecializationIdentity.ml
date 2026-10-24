@@ -80,8 +80,11 @@ let rec directDependencies expr =
   | C.Call (id, values) | C.TypeApp (id, _, values) ->
       FunctionSet.add id (args values)
   | C.Closure (id, captures) -> FunctionSet.add id (combine captures)
-  | C.UnaryOp (_, value) | C.TupleAccess (value, _) | C.RecordAccess (value, _)
-    ->
+  | C.ReturnScope (_, _, value)
+  | C.EarlyReturn (_, value)
+  | C.UnaryOp (_, value)
+  | C.TupleAccess (value, _)
+  | C.RecordAccess (value, _) ->
       directDependencies value
   | C.BinOp (_, left, right)
   | C.Sequence (left, right)
@@ -238,7 +241,9 @@ let specName name types =
   if types = [] then name
   else name ^ "_" ^ String.concat "_" (List.map typeToMangledName types)
 
-let isGenericKeyIntrinsicName name = name = "__hash" || name = "__key_eq"
+let isGenericKeyIntrinsicName name =
+  name = "__hash" || name = "__key_eq" || name = "__dict_check_key"
+
 let exprArgsToList = NonEmptyList.toList
 
 let exprArgsFromList args =

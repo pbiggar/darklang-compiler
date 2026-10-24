@@ -1,0 +1,39 @@
+/// The extension-view registry: the seam that lets a view be added without the core naming it.
+///
+/// Part of `Darklang.Cli.Workbench`.
+module Darklang.Cli.Workbench
+
+// Named wrappers so every ViewDef field is a resolved function reference (inline lambdas leave the tuple's
+// type as `_` and block record coercion - same reason Registry.CommandHandler uses named refs throughout).
+// @compiler blocked: missing-implementation
+let errorItems () : List<BodyItem> = loadErrorItems ()
+// @compiler blocked: missing-implementation
+let errorDetailLines (state: State) : List<String> = Stdlib.String.split (errorDetail state) "\n"
+
+/// Extension views in stable index order. Workspaces place them in navigation.
+// @compiler blocked: missing-implementation
+let extensionViews () : List<ViewDef> =
+  [ ViewDef
+      { id = "errors"
+        name = "Errors"
+        behavior = ViewBehavior.Split
+        loadItems = errorItems
+        render = renderErrors
+        detail = errorDetailLines
+        hints = errorHints }
+    ViewDef
+      { id = "builtins"
+        name = "Builtins"
+        behavior = ViewBehavior.Split
+        loadItems = loadBuiltinItems
+        render = renderBuiltins
+        detail = builtinDetailLines
+        hints = builtinHints }
+    ViewDef
+      { id = "processes"
+        name = "Processes"
+        behavior = ViewBehavior.Split
+        loadItems = loadProcessItems
+        render = renderProcesses
+        detail = processDetailLines
+        hints = processHints } ]

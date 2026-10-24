@@ -1,0 +1,106 @@
+module Darklang.Cli.Docs.CLI
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# CLI Commands
+
+`help` lists every command, grouped. This is the ones you reach for, with a
+sentence of context each; `docs scm` is the one to read for how source control
+WORKS, because that model is not git's.
+
+## The four words
+
+Four ideas, one word each, so the docs and the output agree:
+
+  item       one fn, type, value, trait or impl. Content-addressed, so anything
+             with the same body IS the same item, shared by everyone who wrote it
+  location   a name bound to an item: owner, module path, name. Branch-scoped,
+             which is what lets two branches disagree about what a name means
+  op         one recorded change. The log of them IS the program; everything
+             else is folded from it
+  matter     all of it -- items plus locations, folded from ops -- and the
+             substrate that stores and moves them
+
+`packages` means the published set, not the content. `entity` is not a word we
+use; it was a fifth name for `item`.
+
+## Global flags
+  --branch <name>   run ONE command on a branch, without switching to it
+  --entry-point <fn> run a package function for this invocation only; accepts a name or #hash
+  --json            on any command that answers a question
+
+Branch context DOES persist: `dark switch <name>` moves you and the next `dark`
+starts there. `--branch` is for a one-off.
+
+## Writing code
+  fn <name> "<body>"      create or update a function
+  type <name> "<body>"    create or update a type
+  val <name> "<expr>"     create or update a value (`let` is an alias)
+  module <path> -         several declarations at once, from stdin
+  edit <name> [<file>]    apply a file, or open $EDITOR on the declaration
+  typecheck               audit the declarations on this branch
+  deprecate / delete      take something off the shelf (see: docs deprecation)
+  undeprecate <name>      put it back
+
+Your edits are LIVE as soon as you write them. There is no build step.
+
+## Running
+  eval <expr>       evaluate an expression -- this is how you call a function,
+                    e.g. `eval MyMod.myFn 1 2`
+  run-script <f>    run a .dark script file (`run` is an alias)
+  traces            what ran, and what it returned
+
+## Looking around
+  nav <path>        go to a module (`cd`)
+  ls / back / tree  list / go back / show the hierarchy
+  view <name>       inspect a fn, type, value, trait or impl
+  search <term>     find anything
+  deps <name>       what it uses and what uses it (`--json`, `--deep`)
+  builtins          the F# builtins
+  find-values       every value of a given type
+
+## Your changes
+  status            what changed, what FOLLOWED your change, what's waiting
+  commit "<msg>"    review your draft and commit it (`-y` skips the prompt)
+  commits           the commits, newest first
+  show <id>         what a commit committed, or what one op does
+  discard           drop the whole draft
+  undo <name>       step ONE item back a version
+  conflicts         review what a merge, rebase or sync auto-resolved
+  constraints       standing checks over the store
+  ack <id>...       leave a constraint finding for now (`ack --all`)
+  ops               read this branch's op log
+
+## Branches
+  branch            which branch am I on
+  branch <name>     switch to it, starting it if it's new
+  branches          list them (name, short id, parent, status)
+  switch <name>     same as `branch <name>`; `switch main` returns
+  diff <name>       what it changes vs its parent
+  log [<name>]      its ops (on main: the commits)
+  rebase <name>     take the parent's current state
+  merge <name> [-y] fold it into its parent
+  resolve <branch> <name> mine|theirs
+  (see: docs scm)
+
+## Serving
+  serve <router> [--port N] [--live]
+                              an HTTP server backed by a Darklang router
+                              (alias: http-server; --port defaults to 8080;
+                              --live follows your edits)
+
+## The full-screen experience (`dark` with no args opens it)
+  workbench         the framed, navigable workbench (alias: wb)
+  outliner          the interactive tree outliner
+
+## Config, and the rest
+  install / update / uninstall / version   the `dark` binary itself
+  backups           copies of the store: what exists, take one, prune
+  config            per-install settings (`config set <key> <value>`)
+  permissions       what this instance is allowed to do (alias: perms)
+  help [cmd] / docs [topic] / clear / quit
+
+## Troubleshooting
+If something hangs or behaves unexpectedly, check the logs:
+  rundir/logs/cli.log    # main CLI log
+  rundir/logs/           # other logs (parser, etc.)"""

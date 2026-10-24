@@ -1,0 +1,41 @@
+module Darklang.Stdlib.Cli.UI.Prompt
+
+
+/// Ask the user for text input.
+// @compiler replace: packages/darklang/stdlib/cli/ui/prompt.dark#Darklang.Stdlib.Cli.UI.Prompt.ask reason=compiler-implementation
+let ask (question: String) : String =
+  Stdlib.printError ($"{question} ")
+  Stdlib.Cli.Stdin.readLine ()
+
+
+/// Ask the user a yes/no question. Returns true for yes.
+// @compiler replace: packages/darklang/stdlib/cli/ui/prompt.dark#Darklang.Stdlib.Cli.UI.Prompt.confirm reason=compiler-implementation
+let confirm (question: String) : Bool =
+  Stdlib.printError ($"{question} [y/N] ")
+  let answer = Stdlib.String.toLowercase (Stdlib.Cli.Stdin.readLine ())
+  answer == "y" || answer == "yes"
+
+
+/// Ask the user to select from a list of choices. Returns the chosen item.
+// @compiler replace: packages/darklang/stdlib/cli/ui/prompt.dark#Darklang.Stdlib.Cli.UI.Prompt.select reason=compiler-implementation
+let select (question: String) (choices: List<String>) : String =
+  Stdlib.printErrorLine question
+
+  let _ =
+    choices
+    |> Stdlib.List.indexedMap (fun i choice ->
+      Stdlib.printErrorLine ($"  {Stdlib.Cli.UI.Colors.boldText (Stdlib.toString (i + 1))}. {choice}"))
+
+  Stdlib.printError "Enter number: "
+  let input = Stdlib.Cli.Stdin.readLine ()
+
+  match Stdlib.Int.parse input with
+  | Ok n ->
+    match Stdlib.List.getAt choices (n - 1) with
+    | Some choice -> choice
+    | None ->
+      Stdlib.printErrorLine (Stdlib.Cli.UI.Colors.redText "Invalid selection")
+      select question choices
+  | Error _e ->
+    Stdlib.printErrorLine (Stdlib.Cli.UI.Colors.redText "Please enter a number")
+    select question choices

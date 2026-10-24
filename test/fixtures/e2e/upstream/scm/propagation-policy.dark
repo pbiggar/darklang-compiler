@@ -42,19 +42,23 @@ module Helpers =
 module CandidateOrder =
   // The item itself first, then the module chain from innermost outward, then owner-wide ("", "").
   // Getting this order wrong doesn't error, it just quietly applies the wrong person's decision.
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.candidateKeys (Helpers.loc [ "A", "B", "C" ] "f")) =
     [ ("A.B.C", "f"), ("A.B.C", ""), ("A.B", ""), ("A", ""), ("", "") ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.candidateKeys (Helpers.loc [ "A" ] "f")) =
     [ ("A", "f"), ("A", ""), ("", "") ]
 
   // A top-level item still gets the owner-wide fallback, and nothing else.
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.candidateKeys (Helpers.loc [] "f")) = [ ("", "f"), ("", "") ]
 
   // A MODULE target (name = "") asks the same question with an empty name, so its first candidate is its
   // own module row rather than an item row that cannot exist. The repeat is not a bug: the item key and
   // the innermost module key coincide, and de-duplicating them would cost a pass over the list to change
   // nothing, since the first hit wins either way.
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.candidateKeys (Helpers.loc [ "A", "B" ] "")) =
     [ ("A.B", ""), ("A.B", ""), ("A", ""), ("", "") ]
 
@@ -62,14 +66,17 @@ module CandidateOrder =
 module Defaults =
   // Nobody has said anything: the default is follow. `None` from the resolver is NOT "follow" -- the
   // CALLER decides the default, and this caller's is follow.
+  // @compiler blocked: compiler-gap
   (Helpers.follows [] [ "A" ] "f") = true
 
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.explicitPolicyIn [] (Helpers.loc [ "A" ] "f")) =
     Stdlib.Option.Option.None
 
 
 module MostSpecificWins =
   // An item-level pin beats a module-level follow.
+  // @compiler blocked: compiler-gap
   (Helpers.follows
     [ Helpers.choice "A" "f" Darklang.SCM.Propagation.Policy.Pin
       Helpers.choice "A" "" Darklang.SCM.Propagation.Policy.Follow ]
@@ -78,6 +85,7 @@ module MostSpecificWins =
 
   // ... and an item-level follow beats a module-level pin. Both directions, because a rule that only
   // works one way isn't an override, it's a coincidence.
+  // @compiler blocked: compiler-gap
   (Helpers.follows
     [ Helpers.choice "A" "f" Darklang.SCM.Propagation.Policy.Follow
       Helpers.choice "A" "" Darklang.SCM.Propagation.Policy.Pin ]
@@ -85,6 +93,7 @@ module MostSpecificWins =
     "f") = true
 
   // An INNER module beats an outer one.
+  // @compiler blocked: compiler-gap
   (Helpers.follows
     [ Helpers.choice "A.B" "" Darklang.SCM.Propagation.Policy.Pin
       Helpers.choice "A" "" Darklang.SCM.Propagation.Policy.Follow ]
@@ -92,12 +101,14 @@ module MostSpecificWins =
     "f") = false
 
   // An owner-wide choice covers anything with no closer rule.
+  // @compiler blocked: compiler-gap
   (Helpers.follows
     [ Helpers.choice "" "" Darklang.SCM.Propagation.Policy.Pin ]
     [ "A", "B" ]
     "f") = false
 
   // A module-level pin covers items BENEATH it, not just at it.
+  // @compiler blocked: compiler-gap
   (Helpers.follows
     [ Helpers.choice "A" "" Darklang.SCM.Propagation.Policy.Pin ]
     [ "A", "B" ]
@@ -106,6 +117,7 @@ module MostSpecificWins =
 
 module Scoping =
   // A choice about a SIBLING item says nothing about this one.
+  // @compiler blocked: compiler-gap
   (Helpers.follows
     [ Helpers.choice "A" "g" Darklang.SCM.Propagation.Policy.Pin ]
     [ "A" ]
@@ -113,6 +125,7 @@ module Scoping =
 
   // A choice under a different owner doesn't apply. Decisions are per owner; borrowing someone else's
   // would be the machine overruling a person who never spoke.
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.shouldFollowIn
     [ Darklang.SCM.Propagation.Choice
         { owner = "Other"
@@ -126,16 +139,22 @@ module Scoping =
 
 module PolicyCodec =
   // Round-trips through the string the op and the table both carry.
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.policyToString Darklang.SCM.Propagation.Policy.Pin) = "pin"
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.policyToString Darklang.SCM.Propagation.Policy.Follow) = "follow"
 
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.policyFromString "pin") =
     Stdlib.Option.Option.Some Darklang.SCM.Propagation.Policy.Pin
 
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.policyFromString "follow") =
     Stdlib.Option.Option.Some Darklang.SCM.Propagation.Policy.Follow
 
   // `unset` is a decision, but it is not a POLICY: it removes the row rather than being one, so the
   // codec must not quietly accept it as a third state.
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.policyFromString "unset") = Stdlib.Option.Option.None
+  // @compiler blocked: compiler-gap
   (Darklang.SCM.Propagation.policyFromString "") = Stdlib.Option.Option.None

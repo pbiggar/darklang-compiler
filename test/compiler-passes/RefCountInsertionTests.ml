@@ -53,12 +53,13 @@ let tests =
         (Join
            (joinParameter, Return joinValue, Jump (TempId 1, BoolLiteral true)))
     );
-    ( "Join verifier rejects managed parameter",
-      rejectsJoin "unsupported block argument"
-        (Join
-           ( { joinParameter with typ = AST.TString },
-             Return joinValue,
-             Jump (TempId 1, StringLiteral "value") )) );
+    ( "Join verifier accepts managed string parameter",
+      fun () ->
+        verifyJoin
+          (Join
+             ( { joinParameter with typ = AST.TString },
+               Return joinValue,
+               Jump (TempId 1, StringLiteral "value") )) );
     ( "Join verifier rejects returning entry",
       rejectsJoin "instead of transferring"
         (Join (joinParameter, Return joinValue, Return joinValue)) );

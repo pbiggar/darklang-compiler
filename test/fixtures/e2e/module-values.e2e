@@ -1,0 +1,26 @@
+// Module-relative values, sibling modules, and lexical precedence.
+module Values =
+  val number = 40L
+  val next = number + 1L
+  let get (): Int64 = next
+  let local (): Int64 = let number = 7L in number
+  let parameter (number: Int64): Int64 = number
+  module Inner =
+    val number = 2L
+    val own = Inner.number
+    val parent = next
+    val explicitParent = Values.number
+module Sibling =
+  val number = 9L
+  val other = Values.Inner.number
+Values.number = 40L
+Values.next = 41L
+Values.get () = 41L
+Values.local () = 7L
+Values.parameter 8L = 8L
+Values.Inner.number = 2L
+Values.Inner.own = 2L
+Values.Inner.parent = 41L
+Values.Inner.explicitParent = 40L
+Sibling.number = 9L
+Sibling.other = 2L

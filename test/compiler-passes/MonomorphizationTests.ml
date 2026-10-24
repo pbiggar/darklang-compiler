@@ -8,6 +8,8 @@ module S = SpecializationIdentity
 
 type testResult = (unit, string) result
 
+let ( let* ) = Result.bind
+
 let testPreservesTypeVarsInSpecialization () =
   let xId, symbols = C.allocateBinding "x" (C.emptySymbols ()) in
   let id, symbols = C.internFunction "id" symbols in
@@ -18,6 +20,7 @@ let testPreservesTypeVarsInSpecialization () =
       typeParams = [ "t" ];
       params = C.checkedParams (NonEmptyList.singleton (xId, AST.TVar "t"));
       returnType = C.checkedType (AST.TVar "t");
+      bodyType = C.checkedType (AST.TVar "t");
       body = C.Local xId;
       recursion = None;
     }
@@ -25,7 +28,7 @@ let testPreservesTypeVarsInSpecialization () =
   let artifact : S.genericFunctionArtifact =
     { S.symbols; func = funcDef; directDependencies = S.FunctionSet.empty }
   in
-  let specialized =
+  let* specialized =
     Monomorphization.specializeFromSpecs symbols
       (StringOrder.Map.singleton "id" artifact)
       (S.SpecSet.singleton ("id", [ AST.TVar "t" ]))
@@ -92,6 +95,7 @@ let testSpecializeFromSpecs () =
       typeParams = [ "t" ];
       params = C.checkedParams (NonEmptyList.singleton (xId, AST.TVar "t"));
       returnType = C.checkedType (AST.TVar "t");
+      bodyType = C.checkedType (AST.TVar "t");
       body = C.Local xId;
       recursion = None;
     }
@@ -104,7 +108,7 @@ let testSpecializeFromSpecs () =
         directDependencies = S.directDependencies funcDef.C.body;
       }
   in
-  let result =
+  let* result =
     Monomorphization.specializeFromSpecs symbols genericDefs
       (S.SpecSet.singleton ("id", [ AST.TInt64 ]))
   in

@@ -11,7 +11,7 @@ groups:
       status: partial
       notes: Float literals now preserve the decimal precision specified by their source, reject overflow
         and nonzero underflow, and normalize independently of host formatting. This intentional policy
-        change has a paired interpreter PR; the pinned interpreter still uses its earlier float policy.
+        change matches merged interpreter PR darklang/dark#5985; the pinned interpreter still uses its earlier float policy.
     Character literals:
       status: supported
       notes: Malformed quoted characters stay one token in type contexts; character validation reports the error

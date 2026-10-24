@@ -9,6 +9,7 @@ type e2eTest = {
   name : string;
   sourceLine : int;
   source : string;
+  modulePath : string list;
   expectedValueExpr : string option;
   preamble : string;
   expectedStdout : string option;
@@ -22,6 +23,7 @@ type e2eTest = {
   errorExpectation : errorExpectation option;
   expectedErrorMessage : string option;
   skipReason : string option;
+  compilerDisposition : Dark_compiler.CompilerAnnotations.disposition;
   disableFreeList : bool;
   disableANFOpt : bool;
   disableANFConstFolding : bool;

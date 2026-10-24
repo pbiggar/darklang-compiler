@@ -16,7 +16,6 @@ type typeError =
   | InvalidOperation of string * AST.semanticType list
   | IncompatibleEqualityOperands of AST.semanticType * AST.semanticType
   | IncompatibleOrderingOperands of AST.semanticType * AST.semanticType
-  | PolymorphicRecursion of string
   | ResolutionFailure of NameResolution.resolutionError
   | GenericError of string
 
@@ -125,9 +124,6 @@ let typeErrorToString = function
   | IncompatibleOrderingOperands (left, right) ->
       "Cannot perform numeric operation on " ^ typeToString left ^ " and "
       ^ typeToString right
-  | PolymorphicRecursion name ->
-      "Polymorphic recursion is not supported inside recursive group member: "
-      ^ name
   | ResolutionFailure error -> NameResolution.errorToString error
   | GenericError msg -> msg
 

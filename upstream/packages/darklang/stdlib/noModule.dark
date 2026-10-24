@@ -1,0 +1,16 @@
+module Darklang.Stdlib
+
+
+/// Returns true if the two value are equal
+// @compiler replace: packages/darklang/stdlib/noModule.dark#Darklang.Stdlib.equals reason=compiler-implementation
+let equals (a: 'a) (b: 'a) : Bool = a == b
+
+
+/// Returns true if the two value are not equal
+// @compiler replace: packages/darklang/stdlib/noModule.dark#Darklang.Stdlib.notEquals reason=compiler-implementation
+let notEquals (a: 'a) (b: 'a) : Bool = Builtin.notEquals a b
+
+/// A developer-facing string for <param value>: the shape you'd want in a
+/// debug print, not something to parse or show a user.
+// @compiler blocked: missing-implementation
+let toRepr (value: 'a) : String = Builtin.toRepr value

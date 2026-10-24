@@ -1,0 +1,16 @@
+// Test.dark - Native exception injection for imported package tests.
+module Darklang.Stdlib.Test
+
+let raiseRuntimeError (message: String) : Int64 =
+  Builtin.crash message
+
+let __renderValue<'a> (value: 'a) : String =
+  Builtin.crash "Assertion value renderer was not specialized"
+
+let equal (actual: 'a) (expected: 'a) : Result =
+  if actual == expected then Result.Pass
+  else Result.Fail ["expected " + Stdlib.Test.__renderValue expected + ", got " + Stdlib.Test.__renderValue actual]
+
+let notEqual (actual: 'a) (unexpected: 'a) : Result =
+  if actual != unexpected then Result.Pass
+  else Result.Fail ["did not expect " + Stdlib.Test.__renderValue unexpected]

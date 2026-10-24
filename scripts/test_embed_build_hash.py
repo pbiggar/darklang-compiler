@@ -16,6 +16,8 @@ class BuildHashTests(unittest.TestCase):
             source.parent.mkdir(parents=True)
             source.write_text('module Builtin\nlet getBuildHash () : String = "__COMPILER_BUILD_HASH__"\n')
             (root / "library-sources.list").write_text("packages/darklang/stdlib/__builtin/__buildInfo.dark\n")
+            (root / "porting").mkdir()
+            (root / "porting/compiler-reasons.json").write_text('{}')
             command = [sys.executable, str(Path(__file__).with_name("embed-stdlib.py")),
                        str(root), str(root / "EmbeddedStdlib.ml"), str(root / "BuildInfo.ml")]
             subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -42,6 +44,8 @@ class BuildHashTests(unittest.TestCase):
             source.parent.mkdir(parents=True)
             source.write_text('module Builtin\nlet getBuildHash () : String = "__COMPILER_BUILD_HASH__"\n')
             (root / "library-sources.list").write_text("packages/darklang/stdlib/__builtin/__buildInfo.dark\n")
+            (root / "porting").mkdir()
+            (root / "porting/compiler-reasons.json").write_text('{}')
             for argument, expected in [("0123456", "0123456"), ("abcd", "abcd"),
                                        ("abcdef0", "abcdef0"), ("a" * 64, "a" * 64), ("", "dev")]:
                 result = subprocess.run([sys.executable, str(Path(__file__).with_name("embed-stdlib.py")),

@@ -1,0 +1,229 @@
+module Darklang.Stdlib.Int16
+
+
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.ParseError reason=compiler-implementation
+type ParseError =
+  | BadFormat
+  | OutOfRange
+
+
+// @compiler blocked: container-adaptation
+impl Modulo for Int16 =
+  /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
+  /// The modulus <param b> must be greater than 0.
+  /// Use <fn Int16.remainder> if you want the remainder after division, which has
+  /// a different behavior for negative numbers.
+  // @compiler blocked: container-adaptation
+  let modulo (a: Int16) (b: Int16) : Int16 = Builtin.int16Mod a b
+
+
+/// Returns the integer remainder left over after dividing <param value> by
+/// <param divisor>, as a <type Result>.
+/// For example, {{Int16.remainder 15 6 == Ok 3}}. The remainder will be
+/// negative only if {{<var value> < 0}}.
+/// The sign of <param divisor> doesn't influence the outcome.
+/// Returns an {{Error}} if <param divisor> is {{0}}.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.remainder reason=compiler-implementation
+let remainder
+  (value: Int16)
+  (divisor: Int16)
+  : Stdlib.Result.Result<Int16, String> =
+  Builtin.int16Remainder value divisor
+
+
+// @compiler blocked: container-adaptation
+impl Add for Int16 =
+  /// Adds two 16-bit signed integers together (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let add (a: Int16) (b: Int16) : Int16 = Builtin.int16Add a b
+
+
+// @compiler blocked: container-adaptation
+impl Subtract for Int16 =
+  /// Subtracts two 16-bit signed integers (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let subtract (a: Int16) (b: Int16) : Int16 = Builtin.int16Subtract a b
+
+
+// @compiler blocked: container-adaptation
+impl Multiply for Int16 =
+  /// Multiplies two 16-bit signed integers (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let multiply (a: Int16) (b: Int16) : Int16 = Builtin.int16Multiply a b
+
+
+// @compiler blocked: container-adaptation
+impl Power for Int16 =
+  /// Raise <param base> to the power of <param exponent>.
+  /// Overflow wraps around.
+  /// Raises an error if <param exponent> is negative.
+  // @compiler blocked: container-adaptation
+  let power (``base``: Int16) (exponent: Int16) : Int16 =
+    Builtin.int16Power ``base`` exponent
+
+
+// @compiler blocked: container-adaptation
+impl Divide for Int16 =
+  /// Divides two 16-bit signed integers
+  // @compiler blocked: container-adaptation
+  let divide (a: Int16) (b: Int16) : Int16 = Builtin.int16Divide a b
+
+
+// @compiler blocked: container-adaptation
+impl Negate for Int16 =
+  /// Returns the negation of <param a>, {{-a}}. Negating the minimum value wraps back to itself.
+  // @compiler blocked: container-adaptation
+  let negate (a: Int16) : Int16 = Builtin.int16Negate a
+
+
+// @compiler blocked: container-adaptation
+impl Compare for Int16 =
+  /// Returns {{true}} if <param a> is less than <param b>
+  // @compiler blocked: container-adaptation
+  let lessThan (a: Int16) (b: Int16) : Bool = Builtin.int16LessThan a b
+  /// Returns {{true}} if <param a> is less than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo (a: Int16) (b: Int16) : Bool =
+    Builtin.int16LessThanOrEqualTo a b
+  /// Returns {{true}} if <param a> is greater than <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThan (a: Int16) (b: Int16) : Bool = Builtin.int16GreaterThan a b
+  /// Returns {{true}} if <param a> is greater than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo (a: Int16) (b: Int16) : Bool =
+    Builtin.int16GreaterThanOrEqualTo a b
+
+
+/// Returns a random 16-bit signed integer between <param start> and <param end> (inclusive)
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.random reason=compiler-implementation
+let random (start: Int16) (``end``: Int16) : Int16 =
+  Builtin.int16Random start ``end``
+
+
+/// Get the square root of an <type Int16>
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.sqrt reason=compiler-implementation
+let sqrt (a: Int16) : Float = Builtin.int16Sqrt a
+
+
+/// Converts an <type Int16> to a <type Float>
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.toFloat reason=compiler-implementation
+let toFloat (a: Int16) : Float = Builtin.int16ToFloat a
+
+
+/// Parses a <type String> into an <type Int16>, returning {{Ok}} with the
+/// parsed value on success, or {{Error}} with a <type ParseError> ({{BadFormat}}
+/// if the string isn't a valid integer, {{OutOfRange}} if it's outside the
+/// <type Int16> range).
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.parse reason=compiler-implementation
+let parse (s: String) : Stdlib.Result.Result<Int16, Stdlib.Int16.ParseError> =
+  Builtin.int16Parse s
+
+
+/// Converts an <type Int8> to an <type Int16>.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromInt8 reason=compiler-implementation
+let fromInt8 (i: Int8) : Int16 = Builtin.int16FromInt8 i
+
+
+/// Converts a <type UInt8> to an <type Int16>.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromUInt8 reason=compiler-implementation
+let fromUInt8 (i: UInt8) : Int16 = Builtin.int16FromUInt8 i
+
+
+/// Converts a <type UInt16> to an <type Int16>. Returns {{None}} if the value is greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromUInt16 reason=compiler-implementation
+let fromUInt16 (i: UInt16) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromUInt16 i
+
+
+/// Converts an <type Int32> to an <type Int16>. Returns {{None}} if the value is less than -32768 or greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromInt32 reason=compiler-implementation
+let fromInt32 (i: Int32) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromInt32 i
+
+
+/// Converts a <type UInt32> to an <type Int16>. Returns {{None}} if the value is greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromUInt32 reason=compiler-implementation
+let fromUInt32 (i: UInt32) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromUInt32 i
+
+
+/// Converts an <type Int64> to an <type Int16>. Returns {{None}} if the value is less than -32768 or greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromInt64 reason=compiler-implementation
+let fromInt64 (i: Int64) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromInt64 i
+
+
+/// Converts a <type UInt64> to an <type Int16>. Returns {{None}} if the value is greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromUInt64 reason=compiler-implementation
+let fromUInt64 (i: UInt64) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromUInt64 i
+
+
+/// Converts an <type Int128> to an <type Int16>. Returns {{None}} if the value is less than -32768 or greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromInt128 reason=compiler-implementation
+let fromInt128 (i: Int128) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromInt128 i
+
+
+/// Converts a <type UInt128> to an <type Int16>. Returns {{None}} if the value is greater than 32767.
+// @compiler replace: packages/darklang/stdlib/int16.dark#Darklang.Stdlib.Int16.fromUInt128 reason=compiler-implementation
+let fromUInt128 (i: UInt128) : Stdlib.Option.Option<Int16> =
+  Builtin.int16FromUInt128 i
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseAnd for Int16 =
+  /// Bitwise AND on two <type Int16> values
+  // @compiler blocked: container-adaptation
+  let bitwiseAnd (a: Int16) (b: Int16) : Int16 = Builtin.int16BitwiseAnd a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseOr for Int16 =
+  /// Bitwise OR on two <type Int16> values
+  // @compiler blocked: container-adaptation
+  let bitwiseOr (a: Int16) (b: Int16) : Int16 = Builtin.int16BitwiseOr a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseXor for Int16 =
+  /// Bitwise XOR on two <type Int16> values
+  // @compiler blocked: container-adaptation
+  let bitwiseXor (a: Int16) (b: Int16) : Int16 = Builtin.int16BitwiseXor a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseNot for Int16 =
+  /// Bitwise NOT on an <type Int16> value
+  // @compiler blocked: container-adaptation
+  let bitwiseNot (a: Int16) : Int16 = Builtin.int16BitwiseNot a
+
+
+// @compiler blocked: container-adaptation
+impl ShiftLeft for Int16 =
+  /// Bitwise left shift of an <type Int16> value
+  // @compiler blocked: container-adaptation
+  let shiftLeft (a: Int16) (b: Int16) : Int16 = Builtin.int16ShiftLeft a b
+
+
+// @compiler blocked: container-adaptation
+impl ShiftRight for Int16 =
+  /// Bitwise right shift of an <type Int16> value
+  // @compiler blocked: container-adaptation
+  let shiftRight (a: Int16) (b: Int16) : Int16 = Builtin.int16ShiftRight a b
+
+// @compiler blocked: container-adaptation
+impl ToString for Int16 =
+  /// Stringify <param int16>
+  // @compiler blocked: container-adaptation
+  let toString (int16: Int16) : String = Builtin.int16ToString int16
+
+// @compiler blocked: container-adaptation
+impl Zero for Int16 =
+  // @compiler blocked: container-adaptation
+  let zero () : Int16 = 0s
+
+// @compiler blocked: container-adaptation
+impl One for Int16 =
+  // @compiler blocked: container-adaptation
+  let one () : Int16 = 1s

@@ -1,0 +1,79 @@
+module Darklang.Cli.Docs.Syntax
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Syntax
+
+## Basics
+  let x = 5
+  let add (a: Int) (b: Int) : Int = a + b
+  if cond then a else b
+  // comment
+
+## Functions
+  let greet (name: String) : String = $"Hello, {name}"
+
+Nested functions are supported in a function body, but require parameter and
+return annotations:
+  let outer (n: Int) : Int =
+    let double (x: Int) : Int = x * 2
+    double n
+
+## Match
+  match x with
+  | Some v -> v
+  | None -> 0
+
+## Result and Option unwrap
+  let next (input: String) : Stdlib.Result.Result<Int, Stdlib.Int.ParseError> =
+    let number = (Stdlib.Int.parse input)?
+    Ok (number + 1)
+
+`value?` extracts the value from Ok/Some, or immediately returns Error/None
+from the function or lambda containing it. Write Ok/Some for the success result.
+Unwrapping an Option requires an Option return; unwrapping a Result requires a
+Result return with the same error type. The success types may differ.
+
+Write `?` directly after its operand. `f x?` means `f (x?)`; use `(f x)?`
+or `(value |> transform)?` to unwrap a whole call or pipeline.
+The operand runs once; an early return skips remaining work without undoing
+completed effects. `?` requires a function or lambda and is unsupported in SQL queries.
+
+## Pipe (parens for complex LHS)
+  (Stdlib.List.range 0 10) |> Stdlib.List.map fn
+
+## Lists (comma separator)
+  [1, 2, 3]
+
+## Dicts and records
+  Dict { "a": 1, "b": 2 }
+  type Point = { x: Int, y: Int }
+  Point { x = 1, y = 2 }
+  { point with x = 3, y = 4 }
+
+Fields and entries use commas or newlines. Semicolons are a parse error.
+
+## Strings
+  "hello" + " world"     // concat
+  $"value: {x}"          // interpolation
+
+## Lambda
+  fun x -> x + 1
+  fun (a, b) -> a + b
+
+## Unit
+  ()     // value
+  Unit   // type
+
+## Traits (docs traits)
+  trait Area<'a> = let area (s: 'a) : Float
+  impl Area for Circle = let area (c: Circle) : Float = ...
+  impl ToString for Point = let toString (p: Point) : String = ...
+  let f<'a: ToString> (v: 'a) : String = v.toString
+
+## Printing multiple lines
+  // When printing 3+ lines, prefer printLines over repeated printLine:
+  [ "line 1"
+    "line 2"
+    "line 3"
+  ] |> Stdlib.printLines"""

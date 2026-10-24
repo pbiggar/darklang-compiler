@@ -21,9 +21,15 @@ module Ceiling =
   let streamed (xs: List<Int64>) :{} List<Int64> =
     Stdlib.Stream.toList (Stdlib.Stream.map (Stdlib.Stream.fromList xs) (fun x -> x * 10L))
 
+  // @compiler blocked: compiler-gap
   Ceiling.pure 1L = 2L
+  // @compiler blocked: compiler-gap
   Ceiling.mapped [ 1L, 2L ] = [ 2L, 3L ]
+  // @compiler blocked: compiler-gap
   Ceiling.folded [ 1L, 2L, 3L ] = 6L
+  // @compiler blocked: compiler-gap
   Ceiling.streamed [ 1L, 2L ] = [ 10L, 20L ]
+  // @compiler blocked: compiler-gap
   Ceiling.clocked () = true
+  // @compiler blocked: compiler-gap
   Ceiling.widerThanNeeded 4L = 8L

@@ -1,4 +1,9 @@
-# Compatibility test failure ledger
+# Historical compatibility test audit
+
+This is a historical audit of adapted fixtures and the former central gates.
+The [source ledger](../porting/README.md) is authoritative for current imported
+items. Counts and line numbers below describe the recorded revisions; current
+dispositions live in per-item source annotations.
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 
@@ -20,6 +25,19 @@ helper, and **33/33** remaining assertions pass. At that point, the other failur
 Constructor arity follow-up: named enum cases and payload counts are validated before generic argument inference, including aliases and explicit arguments. Option `None 5` and `Some(5, 6)` now report field-count compile errors; upstream enum L16 and L19 are enabled with phase-specific overrides. The focused regression passed **8/8** (the original checker failed four); the enum fixture passed **33/33** enabled assertions individually. Native build, the full host suite (**11,910/11,910**, after integrating main `38dceec47`), `dune runtest`, and **58/58** leak workloads passed. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
+
+Dictionary key and constructor-context follow-up (2026-10-22): function-bearing
+keys now receive the explicit AOT diagnostic `Functions cannot be used as
+dictionary keys`, replacing five internal List-recovery diagnostics in the Dict
+fixture. Fresh contextual checking reports four invalid alias constructor fields
+as `Expected TString, got TInt64` or its reverse, matching the ordinary checker.
+Only the `#compileerror` directives changed; the upstream expressions and runtime
+expectations remain intact. The alias fixture passes 42/42 and the dictionary
+selection passes 526/526, including the new key-policy, NaN and empty-container
+regressions. Duplicate literal handling now rejects computed and structural
+duplicates with the ordinary duplicate-key error, preserving source-order
+evaluation of all entries before construction. Postfix return scopes retain
+the AOT function-key proof, including its empty-container successes.
 
 A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builtin.unwrap` payload types during lambda lifting. Individual ungated runs passed 191/220 List assertions and 263/264 Int64 assertions. List L161 and Int64 L90 are now enabled; List L162 initially still failed before lambda lifting on an empty list.
 

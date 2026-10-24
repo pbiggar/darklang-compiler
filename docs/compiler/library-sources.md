@@ -1,6 +1,15 @@
 # Embedded library source inventory
 
-The compiler targets interpreter **v0.0.35**, revision
+The complete interpreter corpus at the revision in `porting/sources.yaml` lives
+under `upstream/`, including all package declarations and both test forms.
+Those original files carry per-item compiler decisions. The compiler embeds
+all imported package sources and selects original declarations or compatible
+replacements before checking bodies. `library-sources.list` lists the compiler
+replacement and supplemental implementations in dependency order; the table
+below describes that implementation layer and its historical source origins.
+See [the import design](../porting/upstream-import.md) for selection and tests.
+
+The existing implementation layer originally targeted interpreter **v0.0.35**, revision
 `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460` in `darklang/dark`.
 This inventory was checked against that revision, including nested modules.
 Paths in the interpreter column are relative to the interpreter repository.
@@ -352,3 +361,5 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/json/parseError/jsonPath.dark` | `Darklang.Stdlib.Json.ParseError.JsonPath`  | `packages/darklang/stdlib/json.dark` |
 | `packages/darklang/stdlib/json/parseError.dark` | `Darklang.Stdlib.Json.ParseError`  | `packages/darklang/stdlib/json.dark` |
 | `packages/darklang/stdlib/json.dark` | `Darklang.Stdlib.Json`  | `packages/darklang/stdlib/json.dark` |
+| `packages/darklang/stdlib/test.dark` | `Darklang.Stdlib.Test` | Native runtime-error and equality assertions with statically generated value diagnostics; original Result, pass, fail, expect and all come from the imported source |
+| `packages/darklang/stdlib/__testAssertions.dark` | `Darklang.Stdlib.Test.Tests` | Replacement for the upstream assertion-result comparison helper; tagged test-diagnostics |

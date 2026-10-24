@@ -1,0 +1,284 @@
+module Darklang.Cli.Packages.ImplCommand
+
+// `impl <module> <Trait for Type = members>`: author one implementation, the way
+// `fn` authors one function. The location is the MODULE the impl is written in
+// (an impl has no name of its own); the item lands at <module>[.<Type>].<Trait>,
+// with its method fns beneath it, exactly as `impl ... for ...` inside a `dark
+// module` block would.
+
+
+/// The full name of the trait already at <param location>, where an implementation is about to be
+/// bound: one name holds one item, so binding there would unlist the trait. `dark impl` and the
+/// workbench's editor both refuse on it.
+// @compiler blocked: missing-implementation
+let traitTakesTheName
+  (branchId: Uuid)
+  (location: LanguageTools.ProgramTypes.PackageLocation)
+  : Stdlib.Option.Option<String> =
+  match LanguageTools.PackageManager.Trait.find branchId location with
+  | Some _ ->
+    Stdlib.Option.Option.Some(
+      Stdlib.String.join
+        (Stdlib.List.append (Stdlib.List.append [ location.owner ] location.modules) [ location.name ])
+        "."
+    )
+  | None -> Stdlib.Option.Option.None
+
+// @compiler blocked: missing-implementation
+let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
+  match args with
+  | [] ->
+    Stdlib.printLine (help state)
+    state
+
+  | modulePath :: definitionParts ->
+    let inlineDefinition = Packages.definitionFromArgs definitionParts
+
+    if Stdlib.String.isEmpty inlineDefinition then
+      [
+        (Stdlib.Cli.UI.Colors.error "Error: Implementation required")
+        ""
+        "Pass it inline, a file that holds it, or `-` to read from stdin:"
+        "  impl <module> <Trait for Type = members>"
+        "  impl <module> <source-file>"
+        "  impl <module> -    (read from stdin)"
+        ""
+        "Example, for a type made first with `dark type Me.Demo.Point '{ x: Int64, y: Int64 }'`:"
+        "  dark impl Me.Demo 'ToString for Point = let toString (p: Point) : String = Stdlib.toString p.x'"
+        ""
+      ] |> Stdlib.printLines
+
+      { state with exitCode = 1 }
+    else
+      createImplInline
+        state.packageData.currentLocation
+        modulePath
+        inlineDefinition
+        state
+
+
+// @compiler blocked: missing-implementation
+let createImplInline
+  (currentLocation: Packages.PackageLocation)
+  (modulePath: String)
+  (definition: String)
+  (state: Cli.AppState)
+  : Cli.AppState =
+  // Resolve a synthetic item path below the requested module, so the module
+  // path follows the same rules as `fn`, `type` and `module`. `.` means here.
+  let locationInput =
+    if modulePath == "." then "__impl__" else modulePath + ".__impl__"
+
+  match Location.parseRelativeTo currentLocation locationInput with
+  | Ok baseLocation ->
+    let trimmedDefinition = Stdlib.String.trim definition
+    let fullSource =
+      if
+        Stdlib.String.startsWith trimmedDefinition "impl "
+        || Stdlib.String.startsWith trimmedDefinition "impl<"
+        || Stdlib.String.startsWith trimmedDefinition "///"
+      then
+        definition
+      else if Stdlib.String.startsWith trimmedDefinition "<" then
+        // `dark impl Acme "<'a: Show> Show for List<'a> = ..."`, the conditional form `docs
+        // traits` documents. Type parameters bind to the `impl` keyword and the parser refuses a
+        // space between them, so there is nowhere for the usual one to go.
+        $"impl{trimmedDefinition}"
+      else
+        $"impl {definition}"
+
+    match LanguageTools.Parser.Parse.toWrittenTypes fullSource with
+    | Some(SourceFile sourceFile) ->
+      // The parser may recover a tree after errors; do not save it.
+      let hasParseError =
+        (Errors.reportParseErrors (LanguageTools.Parser.Parse.diagnostics fullSource))
+        || (Errors.reportTrailing sourceFile)
+      let parsed =
+        if hasParseError then
+          Stdlib.Option.Option.None
+        else
+          match sourceFile.declarations with
+          | [ Impl i ] -> Stdlib.Option.Option.Some i
+          | _ -> Stdlib.Option.Option.None
+
+      match parsed with
+      | Some implDecl ->
+        // The item's own location: the member path's last segment is the trait.
+        let memberPath =
+          LanguageTools.WrittenTypesToProgramTypes.ImplDeclaration.memberPath
+            baseLocation.modules
+            implDecl
+        let location =
+          match Stdlib.List.reverse memberPath with
+          | name :: revModules ->
+            LanguageTools.ProgramTypes.PackageLocation
+              { owner = baseLocation.owner
+                modules = Stdlib.List.reverse revModules
+                name = name }
+          | [] ->
+            LanguageTools.ProgramTypes.PackageLocation
+              { owner = baseLocation.owner
+                modules = baseLocation.modules
+                name = implDecl.trait_.typ.name }
+
+        let failState = { state with exitCode = 1 }
+
+        // One name holds ONE item here, and an implementation written in a module named for
+        // its type lands on `<module>.<Trait>`, which is exactly where a trait DECLARED in
+        // that module already sits. Binding over it unlists the trait, and the trait then
+        // cannot be reached by name at all: `dark view <that name>` answers with the
+        // implementation, and resolving the trait for any other type fails.
+        //
+        // That used to be dodged by naming the implementation `<module>.<Type>.<Trait>`
+        // unconditionally, so it never collided. The cost was a name nobody wants to read or
+        // type, and `dark constraints` prints these. A real name conflict told to the author
+        // beats a verbose name that silently avoids it, so this refuses instead. The author
+        // moves either one; both are one command.
+        let traitAlreadyHere =
+          Stdlib.Option.isSome (traitTakesTheName state.currentBranchId location)
+
+        if traitAlreadyHere then
+          let fullName =
+            Stdlib.String.join
+              (Stdlib.List.append
+                (Stdlib.List.append [ location.owner ] location.modules)
+                [ location.name ])
+              "."
+
+          [ ""
+            (Stdlib.Cli.UI.Colors.error
+              $"A trait is already called {fullName}, so this implementation cannot take that name.")
+            ""
+            ("An implementation written in this module is named for its trait, which is "
+             + "where the trait itself already is.")
+            ""
+            (Stdlib.Cli.UI.Colors.hint
+              "  Move either one: write the implementation from the module above, or declare the trait there.")
+            (Stdlib.Cli.UI.Colors.hint
+              $"  `dark view {fullName}` shows what holds the name now.")
+            "" ]
+          |> Stdlib.printLines
+
+          failState
+        else
+
+          Packages.saveAuthored
+            state
+            location
+            LanguageTools.ProgramTypes.ItemKind.TraitImpl
+            "implementation"
+            failState
+            (fun ctx ->
+              // Lower from the MODULE the impl is written in; `implWithOps` builds
+              // the member path and lowers the method fns beneath it.
+              let moduleCtx = { ctx with currentModule = baseLocation.modules }
+              let (packageImpl, _fns, ops, unresolvedNames) =
+                LanguageTools.WrittenTypesToProgramTypes.implWithOps moduleCtx implDecl
+
+              // An implementation of a trait that does not exist is not a forward reference
+              // worth waiting on: without the trait there is nothing to implement, and the
+              // generic "will resolve when dependencies are added" sends you looking for a
+              // missing dependency rather than a missing trait. Say which it is, and refuse.
+              let traitName =
+                Stdlib.String.join packageImpl.trait_.originalName "."
+
+              let traitUnresolved =
+                match packageImpl.trait_.resolved with
+                | Ok _ -> false
+                | Error _ -> true
+
+              if traitUnresolved then
+                Stdlib.printLine
+                  (Stdlib.Cli.UI.Colors.error $"There is no trait called {traitName}.")
+
+                Stdlib.printLine
+                  (Stdlib.Cli.UI.Colors.hint
+                    "  `dark search <name> --trait` finds one; `dark trait` writes one; `docs traits` explains them.")
+
+                Stdlib.Option.Option.None
+              else
+                Stdlib.Option.Option.Some((ops, packageImpl.hash, unresolvedNames)))
+
+      | None ->
+        if hasParseError then
+          { state with exitCode = 1 }
+        else
+          [
+            (Stdlib.Cli.UI.Colors.error "Expected exactly one impl declaration")
+            ""
+            "Example:"
+            "  dark impl Me.Demo 'ToString for Point = let toString (p: Point) : String = Stdlib.toString p.x'"
+            ""
+          ] |> Stdlib.printLines
+          { state with exitCode = 1 }
+    | None ->
+      [
+        (Stdlib.Cli.UI.Colors.error "Failed to parse the implementation")
+        ""
+        "Example:"
+        "  dark impl Me.Demo 'ToString for Point = let toString (p: Point) : String = Stdlib.toString p.x'"
+        ""
+      ] |> Stdlib.printLines
+      { state with exitCode = 1 }
+  | Error msg ->
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"Invalid module: {msg}")
+    { state with exitCode = 1 }
+
+
+// @compiler blocked: missing-implementation
+let help (_state: Cli.AppState) : String =
+  [
+    "Create or update an implementation of a trait for a type"
+    ""
+    "Usage: impl <module> <Trait for Type = members>"
+    "       impl <module> <source-file>"
+    "       impl <module> -"
+    ""
+    "The module is where the impl is written (`.` for the current one); the item"
+    "lands at <module>.<Type>.<Trait>, with its method fns beneath it. A member is"
+    "a method fn, or `let m = Some.existing.fn` to name a fn that already exists."
+    "Bare trait names resolve to the stdlib traits, so `impl . \"Add for Vec = ...\"`"
+    "gives Vec a `+`. `impls <trait>` lists what exists; see `docs traits`."
+    ""
+    "Examples, in order (each runs as written):"
+    "  dark type Me.Demo.Point '{ x: Int64, y: Int64 }'"
+    "  dark impl Me.Demo 'ToString for Point = let toString (p: Point) : String = Stdlib.toString p.x'"
+    "  dark eval 'Stdlib.toString (Me.Demo.Point { x = 3L, y = 4L })'"
+    ""
+    "  # `+` on a type of your own:"
+    "  dark type Me.Demo.Vec '{ dx: Int64, dy: Int64 }'"
+    "  dark impl Me.Demo 'Add for Vec = let add (a: Vec) (b: Vec) : Vec = Vec { dx = a.dx + b.dx, dy = a.dy + b.dy }'"
+    "  dark eval 'Me.Demo.Vec { dx = 1L, dy = 2L } + Me.Demo.Vec { dx = 3L, dy = 4L }'"
+    ""
+    "  # Naming a fn that already exists, instead of writing one:"
+    "  dark fn Me.Demo.vecText '(v: Me.Demo.Vec) : String = Stdlib.toString v.dx + \",\" + Stdlib.toString v.dy'"
+    "  dark impl Me.Demo 'ToString for Vec = let toString = Me.Demo.vecText'"
+    ""
+    "  # Several methods, from stdin, for a trait of your own:"
+    "  dark trait Me.Demo.Shape - <<'EOF'"
+    "  /// What a shape can do"
+    "  trait Shape<'a> ="
+    "    let area (s: 'a) : Float"
+    "    let name (s: 'a) : String"
+    "  EOF"
+    "  dark type Me.Demo.Circle '{ r: Float }'"
+    "  dark impl Me.Demo - <<'EOF'"
+    "  impl Me.Demo.Shape for Circle ="
+    "    let area (c: Circle) : Float = 3.14159 * c.r * c.r"
+    "    let name (c: Circle) : String = \"circle\""
+    "  EOF"
+    ""
+    "  # Conditional, for a generic type: a Box of anything printable is printable."
+    "  # Type params lead. A generic type is declared in a module:"
+    "  dark module /Me.Boxes - <<'EOF'"
+    "  type Box<'a> = { item: 'a }"
+    "  impl<'a: ToString> ToString for Box<'a> ="
+    "    let toString (b: Box<'a>) : String = \"box of \" + Stdlib.toString b.item"
+    "  EOF"
+    "  dark eval 'Stdlib.toString (Me.Boxes.Box { item = 7L })'"
+    ""
+  ] |> Stdlib.String.join "\n"
+
+
+// @compiler blocked: missing-implementation
+let complete (_state: Cli.AppState) (_args: List<String>) : List<Cli.Completion.CompletionItem> = []

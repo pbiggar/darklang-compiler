@@ -1,0 +1,38 @@
+/// The interpreter's performance counters: instruction count, call counts,
+/// frame pushes, and (when detailed timing is on) per-builtin and
+/// per-package-fn time.
+///
+/// Perf work reads these by hand, from a `.dark` workload or `dark eval`. Nothing in the
+/// CLI surfaces them yet.
+module Darklang.LanguageTools.InterpreterStats
+
+
+/// Zero the counters, and start counting if they weren't already.
+// @compiler blocked: missing-implementation
+let reset () : Unit =
+  Builtin.interpreterStatsReset ()
+
+
+/// The counters so far, as a JSON string.
+// @compiler blocked: missing-implementation
+let get () : String =
+  Builtin.interpreterStatsGet ()
+
+
+/// Also record per-expression time from here on. Off by default: on some
+/// hosts reading the clock costs more than the expression being timed, so
+/// this is a deliberate, per-run choice rather than something to leave on.
+// @compiler blocked: missing-implementation
+let enableDetailedTiming (enabled: Bool) : Unit =
+  Builtin.interpreterStatsEnableDetailedTiming enabled
+
+
+/// Bytes this process has allocated since it started, including memory since
+/// freed. Read it either side of a piece of work and subtract.
+///
+/// This is the number to compare two versions of the same code with: unlike
+/// wall-clock time it repeats exactly, and it does not care how loaded the
+/// machine is.
+// @compiler blocked: missing-implementation
+let allocatedBytes () : Int64 =
+  Builtin.gcAllocatedBytes ()

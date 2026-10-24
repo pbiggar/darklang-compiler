@@ -1,0 +1,282 @@
+module Darklang.Cli.Builtins
+
+// Known groups in display order with their display names.
+// Format: (prefix, displayName)
+//
+// The prefix is what `extractGroup` reads off a builtin's name: the characters before the
+// first capital, so `int64Add` is `int64` and `sqliteQuery` is `sqlite`. A prefix with no
+// entry here is shown uppercased and sorted after every named group, which is how 49 of the
+// 69 live prefixes were being displayed -- including `pm` (57 builtins) and the whole integer
+// family (302 between them). `tests/cli/builtinGroups.dark` fails when a prefix carrying three
+// or more builtins has no entry, and when an entry here names a prefix no builtin carries.
+// @compiler blocked: missing-implementation
+val knownGroups =
+  [ ("int", "Int")
+    ("int8", "Int8")
+    ("int16", "Int16")
+    ("int32", "Int32")
+    ("int64", "Int64")
+    ("int128", "Int128")
+    ("uint8", "UInt8")
+    ("uint16", "UInt16")
+    ("uint32", "UInt32")
+    ("uint64", "UInt64")
+    ("uint128", "UInt128")
+    ("float", "Float")
+    ("bool", "Bool")
+    ("char", "Char")
+    ("string", "String")
+    ("list", "List")
+    ("dict", "Dict")
+    ("blob", "Blob")
+    ("stream", "Stream")
+    ("json", "JSON")
+    ("base64", "Base64")
+    ("uuid", "UUID")
+    ("date", "DateTime")
+    ("math", "Math")
+    ("bitwise", "Bitwise")
+    ("crypto", "Crypto")
+    ("x509", "X509")
+    ("http", "HTTP")
+    ("parser", "Parser")
+    ("regex", "Regex")
+    ("sqlite", "SQLite")
+    ("cli", "CLI")
+    ("stdin", "Stdin")
+    ("stdout", "Stdout")
+    ("syscall", "Syscall")
+    ("host", "Host")
+    ("exec", "Exec")
+    ("local", "Local DB")
+    ("pm", "Package Manager")
+    ("scm", "SCM")
+    ("traces", "Traces")
+    ("test", "Test")
+    ("runtime", "Runtime")
+    ("interpreter", "Interpreter")
+    ("applicable", "Applicable")
+    // A misnomer the table cannot fix: these six are `getAllBuiltinFns`, `getBuildHash` and
+    // friends, which are reflection rather than a `get` family. The real fix is to rename the
+    // builtins, which moves their `Builtin.x` wrappers too, so it is not done in passing.
+    ("get", "Reflection")
+    ("debug", "Debug")
+    ("print", "Print") ]
+
+
+// Extract the group prefix from a camelCase builtin name
+// @compiler blocked: missing-implementation
+let extractGroup (name: String): String =
+  let chars = Stdlib.String.toList name
+
+  let groupChars =
+    Stdlib.List.takeWhile chars (fun c -> Stdlib.Bool.not (Stdlib.Char.isUppercase c))
+
+  if Stdlib.List.isEmpty groupChars then
+    "other"
+  else
+    Stdlib.String.fromList groupChars
+
+
+// @compiler blocked: missing-implementation
+let getDisplayName (prefix: String): String =
+  let found =
+    Stdlib.List.findFirst knownGroups (fun (groupPrefix, _) -> groupPrefix == prefix)
+
+  match found with
+  | Some((_, displayName)) -> displayName
+  | None -> Stdlib.String.toUppercase prefix
+
+
+// @compiler blocked: missing-implementation
+let isKnownGroup (prefix: String): Bool =
+  Stdlib.List.any knownGroups (fun (groupPrefix, _) -> groupPrefix == prefix)
+
+
+// @compiler blocked: missing-implementation
+let versionSuffix (v: Int32) : String =
+  if v == 0l then "" else $"_v{Stdlib.toString v}"
+
+
+// @compiler blocked: missing-implementation
+let purityTag (purity: LanguageTools.BuiltinFunctionPurity) : String =
+  match purity with
+  | Pure -> "[pure]"
+  | Impure -> "[impure]"
+
+
+// Sort groups: known groups first in order, then unknown groups alphabetically
+// @compiler blocked: missing-implementation
+let sortGroups
+  (groups: List<String * List<LanguageTools.BuiltinFunction>>)
+  : List<String * List<LanguageTools.BuiltinFunction>> =
+  let knownPrefixes = Stdlib.List.map knownGroups (fun (groupPrefix, _) -> groupPrefix)
+
+  let knownInOrder =
+    knownPrefixes
+    |> Stdlib.List.filterMap (fun prefix ->
+      let found =
+        Stdlib.List.findFirst groups (fun (groupPrefix, _) -> groupPrefix == prefix)
+
+      found)
+
+  let unknown =
+    groups
+    |> Stdlib.List.filter (fun (groupPrefix, _) ->
+      Stdlib.Bool.not (isKnownGroup groupPrefix))
+    |> Stdlib.List.sortBy (fun (groupPrefix, _) -> groupPrefix)
+
+  Stdlib.List.append knownInOrder unknown
+
+
+// @compiler blocked: missing-implementation
+let execute (state: AppState) (args: List<String>): AppState =
+  let allBuiltins = LanguageTools.allBuiltinFns ()
+
+  let withSigs = Stdlib.List.any args (fun arg -> arg == "--with-sigs")
+  let withPurity = Stdlib.List.any args (fun arg -> arg == "--with-purity")
+
+  let filterArgs =
+    args
+    |> Stdlib.List.filter (fun arg ->
+      arg != "--with-sigs" && arg != "--with-purity")
+
+  let filter =
+    match filterArgs with
+    | [] -> Stdlib.Option.Option.None
+    | [ pattern ] -> Stdlib.Option.Option.Some pattern
+    | _ -> Stdlib.Option.Option.None
+
+  let grouped =
+    allBuiltins
+    |> Stdlib.List.fold Stdlib.Dict.empty (fun acc fn ->
+      let group = extractGroup fn.name.name
+
+      let existing =
+        match Stdlib.Dict.get acc group with
+        | Some list -> list
+        | None -> []
+
+      Stdlib.Dict.setOverridingDuplicates
+        acc
+        group
+        (Stdlib.List.append existing [ fn ]))
+
+  let allGroups = Stdlib.Dict.toList grouped
+
+  let sortedGroups = sortGroups allGroups
+
+  let filteredGroups =
+    match filter with
+    | None -> sortedGroups
+    | Some pattern ->
+      sortedGroups
+      |> Stdlib.List.filterMap (fun pair ->
+        let group = Stdlib.Tuple2.first pair
+        let fns = Stdlib.Tuple2.second pair
+
+        let matchingFns =
+          fns
+          |> Stdlib.List.filter (fun fn ->
+            (Stdlib.String.contains fn.name.name pattern)
+            || (Stdlib.String.contains group pattern))
+
+        if Stdlib.List.isEmpty matchingFns then
+          Stdlib.Option.Option.None
+        else
+          Stdlib.Option.Option.Some ((group, matchingFns)))
+
+  if withSigs then
+    filteredGroups
+    |> Stdlib.List.iter (fun pair ->
+      let group = Stdlib.Tuple2.first pair
+      let fns = Stdlib.Tuple2.second pair
+      Stdlib.printLine ""
+      Stdlib.printLine (Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.bold (getDisplayName group))
+
+      fns
+      |> Stdlib.List.iter (fun fn ->
+        let branchId = SCM.Branch.mainBranchId
+
+        let params =
+          fn.parameters
+          |> Stdlib.List.map (fun p ->
+            let typStr = PrettyPrinter.RuntimeTypes.typeReference branchId p.``type``
+            $"{p.name}: {typStr}")
+          |> Stdlib.String.join ", "
+
+        let returnTypeStr =
+          PrettyPrinter.RuntimeTypes.typeReference branchId fn.returnType
+
+        let suffix =
+          if withPurity then $" {purityTag fn.purity}" else ""
+
+        Stdlib.printLine
+          $"  {fn.name.name}{versionSuffix fn.name.version}({params}) -> {returnTypeStr}{suffix}"))
+  else
+    // Compact output: comma-separated names
+    filteredGroups
+    |> Stdlib.List.iter (fun pair ->
+      let group = Stdlib.Tuple2.first pair
+      let fns = Stdlib.Tuple2.second pair
+
+      let names =
+        fns
+        |> Stdlib.List.map (fun fn ->
+          let suffix =
+            if withPurity then $" {purityTag fn.purity}" else ""
+          $"{fn.name.name}{versionSuffix fn.name.version}{suffix}")
+        |> Stdlib.String.join ", "
+
+      Stdlib.printLine ""
+      Stdlib.printLine $"{Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.bold (getDisplayName group)}: {names}")
+
+  let totalCount =
+    filteredGroups
+    |> Stdlib.List.map (fun pair -> Stdlib.List.length (Stdlib.Tuple2.second pair))
+    |> Stdlib.List.fold 0 (fun acc n -> acc + n)
+
+  let summary =
+    match filter with
+    | None -> $"Total: {Stdlib.toString totalCount} builtin functions"
+    | Some pattern ->
+      $"Showing {Stdlib.toString totalCount} functions matching '{pattern}'"
+
+  [ ""
+    Stdlib.Cli.UI.Colors.hint summary ]
+  |> Stdlib.printLines
+
+  if Stdlib.Bool.not withSigs then
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.hint "Use --with-sigs to see full function signatures, --with-purity to tag pure/impure")
+
+  state
+
+
+// @compiler blocked: missing-implementation
+let help (_state: AppState) : String =
+  [ "Usage: builtins [--with-sigs] [--with-purity] [filter]"
+    ""
+    "Lists all builtin functions grouped by category."
+    ""
+    "Options:"
+    "  --with-sigs    Show full function signatures with parameter types"
+    "  --with-purity  Tag each fn with [pure] / [impure-previewable] / [impure]"
+    ""
+    "Arguments:"
+    "  filter         Optional pattern to filter functions by name or group"
+    ""
+    "Examples:"
+    "  builtins                                - List all builtins (compact)"
+    "  builtins --with-sigs                    - List all builtins with signatures"
+    "  builtins --with-purity                  - Compact + purity tag"
+    "  builtins --with-sigs --with-purity http - HTTP fns, sigs + purity"
+    "  builtins json                           - Filter by 'json'" ]
+  |> Stdlib.String.join "\n"
+
+
+// @compiler blocked: missing-implementation
+let complete
+  (state: AppState)
+  (args: List<String>)
+  : List<Completion.CompletionItem> =
+  []

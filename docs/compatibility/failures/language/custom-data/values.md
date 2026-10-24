@@ -2,26 +2,13 @@
 
 [Source fixture](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark) · [File list](../../../current-audit.md)
 
-Executed 72 assertions: **19 passed, 53 failed**.
+User-value follow-up: **35/35 user-value assertions pass** with module scopes
+preserved by the legacy assertion importer. The **37 package-value assertions
+remain disabled**; package loading is outside this change. The package failures
+below are retained from the earlier 72-assertion audit.
 
 | Test | Observed failure |
 | --- | --- |
-| [L5](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L5) — UserDefined.stringValue | Unknown function or value 'UserDefined.stringValue' |
-| [L9](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L9) — UserDefined.int64Value | Unknown function or value 'UserDefined.int64Value' |
-| [L13](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L13) — UserDefined.intValue | Unknown function or value 'UserDefined.intValue' |
-| [L17](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L17) — UserDefined.uint64Value | Unknown function or value 'UserDefined.uint64Value' |
-| [L21](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L21) — UserDefined.int32Value | Unknown function or value 'UserDefined.int32Value' |
-| [L25](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L25) — UserDefined.uint32Value | Unknown function or value 'UserDefined.uint32Value' |
-| [L29](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L29) — UserDefined.int16Value | Unknown function or value 'UserDefined.int16Value' |
-| [L33](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L33) — UserDefined.uint16Value | Unknown function or value 'UserDefined.uint16Value' |
-| [L37](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L37) — UserDefined.int8Value | Unknown function or value 'UserDefined.int8Value' |
-| [L41](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L41) — UserDefined.uint8Value | Unknown function or value 'UserDefined.uint8Value' |
-| [L45](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L45) — UserDefined.floatValue | Unknown function or value 'UserDefined.floatValue' |
-| [L49](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L49) — UserDefined.boolValue | Unknown function or value 'UserDefined.boolValue' |
-| [L53](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L53) — UserDefined.tupleValue | Unknown function or value 'UserDefined.tupleValue' |
-| [L57](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L57) — UserDefined.charValue | Unknown function or value 'UserDefined.charValue' |
-| [L61](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L61) — UserDefined.unitValue | Unknown function or value 'UserDefined.unitValue' |
-| [L65](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L65) — UserDefined.enumValue | Unknown function or value 'UserDefined.enumValue' |
 | [L76](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L76) — Darklang.Test.Values.stringValue | Unknown function or value 'Darklang.Test.Values.stringValue' |
 | [L77](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L77) — "test" | Unknown function or value 'Darklang.Test.Values.stringValue' |
 | [L78](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark#L78) — Darklang.Test.Values.stringValue | Unknown function or value 'Darklang.Test.Values.stringValue' |

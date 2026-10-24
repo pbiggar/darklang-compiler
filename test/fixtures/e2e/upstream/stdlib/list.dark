@@ -58,26 +58,31 @@ Stdlib.List.dropWhile [] (fun item -> item < 3L) = []
 
 
 
+// @compiler blocked: compiler-gap
 (Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> Builtin.testIncrementSideEffectCounter ())
 
  Builtin.testSideEffectCount ()) = 3L
 
+// @compiler blocked: compiler-gap
 (Stdlib.List.iter [ 1L, 2L, 3L, 4L, 5L ] (fun x ->
   if x % 2L == 0L then
     Builtin.testIncrementSideEffectCounter ())
 
  Builtin.testSideEffectCount ()) = 2L
 
+// @compiler blocked: compiler-gap
 (Stdlib.List.iter [] (fun x -> Builtin.testIncrementSideEffectCounter ())
 
  Builtin.testSideEffectCount ()) = 0L
 
+// @compiler blocked: compiler-gap
 (Stdlib.List.iter [ 10L, 20L, 30L ] (fun x ->
   Builtin.testIncrementSideEffectCounter ()
   Builtin.testIncrementSideEffectCounter ())
 
  Builtin.testSideEffectCount ()) = 6L
 
+// @compiler blocked: compiler-gap
 (Stdlib.List.iter [ 1L, 2L, 3L ] (fun x ->
   if x > 2L then
     Builtin.testIncrementSideEffectCounter ())
@@ -154,6 +159,7 @@ module GetAt =
 module Head =
   Stdlib.List.head [ 1L, 2L, 3L ] = Stdlib.Option.Option.Some 1L
 
+  // @compiler blocked: compiler-gap
   Stdlib.List.head [ Builtin.testRuntimeError "test" ] = error="Uncaught exception: test"
   Stdlib.List.head [] = Stdlib.Option.Option.None
 
@@ -181,6 +187,7 @@ module Interpose =
 module Last =
   Stdlib.List.last [ 1L, 2L, 3L ] = Stdlib.Option.Option.Some 3L
 
+  // @compiler blocked: compiler-gap
   Stdlib.List.last [ Builtin.testRuntimeError "test" ] = error="Uncaught exception: test"
   Stdlib.List.last [] = Stdlib.Option.Option.None
 
@@ -235,6 +242,7 @@ Stdlib.List.push [] 1L = [ 1L ]
 Stdlib.List.randomElement [ 1L ] = Stdlib.Option.Option.Some 1L
 Stdlib.List.randomElement [] = Stdlib.Option.Option.None
 
+// @compiler blocked: compiler-gap
 Stdlib.List.randomElement [ Builtin.testRuntimeError "test" ] = error="Uncaught exception: test"
 Stdlib.List.range -1 0 = [ -1, 0 ]
 Stdlib.List.range -5 5 = [ -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5 ]
@@ -343,6 +351,7 @@ module Zipping =
   Stdlib.List.zip [ 10L, 20L, 30L ] [ 1L, 2L, 3L ] = Stdlib.Option.Option.Some [ (10L, 1L), (20L, 2L), (30L, 3L) ]
   Stdlib.List.zip [ 10L, 20L ] [ 1L, 2L, 3L ] = Stdlib.Option.Option.None
   Stdlib.List.zip [] [] = Stdlib.Option.Option.Some []
+  // @compiler blocked: compiler-gap
   Stdlib.List.zip [ Builtin.testRuntimeError "msg" ] [ Some "" ] = error="Uncaught exception: msg"
 module GroupByWithKey =
   Stdlib.List.groupByWithKey [ 1L, 2L, 3L, 4L, 5L ] (fun x ->

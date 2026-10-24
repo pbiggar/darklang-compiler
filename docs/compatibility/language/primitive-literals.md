@@ -46,8 +46,9 @@ are preserved. Validation and exponent-free normalization do not use host
 formatting or impose an arbitrary source-exponent limit. The policy applies to
 expression and pattern literals; runtime string parsing is unchanged.
 
-This intentional language change is implemented together with an interpreter
-PR. The interpreter revision currently pinned by the ledger predates it.
+This language change matches the interpreter implementation merged in
+[darklang/dark#5985](https://github.com/darklang/dark/pull/5985).
+The interpreter revision currently pinned by the ledger predates that merge.
 
 Bare decimal literals lower to arbitrary-precision Int, matching the
 interpreter. Int128/UInt128 lower to managed fixed blocks containing two UInt64 limbs;

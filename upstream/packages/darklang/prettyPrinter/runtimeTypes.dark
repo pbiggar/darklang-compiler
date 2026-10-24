@@ -1,0 +1,963 @@
+module Darklang.PrettyPrinter.RuntimeTypes
+
+/// An RT hash as the PT one the package manager answers about.
+///
+/// `RuntimeTypes.Hash` and `ProgramTypes.Hash` are both `Hash of String` and name the same bytes;
+/// they are separate types because they belong to separate vocabularies. Identical declarations
+/// hash identically, so the two can be one stored item and passing either for the other can
+/// type-check by accident. This says the conversion out loud, which is what the code means.
+// @compiler blocked: missing-implementation
+let ptHash
+  (hash: LanguageTools.RuntimeTypes.Hash)
+  : LanguageTools.ProgramTypes.Hash =
+  LanguageTools.ProgramTypes.Hash.Hash (LanguageTools.RuntimeTypes.hashToString hash)
+
+
+// @compiler blocked: missing-implementation
+let nameResolutionError
+  (nre: LanguageTools.RuntimeTypes.NameResolutionError)
+  : String =
+  match nre with
+  | NotFound -> "not found"
+  | InvalidName -> "invalid name"
+
+// @compiler blocked: missing-implementation
+let nameResolution<'a>
+  (nr: LanguageTools.RuntimeTypes.NameResolution<'a>)
+  (f: 'a -> String)
+  : String =
+  match nr.resolved with
+  | Ok a -> f a
+  | Error e -> nameResolutionError e
+
+
+// @compiler blocked: missing-implementation
+let packageName
+  (owner: String)
+  (modules: List<String>)
+  (name: String)
+  : String =
+  let modulesPart =
+    match modules with
+    | [] -> ""
+    | modules ->
+      let modules = Stdlib.String.join modules "."
+      $"{modules}."
+
+  // Owners that are scaffolding rather than a namespace someone chose: a
+  // testfile's declarations, and the ones a CLI script declares for itself.
+  // Printing the scaffolding back at the reader is noise, and for a script it is
+  // worse than noise, since `CliScript` is not a name anything can be reached by.
+  match owner with
+  | ""
+  | "Tests"
+  | "CliScript" -> $"{modulesPart}{name}"
+  | _ -> $"{owner}.{modulesPart}{name}"
+
+/// Given PM locations for a hash, resolve to best display name.
+/// Uses pickLocation with context to choose among multiple locations.
+// @compiler blocked: missing-implementation
+let resolvePackageHash
+  (ctx: LanguageTools.PackageManager.PickContext)
+  (locations: List<LanguageTools.ProgramTypes.PackageLocation>)
+  (hash: LanguageTools.RuntimeTypes.Hash)
+  : String =
+  match Darklang.LanguageTools.PackageManager.pickLocation ctx locations with
+  | Some l -> packageName l.owner l.modules l.name
+  | None -> Darklang.LanguageTools.RuntimeTypes.hashToString hash
+
+/// Like resolvePackageHash but prefers originalName when ambiguous (multiple locations).
+// @compiler blocked: missing-implementation
+let resolvePackageHashWithOriginalName
+  (ctx: LanguageTools.PackageManager.PickContext)
+  (locations: List<LanguageTools.ProgramTypes.PackageLocation>)
+  (originalName: List<String>)
+  (hash: LanguageTools.RuntimeTypes.Hash)
+  : String =
+  match locations with
+  | [ single ] -> packageName single.owner single.modules single.name
+  | _ ->
+    match originalName with
+    | _ :: _ -> Stdlib.String.join originalName "."
+    | [] -> resolvePackageHash ctx locations hash
+
+
+/// A type's name for value output, spelled relative to `opts.currentModule`.
+// @compiler blocked: missing-implementation
+let typeNameWith
+    (branchId: Uuid)
+    (opts: PrettyPrinter.DisplayOptions)
+    (t: LanguageTools.RuntimeTypes.FQTypeName.FQTypeName)
+  : String =
+  match t with
+  | Package hash ->
+    let locations = Darklang.LanguageTools.PackageManager.Type.locations branchId (ptHash hash)
+    match
+      Darklang.LanguageTools.PackageManager.pickLocation
+        (LanguageTools.PackageManager.PickContext
+          { currentModule = opts.currentModule
+            preferredLocation = Stdlib.Option.Option.None })
+        locations
+    with
+    | Some l -> PrettyPrinter.shortenName opts.currentModule l.owner l.modules l.name
+    | None -> Darklang.LanguageTools.RuntimeTypes.hashToString hash
+
+
+/// Whether a value of this type says its type name before its case.
+///
+/// `Some`, `None`, `Ok` and `Error` are unambiguous everywhere and resolve unqualified, so naming their
+/// type in front of them is pure noise: `Some(Some([1, 2, 3]))` says everything
+/// `Option.Some(Option.Some([1, 2, 3]))` does. Every other enum keeps its type name, because `Red` on
+/// its own doesn't tell you it came from `Color`.
+// @compiler blocked: missing-implementation
+let caseNameStandsAlone
+    (branchId: Uuid)
+    (currentModule: List<String>)
+    (t: LanguageTools.RuntimeTypes.FQTypeName.FQTypeName)
+  : Bool =
+  match t with
+  | Package hash ->
+    let locations = Darklang.LanguageTools.PackageManager.Type.locations branchId (ptHash hash)
+
+    // Several names for one type, and nothing in the reader's context to choose between them.
+    //
+    // Types are content-addressed, so two declarations with the same shape ARE one type:
+    // `Stdlib.Int.ParseError`, `Stdlib.Float.ParseError` and `Stdlib.Uuid.ParseError` are all
+    // `| BadFormat`, which makes them a single type with three names. Printing one of those names is
+    // picking arbitrarily, and it picks wrong most of the time -- `Stdlib.Int.parse "abc"` reporting a
+    // `Stdlib.Uuid.ParseError` is a real thing this used to print. The case name alone is the most that
+    // can honestly be said, so say that.
+    let ambiguous =
+      match locations with
+      | []
+      | [ _ ] -> false
+      | _ ->
+        locations
+        |> Stdlib.List.map (fun l ->
+          Darklang.LanguageTools.PackageManager.countMatchingPrefix
+            currentModule
+            (Stdlib.List.push l.modules l.owner))
+        |> Stdlib.List.fold 0 (fun acc n -> if n > acc then n else acc)
+        |> fun best -> best == 0
+
+    if ambiguous then
+      true
+    else
+      match
+        Darklang.LanguageTools.PackageManager.pickLocation
+          LanguageTools.PackageManager.PickContext.empty
+          locations
+      with
+      | Some l ->
+        let path = Stdlib.List.push l.modules l.owner
+        (path == [ "Darklang", "Stdlib", "Option" ] && l.name == "Option")
+        || (path == [ "Darklang", "Stdlib", "Result" ] && l.name == "Result")
+      | None -> false
+
+
+module FQTypeName =
+  // @compiler blocked: missing-implementation
+  let package
+        (branchId: Uuid)
+        (hash: LanguageTools.RuntimeTypes.FQTypeName.Package)
+    : String =
+    resolvePackageHash LanguageTools.PackageManager.PickContext.empty (LanguageTools.PackageManager.Type.locations branchId (ptHash hash)) hash
+
+// TODO rename to fqtypeName?
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.typeName reason=compiler-implementation
+let typeName
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.FQTypeName.FQTypeName)
+  : String =
+  match t with
+  | Package p -> FQTypeName.package branchId p
+
+
+/// A trait's full name, by the name its hash is bound to on the branch.
+// @compiler blocked: missing-implementation
+let traitName
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.FQTraitName.FQTraitName)
+  : String =
+  match t with
+  | Package hash ->
+    resolvePackageHash
+      LanguageTools.PackageManager.PickContext.empty
+      (LanguageTools.PackageManager.Trait.locations branchId (ptHash hash))
+      hash
+
+/// Just the trait's own name.
+// @compiler blocked: missing-implementation
+let shortTraitName
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.FQTraitName.FQTraitName)
+  : String =
+  match t with
+  | Package hash ->
+    let locations = Darklang.LanguageTools.PackageManager.Trait.locations branchId (ptHash hash)
+    match
+      Darklang.LanguageTools.PackageManager.pickLocation
+        LanguageTools.PackageManager.PickContext.empty
+        locations
+    with
+    | Some l -> l.name
+    | None -> Darklang.LanguageTools.RuntimeTypes.hashToString hash
+
+
+/// Just the type's own name, without the module path that leads to it.
+///
+/// For error messages, where the surrounding sentence already says what kind of thing is being talked
+/// about and the full path is noise: "expects Option, but got Result" reads better than the same line
+/// with two forty-character paths in it. Falls back to the full name when the type has no location.
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.shortTypeName reason=compiler-implementation
+let shortTypeName
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.FQTypeName.FQTypeName)
+  : String =
+  match t with
+  | Package hash ->
+    let locations = Darklang.LanguageTools.PackageManager.Type.locations branchId (ptHash hash)
+    match
+      Darklang.LanguageTools.PackageManager.pickLocation
+        LanguageTools.PackageManager.PickContext.empty
+        locations
+    with
+    | Some l -> l.name
+    | None -> Darklang.LanguageTools.RuntimeTypes.hashToString hash
+
+
+module FQValueName =
+  // @compiler blocked: missing-implementation
+  let builtIn (t: LanguageTools.RuntimeTypes.FQValueName.Builtin) : String =
+    let namePart = t.name
+
+    let versionPart =
+      if t.version == 0l then
+        ""
+      else
+        $"_v{Stdlib.toString t.version}"
+
+    $"{namePart}{versionPart}"
+
+  // @compiler blocked: missing-implementation
+  let package
+        (branchId: Uuid)
+        (hash: LanguageTools.RuntimeTypes.FQValueName.Package)
+    : String =
+    resolvePackageHash LanguageTools.PackageManager.PickContext.empty (LanguageTools.PackageManager.Value.locations branchId (ptHash hash)) hash
+
+// TODO rename to fqvalueName?
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.valueName reason=compiler-implementation
+let valueName
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.FQValueName.FQValueName)
+  : String =
+  match t with
+  | Builtin b -> FQValueName.builtIn b
+  | Package p -> FQValueName.package branchId p
+
+
+module FQFnName =
+  // @compiler blocked: missing-implementation
+  let builtIn (t: LanguageTools.RuntimeTypes.FQFnName.Builtin) : String =
+    let namePart = t.name
+
+    let versionPart =
+      if t.version == 0l then
+        ""
+      else
+        $"_v{Stdlib.toString t.version}"
+
+    $"Builtin.{namePart}{versionPart}"
+
+  // @compiler blocked: missing-implementation
+  let package
+        (branchId: Uuid)
+        (hash: LanguageTools.RuntimeTypes.FQFnName.Package)
+    : String =
+    resolvePackageHash LanguageTools.PackageManager.PickContext.empty (LanguageTools.PackageManager.Function.locations branchId (ptHash hash)) hash
+
+
+// TODO rename to fqfnName?
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.fnName reason=compiler-implementation
+let fnName
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.FQFnName.FQFnName)
+  : String =
+  match t with
+  | Builtin b -> FQFnName.builtIn b
+  | Package p -> FQFnName.package branchId p
+  // A trait's hash is not a type's, so it needs the trait's own locations: without this a trait
+  // method prints as a 64-character hash wherever a fn name is printed, arity errors and
+  // partial applications included.
+  | TraitMethod tm ->
+    let traitHash = tm.trait_
+    let method = tm.method_
+
+    let traitName =
+      resolvePackageHash
+        LanguageTools.PackageManager.PickContext.empty
+        (LanguageTools.PackageManager.Trait.locations branchId (ptHash traitHash))
+        traitHash
+
+    $"{traitName}.{method}"
+
+
+
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.typeReference reason=compiler-implementation
+let typeReference
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.TypeReference)
+  : String =
+  match t with
+  | TUnit -> "Unit"
+  | TBool -> "Bool"
+
+  | TInt8 -> "Int8"
+  | TUInt8 -> "UInt8"
+  | TInt16 -> "Int16"
+  | TUInt16 -> "UInt16"
+  | TInt32 -> "Int32"
+  | TUInt32 -> "UInt32"
+  | TInt64 -> "Int64"
+  | TUInt64 -> "UInt64"
+  | TInt128 -> "Int128"
+  | TUInt128 -> "UInt128"
+  | TInt -> "Int"
+
+  | TFloat -> "Float"
+
+  | TChar -> "Char"
+  | TString -> "String"
+
+  | TUuid -> "Uuid"
+
+  | TDateTime -> "DateTime"
+
+  | TBlob -> "Blob"
+
+  | TStream inner -> $"Stream<{typeReference branchId inner}>"
+
+  | TTuple(first, second, theRest) ->
+    (Stdlib.List.append [ first, second ] theRest)
+    |> Stdlib.List.map (fun item -> typeReference branchId item)
+    |> Stdlib.String.join " * "
+    |> fun parts -> "(" + parts + ")"
+
+  | TList inner -> $"List<{typeReference branchId inner}>"
+
+  | TDict(key, value) ->
+    let k = typeReference branchId key
+    let v = typeReference branchId value
+    $"Dict<{k}, {v}>"
+
+  | TCustomType(typ, args) ->
+    let argsPart =
+      match args with
+      | [] -> ""
+      | args ->
+        args
+        |> Stdlib.List.map (fun arg -> typeReference branchId arg)
+        |> Stdlib.String.join ", "
+        |> fun parts -> $"<{parts}>"
+
+    let typeNamePart =
+      match typ.resolved with
+      | Ok name ->
+        match name with
+        | Package hash ->
+          let locations = LanguageTools.PackageManager.Type.locations branchId (ptHash hash)
+          resolvePackageHashWithOriginalName LanguageTools.PackageManager.PickContext.empty locations typ.originalName hash
+      | Error e -> nameResolutionError e
+
+    $"{typeNamePart}{argsPart}"
+
+
+  | TFn(args, ret) ->
+    let argPart =
+      args
+      |> Stdlib.List.map (fun arg -> typeReference branchId arg)
+      |> Stdlib.String.join ", "
+      |> fun parts -> "(" + parts + ")"
+
+    $"{argPart} -> {typeReference branchId ret}"
+
+
+
+  | TVariable varName -> "'" + varName
+
+
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.knownType reason=compiler-implementation
+let knownType
+    (branchId: Uuid)
+    (t: LanguageTools.RuntimeTypes.KnownType)
+  : String =
+  match t with
+  | KTUnit -> "Unit"
+  | KTBool -> "Bool"
+
+  | KTInt8 -> "Int8"
+  | KTUInt8 -> "UInt8"
+  | KTInt16 -> "Int16"
+  | KTUInt16 -> "UInt16"
+  | KTInt32 -> "Int32"
+  | KTUInt32 -> "UInt32"
+  | KTInt64 -> "Int64"
+  | KTUInt64 -> "UInt64"
+  | KTInt128 -> "Int128"
+  | KTUInt128 -> "UInt128"
+  | KTInt -> "Int"
+
+  | KTFloat -> "Float"
+
+  | KTChar -> "Char"
+  | KTString -> "String"
+
+  | KTDateTime -> "DateTime"
+  | KTUuid -> "Uuid"
+
+  | KTBlob -> "Blob"
+
+  | KTStream inner -> $"Stream<{valueType branchId inner}>"
+
+  | KTTuple(t1, t2, trest) ->
+    (Stdlib.List.append [ t1, t2 ] trest)
+    |> Stdlib.List.map (fun item -> valueType branchId item)
+    |> Stdlib.String.join " * "
+    |> fun s -> $"({s})"
+  | KTList typ -> $"List<{valueType branchId typ}>"
+  | KTDict(key, value) ->
+    let k = valueType branchId key
+    let v = valueType branchId value
+    $"Dict<{k}, {v}>"
+
+  | KTFn(argTypes, retType) ->
+    (Stdlib.List.push argTypes retType)
+    |> Stdlib.List.map (fun vt -> valueType branchId vt)
+    |> Stdlib.String.join " -> "
+
+  | KTCustomType(name, typeArgs) ->
+    let typeArgsPortion =
+      match typeArgs with
+      | [] -> ""
+      | args ->
+        args
+        |> Stdlib.List.map (fun t -> valueType branchId t)
+        |> Stdlib.String.join ", "
+        |> fun betweenBrackets -> "<" + betweenBrackets + ">"
+
+    (typeName branchId name) + typeArgsPortion
+
+
+
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.valueType reason=compiler-implementation
+let valueType
+    (branchId: Uuid)
+    (vt: LanguageTools.RuntimeTypes.ValueType)
+  : String =
+  match vt with
+  | Known kt -> knownType branchId kt
+  | Unknown -> "_"
+
+
+/// A value type, named the way it was written where it was declared.
+///
+/// Two sources, each authoritative about a different thing. The `ValueType` is
+/// the authority on shape: it has been through the type symbol table, so where
+/// the declaration said `List<'a>` it says `List<Int>`. The declared
+/// `TypeReference` is the authority on names: a hash bound to one location has
+/// one name and needs no help, but bound to several, every one of those names is
+/// equally true of the type and choosing between them from the hash is a guess.
+/// `Stdlib.Int.ParseError`, `Stdlib.Float.ParseError` and
+/// `Stdlib.Uuid.ParseError` are all `| BadFormat`, so they are one type with
+/// three names, and an `Int.parse` failure reported as a `Uuid.ParseError` is a
+/// real thing this printed.
+///
+/// So walk the two together, taking shape from the left and names from the
+/// right. They can stop lining up: an alias unwraps to something of a different
+/// shape, a type variable resolves to a concrete type, a raise site has no
+/// declaration at all. Wherever that happens the declaration is dropped for that
+/// subtree and the rest is named canonically, which is the answer <fn valueType>
+/// gives on its own.
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.declaredValueType reason=compiler-implementation
+let declaredValueType
+    (branchId: Uuid)
+    (declared: Stdlib.Option.Option<LanguageTools.RuntimeTypes.TypeReference>)
+    (vt: LanguageTools.RuntimeTypes.ValueType)
+  : String =
+  match vt with
+  | Unknown -> "_"
+  | Known kt -> declaredKnownType branchId declared kt
+
+
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.declaredKnownType reason=compiler-implementation
+let declaredKnownType
+    (branchId: Uuid)
+    (declared: Stdlib.Option.Option<LanguageTools.RuntimeTypes.TypeReference>)
+    (kt: LanguageTools.RuntimeTypes.KnownType)
+  : String =
+  // The declared reference for the nth type argument, when the declaration has
+  // the same shape and so has an nth type argument to give.
+  let nth
+    (refs: List<LanguageTools.RuntimeTypes.TypeReference>)
+    (i: Int)
+    : Stdlib.Option.Option<LanguageTools.RuntimeTypes.TypeReference> =
+    Stdlib.List.getAt refs i
+
+  match kt, declared with
+  | KTStream inner, Some(TStream dInner) ->
+    $"Stream<{declaredValueType branchId (Stdlib.Option.Option.Some dInner) inner}>"
+
+  | KTList inner, Some(TList dInner) ->
+    $"List<{declaredValueType branchId (Stdlib.Option.Option.Some dInner) inner}>"
+
+  | KTDict(key, value), Some(TDict(dKey, dValue)) ->
+    let k = declaredValueType branchId (Stdlib.Option.Option.Some dKey) key
+    let v = declaredValueType branchId (Stdlib.Option.Option.Some dValue) value
+    $"Dict<{k}, {v}>"
+
+  | KTTuple(t1, t2, trest), Some(TTuple(d1, d2, drest)) ->
+    let items = Stdlib.List.append [ t1, t2 ] trest
+    let declaredItems = Stdlib.List.append [ d1, d2 ] drest
+
+    if (Stdlib.List.length items) == (Stdlib.List.length declaredItems) then
+      items
+      |> Stdlib.List.indexedMap (fun i item ->
+        declaredValueType branchId (nth declaredItems i) item)
+      |> Stdlib.String.join " * "
+      |> fun s -> $"({s})"
+    else
+      knownType branchId kt
+
+  | KTFn(argTypes, retType), Some(TFn(dArgTypes, dRetType)) ->
+    if (Stdlib.List.length argTypes) == (Stdlib.List.length dArgTypes) then
+      let args =
+        argTypes
+        |> Stdlib.List.indexedMap (fun i arg ->
+          declaredValueType branchId (nth dArgTypes i) arg)
+
+      let ret =
+        declaredValueType branchId (Stdlib.Option.Option.Some dRetType) retType
+
+      (Stdlib.List.push args ret) |> Stdlib.String.join " -> "
+    else
+      knownType branchId kt
+
+  | KTCustomType(Package hash, typeArgs), Some(TCustomType(dName, dTypeArgs)) ->
+    let typeArgsPortion =
+      match typeArgs with
+      | [] -> ""
+      | args ->
+        args
+        |> Stdlib.List.indexedMap (fun i arg ->
+          declaredValueType branchId (nth dTypeArgs i) arg)
+        |> Stdlib.String.join ", "
+        |> fun betweenBrackets -> "<" + betweenBrackets + ">"
+
+    let locations = Darklang.LanguageTools.PackageManager.Type.locations branchId (ptHash hash)
+
+    let namePart =
+      resolvePackageHashWithOriginalName
+        LanguageTools.PackageManager.PickContext.empty
+        locations
+        dName.originalName
+        hash
+
+    namePart + typeArgsPortion
+
+  | _, _ -> knownType branchId kt
+
+
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.letPattern reason=compiler-implementation
+let letPattern (pat: LanguageTools.RuntimeTypes.LetPattern) : String =
+  match pat with
+  | LPVariable _reg ->
+    // TODO clearly this is not ideal.
+    "[variable]"
+  | LPWildcard -> "_"
+  | LPUnit -> "()"
+  | LPTuple(first, second, theRest) ->
+    let parts = Stdlib.List.append [ first, second ] theRest
+    let parts = Stdlib.List.map parts (fun p -> letPattern p)
+    let parts = Stdlib.String.join parts ", "
+    $"({parts})"
+
+
+module Dval =
+  // @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.Dval.valueTypeName reason=compiler-implementation
+  let valueTypeName
+        (branchId: Uuid)
+        (dv: LanguageTools.RuntimeTypes.Dval)
+    : String =
+    // TODO: When a builtin for Dval.toValueType is available, use:
+    // dv |> LanguageTools.RuntimeTypes.Dval.toValueType |> valueType
+    // This mirrors DvalReprDeveloper.toTypeName
+    // If a builtin is ever exposed, we could simplify to: Builtin.dvalToTypeName dv
+    match dv with
+    | DUnit -> "Unit"
+    | DBool _ -> "Bool"
+    | DInt8 _ -> "Int8"
+    | DUInt8 _ -> "UInt8"
+    | DInt16 _ -> "Int16"
+    | DUInt16 _ -> "UInt16"
+    | DInt32 _ -> "Int32"
+    | DUInt32 _ -> "UInt32"
+    | DInt64 _ -> "Int64"
+    | DUInt64 _ -> "UInt64"
+    | DInt128 _ -> "Int128"
+    | DUInt128 _ -> "UInt128"
+    | DInt _ -> "Int"
+    | DFloat _ -> "Float"
+    | DChar _ -> "Char"
+    | DString _ -> "String"
+    | DDateTime _ -> "DateTime"
+    | DUuid _ -> "Uuid"
+    | DTuple(first, second, theRest) ->
+      let types = Stdlib.List.append [ first, second ] theRest
+      types
+      |> Stdlib.List.map (fun item -> valueTypeName branchId item)
+      |> Stdlib.String.join " * "
+      |> fun parts -> "(" + parts + ")"
+    | DList (vt, _) -> $"List<{valueType branchId vt}>"
+    | DDict(kt, vt, _) ->
+      let k = valueType branchId kt
+      let v = valueType branchId vt
+      $"Dict<{k}, {v}>"
+    | DRecord (_, typeName, typeArgs, _) ->
+      let typeArgsPart =
+        match typeArgs with
+        | [] -> ""
+        | args ->
+          args
+          |> Stdlib.List.map (fun t -> valueType branchId t)
+          |> Stdlib.String.join ", "
+          |> fun parts -> $"<{parts}>"
+      (RuntimeTypes.typeName branchId typeName) + typeArgsPart
+    | DEnum (_, typeName, typeArgs, _, _) ->
+      let typeArgsPart =
+        match typeArgs with
+        | [] -> ""
+        | args ->
+          args
+          |> Stdlib.List.map (fun t -> valueType branchId t)
+          |> Stdlib.String.join ", "
+          |> fun parts -> $"<{parts}>"
+      (RuntimeTypes.typeName branchId typeName) + typeArgsPart
+    | DApplicable (AppNamedFn _) -> "Function"
+    | DApplicable (AppLambda _) -> "Lambda"
+    | DBlobPersistent(_, _) -> "Blob"
+    | DBlobEphemeral _ -> "Blob"
+    | DStreamStub vt -> $"Stream<{valueType branchId vt}>"
+
+  /// The field names of a record type, in the order they were declared.
+  ///
+  /// Empty when the type isn't resolvable or isn't a record, which callers treat as "no opinion".
+  // @compiler blocked: missing-implementation
+  let declaredFieldOrder
+    (typeName: LanguageTools.RuntimeTypes.FQTypeName.FQTypeName)
+    : List<String> =
+    match typeName with
+    | Package hash ->
+      match Darklang.LanguageTools.PackageManager.Type.get (ptHash hash) with
+      | Some t ->
+        match t.declaration.definition with
+        | Record fields -> fields |> Stdlib.List.map (fun f -> f.name)
+        | _ -> []
+      | None -> []
+
+
+  /// Put `pairs` into `order`, keeping anything `order` doesn't mention on the end.
+  ///
+  /// A record's fields live in a `Dict`, which iterates alphabetically, so a value printed straight
+  /// from it comes out in an order nobody wrote: `PackageLocation` declared as owner/modules/name
+  /// printed as modules/name/owner, and so didn't match its own `view`.
+  /// Subject first, because `|>` supplies the first parameter.
+  // @compiler blocked: missing-implementation
+  let inDeclaredOrder
+    (pairs: List<(String * LanguageTools.RuntimeTypes.Dval)>)
+    (order: List<String>)
+    : List<(String * LanguageTools.RuntimeTypes.Dval)> =
+    match order with
+    | [] -> pairs
+    | _ ->
+      let ordered =
+        order
+        |> Stdlib.List.filterMap (fun n ->
+          pairs |> Stdlib.List.findFirst (fun pair -> (Stdlib.Tuple2.first pair) == n))
+
+      let extra =
+        pairs
+        |> Stdlib.List.filter (fun pair ->
+          Stdlib.Bool.not (Stdlib.List.contains order (Stdlib.Tuple2.first pair)))
+
+      Stdlib.List.append ordered extra
+
+
+  // @compiler blocked: missing-implementation
+  let makeSpaces (len: Int) : String =
+    match Stdlib.List.repeat len " " with
+    | Ok spaces -> spaces |> Stdlib.String.join ""
+    | Error _ -> ""
+
+  /// A value as a `Pretty.Doc`: the shapes it could take, not one it has already been forced into.
+  ///
+  /// Every container is a `group`, so it renders on one line when it fits and breaks when it doesn't --
+  /// and, unlike the string version this replaces, the decision counts everything on the line. A record
+  /// used to be measured by its fields alone, so a 51-character type name in front of them didn't count
+  /// and a 118-column line reported as fitting. Here the name is part of the same document.
+  ///
+  /// `depth` is compared against `opts.maxDepth`; past it, a value is elided rather than descended into.
+  // @compiler blocked: missing-implementation
+  let toDoc
+    (branchId: Uuid)
+    (opts: PrettyPrinter.DisplayOptions)
+    (depth: Int)
+    (dv: LanguageTools.RuntimeTypes.Dval)
+    : Stdlib.Pretty.Doc =
+    let txt (s: String) : Stdlib.Pretty.Doc = Stdlib.Pretty.text s
+
+    // Painted by kind. With the default plain palette every style is an empty string, so the output is
+    // byte-for-byte what it was before anyone asked for color.
+    let paint (style: String) (t: String) : Stdlib.Pretty.Doc =
+      Stdlib.Pretty.styled style t opts.palette.reset
+
+    let tooDeep =
+      match opts.maxDepth with
+      | None -> false
+      | Some max -> depth > max
+
+    if tooDeep then
+      txt "..."
+    else
+
+    // `[a, b]` flat, and one per line when broken. `open`/`close` hug their contents via `softLine`, so
+    // fitting on one line doesn't gain a pair of spaces the way `{ a, b }` deliberately does.
+    let wrapped
+      (opening: String)
+      (closing: String)
+      (opener: Stdlib.Pretty.Doc)
+      (parts: List<Stdlib.Pretty.Doc>)
+      : Stdlib.Pretty.Doc =
+      let sep = Stdlib.Pretty.concat (txt ",") Stdlib.Pretty.line
+      let inner = Stdlib.Pretty.join parts sep
+
+      Stdlib.Pretty.group (
+        Stdlib.Pretty.concat
+          (txt opening)
+          (Stdlib.Pretty.concat
+            (Stdlib.Pretty.nest 2 (Stdlib.Pretty.concat opener inner))
+            (Stdlib.Pretty.concat opener (txt closing))))
+
+    let bracketed (o: String) (c: String) (parts: List<Stdlib.Pretty.Doc>) : Stdlib.Pretty.Doc =
+      wrapped o c Stdlib.Pretty.softLine parts
+
+    let braced (o: String) (c: String) (parts: List<Stdlib.Pretty.Doc>) : Stdlib.Pretty.Doc =
+      wrapped o c Stdlib.Pretty.line parts
+
+    let child (v: LanguageTools.RuntimeTypes.Dval) : Stdlib.Pretty.Doc =
+      Dval.toDoc branchId opts (depth + 1) v
+
+    match dv with
+    | DUnit -> paint opts.palette.keyword "()"
+
+    | DBool true -> paint opts.palette.keyword "true"
+    | DBool false -> paint opts.palette.keyword "false"
+
+    | DChar c -> paint opts.palette.string_ $"'{PrettyPrinter.escapeCharLiteral (Stdlib.toString c)}'"
+    | DString s -> paint opts.palette.string_ $"\"{PrettyPrinter.escapeSpecialCharacters s}\""
+
+    | DInt8 i -> paint opts.palette.number (Stdlib.toString i)
+    | DUInt8 i -> paint opts.palette.number (Stdlib.toString i)
+    | DInt16 i -> paint opts.palette.number (Stdlib.toString i)
+    | DUInt16 i -> paint opts.palette.number (Stdlib.toString i)
+    | DInt32 i -> paint opts.palette.number (Stdlib.toString i)
+    | DUInt32 i -> paint opts.palette.number (Stdlib.toString i)
+    | DInt64 i -> paint opts.palette.number (Stdlib.toString i)
+    | DUInt64 i -> paint opts.palette.number (Stdlib.toString i)
+    | DInt128 i -> paint opts.palette.number (Stdlib.toString i)
+    | DUInt128 i -> paint opts.palette.number (Stdlib.toString i)
+    | DInt i -> paint opts.palette.number (Stdlib.toString i)
+
+    | DFloat f -> paint opts.palette.number (Stdlib.toString f)
+
+    | DDateTime d -> txt $"<{valueTypeName branchId dv}: {Stdlib.toString d}>"
+    | DUuid uuid -> txt $"<{valueTypeName branchId dv}: {Stdlib.toString uuid}>"
+
+    | DTuple(first, second, theRest) ->
+      let parts =
+        (Stdlib.List.append [ first, second ] theRest) |> Stdlib.List.map (fun i -> child i)
+      bracketed "(" ")" parts
+
+    | DList(_vt, l) ->
+      if Stdlib.List.isEmpty l then
+        txt $"{valueTypeName branchId dv} []"
+      else
+        bracketed "[" "]" (l |> Stdlib.List.map (fun i -> child i))
+
+    | DDict(_, _, d) ->
+      if d == Stdlib.Dict.empty then
+        txt "{}"
+      else
+        let parts =
+          d
+          |> Stdlib.Dict.toList
+          |> Stdlib.List.map (fun pair ->
+            let (key, value) = pair
+
+            Stdlib.Pretty.concat
+              (Stdlib.Pretty.concat (child key) (txt ": "))
+              (child value))
+
+        braced "{" "}" parts
+
+    // Don't fetch the bytes for rendering -- payloads can be many MB.
+    | DBlobPersistent(hash, length) ->
+      let short = Stdlib.String.first hash 8
+      txt $"<Blob: {short}… {Stdlib.toString length} bytes>"
+    | DBlobEphemeral _ -> txt "<Blob: ephemeral>"
+
+    | DStreamStub _ -> txt "<stream: stub>"
+
+    | DEnum(_, typeName, typeArgs, caseName, fields) ->
+      let typeArgsPart =
+        if Stdlib.Bool.not opts.showTypeArgs then
+          ""
+        else
+          match typeArgs with
+          | [] -> ""
+          | typeArgs ->
+            typeArgs
+            |> Stdlib.List.map (fun typeArg -> valueType branchId typeArg)
+            |> Stdlib.String.join ", "
+            |> fun parts -> $"<{parts}>"
+
+      // `Some(1)`, not `Option.Some(1)`; but `Color.Red`, not `Red`.
+      let prefix =
+        if caseNameStandsAlone branchId opts.currentModule typeName then
+          ""
+        else
+          (typeNameWith branchId opts typeName) + typeArgsPart + "."
+
+      match fields with
+      | [] -> txt $"{prefix}{caseName}"
+      | fields ->
+        Stdlib.Pretty.concat
+          (txt $"{prefix}{caseName}")
+          (bracketed "(" ")" (fields |> Stdlib.List.map (fun f -> child f)))
+
+    | DRecord(_, typeName, typeArgs, o) ->
+      let typeStr = typeNameWith branchId opts typeName
+
+      let typeArgsPart =
+        if Stdlib.Bool.not opts.showTypeArgs then
+          ""
+        else
+          match typeArgs with
+          | [] -> ""
+          | args ->
+            args
+            |> Stdlib.List.map (fun t -> valueType branchId t)
+            |> Stdlib.String.join ", "
+            |> fun betweenBrackets -> "<" + betweenBrackets + ">"
+
+      let parts =
+        o
+        |> Stdlib.Dict.toList
+        |> Dval.inDeclaredOrder (Dval.declaredFieldOrder typeName)
+        |> Stdlib.List.map (fun pair ->
+          let (key, value) = pair
+          let key = PrettyPrinter.formatFieldName key
+          Stdlib.Pretty.concat (txt $"{key}: ") (child value))
+
+      // The type name is part of the document, so it counts toward the fit.
+      Stdlib.Pretty.concat (txt $"{typeStr}{typeArgsPart} ") (braced "{" "}" parts)
+
+    | DApplicable(AppNamedFn namedFn) ->
+      txt (PrettyPrinter.RuntimeTypes.fnName branchId namedFn.name)
+
+    | DApplicable(AppLambda _lambda) -> txt "(lambda)"
+
+
+
+// @compiler blocked: missing-implementation
+let dvalWith
+    (branchId: Uuid)
+    (opts: PrettyPrinter.DisplayOptions)
+    (dv: LanguageTools.RuntimeTypes.Dval)
+  : String =
+  // The one place a `Doc` is collapsed into text. Everything above builds alternatives; this picks.
+  Stdlib.Pretty.render opts.width (Dval.toDoc branchId opts 0 dv)
+
+
+/// One value on one line, at most <param maxChars> of it: what a gutter, an inlay hint or a
+/// table cell shows beside the code. Rendered narrow and shallow, then flattened.
+/// The most of a list that can possibly show up in `maxChars` characters of rendering.
+///
+/// Rendering a value and then cutting the result to a budget means formatting the whole thing to
+/// show a prefix of it: a 2000-element list cost its entire length to produce sixty characters,
+/// which is where most of the time went when a trace's value happened to be a big collection.
+///
+/// How many elements are enough: the shortest thing a Dval renders to is one character, and every
+/// element after the first also costs a two-character separator, so k elements always produce at
+/// least 3k - 2 characters.
+///
+/// The floor of 64 is not slack, it is the correctness condition. The printer lays a value out
+/// INLINE when it fits its width and wraps it otherwise, and the two differ by a space after the
+/// bracket, so cutting a list down far enough to make it fit changes the characters rather than
+/// just shortening them. 64 elements are at least 190 characters, comfortably past any width this
+/// is used with, so the capped value always takes the same branch the whole one would have. A
+/// `maxChars` of 10 was enough to break this before the floor existed.
+///
+/// Only lists. A dict with thousands of keys has the same problem and is not handled here,
+/// because "the first n" of a dict needs an ordering this type does not promise.
+// @compiler blocked: missing-implementation
+let capForDisplay
+    (maxChars: Int)
+    (dv: LanguageTools.RuntimeTypes.Dval)
+  : LanguageTools.RuntimeTypes.Dval =
+  let enough = Stdlib.max ((maxChars / 3) + 2) 64
+
+  match dv with
+  | DList(t, items) ->
+    if (Stdlib.List.length items) > enough then
+      LanguageTools.RuntimeTypes.Dval.DList(t, Stdlib.List.take items enough)
+    else
+      dv
+  | _ -> dv
+
+
+// @compiler blocked: missing-implementation
+let dvalOneLine
+    (branchId: Uuid)
+    (maxChars: Int)
+    (dv: LanguageTools.RuntimeTypes.Dval)
+  : String =
+  let dv = capForDisplay maxChars dv
+
+  let text =
+    dvalWith
+      branchId
+      { PrettyPrinter.DisplayOptions.default with
+          width = 60
+          maxDepth = Stdlib.Option.Option.Some 2 }
+      dv
+
+  let oneLine =
+    text |> Stdlib.String.split "\n" |> Stdlib.List.map Stdlib.String.trim |> Stdlib.String.join " "
+
+  if (Stdlib.String.length oneLine) > maxChars then
+    (Stdlib.String.slice oneLine 0 (maxChars - 3)) + "..."
+  else
+    oneLine
+
+
+/// Render a value with the default options.
+///
+/// Kept at this exact signature because `Execution.fs` reaches it through `PackageRefs`, which is how
+/// every F#-side value repr is produced. Prefer `dvalWith` in Dark code.
+// @compiler replace: packages/darklang/prettyPrinter/runtimeTypes.dark#Darklang.PrettyPrinter.RuntimeTypes.dval reason=compiler-implementation
+let dval
+    (branchId: Uuid)
+    (dv: LanguageTools.RuntimeTypes.Dval)
+  : String =
+  dvalWith branchId PrettyPrinter.DisplayOptions.default dv

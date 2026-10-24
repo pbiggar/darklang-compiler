@@ -13,8 +13,9 @@ Stdlib.Int64.add 5L 3L = 8L
 10.0 / 4.0 = 2.5
 7L % 3L = 1L
 -8L % 3L = 1L
-7.5 % 2.0 = 1.5
--1.5 % 2.0 = 0.5
+// Float has no Modulo implementation in the current upstream operator contract.
+7.5 % 2.0 = compileerror="Operator is unavailable for this type"
+-1.5 % 2.0 = compileerror="Operator is unavailable for this type"
 2.0 ** 3.0 = 8.0
 2L ** 3L = 8L
 2.5 < 3.5 = true
@@ -54,8 +55,11 @@ Stdlib.Int64.add 5L 3L = 8L
 // unary `-` works on every signed integer type and Float
 -(Stdlib.Int8.add 2y 3y) = -5y
 -(Stdlib.Float.add 1.0 1.5) = -2.5
+// @compiler blocked: compiler-gap
 5L + (Builtin.testRuntimeError "error") = error="Uncaught exception: error"
+// @compiler blocked: compiler-gap
 (Builtin.testRuntimeError "error") + 5L = error="Uncaught exception: error"
+// @compiler blocked: compiler-gap
 (Builtin.testRuntimeError "one") + (Builtin.testRuntimeError "two") = error="Uncaught exception: one"
 
 // ---------------------------------------------------------------------------

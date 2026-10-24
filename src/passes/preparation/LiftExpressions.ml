@@ -80,6 +80,10 @@ let rec liftLambdasInExpr expr state =
       Ok (C.BinOp (op, left, right), state)
   | C.BinOp (op, left, right) ->
       two left right (fun left right -> C.BinOp (op, left, right))
+  | C.ReturnScope (target, typ, inner) ->
+      one inner (fun value -> C.ReturnScope (target, typ, value))
+  | C.EarlyReturn (target, inner) ->
+      one inner (fun value -> C.EarlyReturn (target, value))
   | C.UnaryOp (op, inner) -> one inner (fun value -> C.UnaryOp (op, value))
   | C.Let (pattern, value, body) ->
       let* value', state1 = liftLambdasInExpr value state in
@@ -328,6 +332,7 @@ and liftLambda argument parameters annotation body state =
              (if argument then "lifted argument lambda" else "lifted lambda")
              ((closure, AST.TTuple tupleTypes) :: loweredParameters));
       returnType = C.checkedType returnType;
+      bodyType = C.checkedType returnType;
       body = bodyWithExtractions;
       recursion =
         (if argument then None

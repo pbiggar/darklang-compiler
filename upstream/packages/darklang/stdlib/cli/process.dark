@@ -1,0 +1,480 @@
+module Darklang.Stdlib.Cli.Process
+
+
+/// Process handle for interacting with spawned processes
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.ProcessHandle reason=compiler-implementation
+type ProcessHandle = Int
+
+/// Spawn a new process and return a handle for interaction
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.spawn reason=compiler-implementation
+let spawn (command: String) : ProcessHandle =
+  Builtin.runtimeChildStart "/bin/sh" ["-c", command] false |> Builtin.unwrap
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__executionOutcome reason=compiler-implementation
+let __executionOutcome (result: Result.Result<(Int * Blob * Blob), Int>) : Stdlib.Cli.ExecutionOutcome =
+  match result with
+  | Error e -> Stdlib.Cli.ExecutionOutcome { exitCode = -1, stdout = "", stderr = (Stdlib.Cli.Posix.__fromErrno e).message }
+  | Ok ((code, output, error)) ->
+    Stdlib.Cli.ExecutionOutcome { exitCode = code,
+      stdout = Stdlib.String.fromBlobWithReplacement output,
+      stderr = Stdlib.String.fromBlobWithReplacement error }
+
+/// Send input to a process and read any available output (non-blocking)
+/// Use empty string for input to just read output without sending anything
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.communicate reason=compiler-implementation
+let communicate (handle: ProcessHandle) (input: String) : Stdlib.Cli.ExecutionOutcome =
+  __executionOutcome (Stdlib.Cli.Process.__childCommunicate handle input)
+
+/// Terminate a process and get final output
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.terminate reason=compiler-implementation
+let terminate (handle: ProcessHandle) : Stdlib.Cli.ExecutionOutcome =
+  __executionOutcome (Stdlib.Cli.Process.__childTerminate handle)
+
+
+// ─── Posix-based process execution (no bash, no shell) ───
+
+/// Result of running a process
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.Output reason=compiler-implementation
+type Output =
+  { exitCode: Int
+    stdout: String
+    stderr: String }
+
+
+/// Escape a string for safe use inside single quotes in a shell command.
+/// Replaces ' with '\'' (end quote, escaped quote, start quote).
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.shellQuote reason=compiler-implementation
+let shellQuote (s: String) : String =
+  let escaped = Stdlib.String.replaceAll s "'" "'\\''"
+  $"'{escaped}'"
+
+
+/// Spawn <param program> directly (no shell), wait for it, and return
+/// (exitCode, stdout, stderr). With a timeout the child is killed when it
+/// elapses and the call fails with ETIMEDOUT.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.spawnAndWait reason=compiler-implementation
+let spawnAndWait
+  (program: String)
+  (args: List<String>)
+  (timeoutMs: Stdlib.Option.Option<Int>)
+  : Result.Result<(Int * String * String), Posix.Error> =
+  Stdlib.Cli.Process.__childRun program args timeoutMs
+  |> Stdlib.Result.mapError (fun errno ->
+    if errno == (if Stdlib.Cli.Posix.__abiMac () then 60 else 110) then
+      Posix.Error { errno = errno, message = "Process timed out" }
+    else Stdlib.Cli.Posix.__fromErrno errno)
+  |> Stdlib.Result.map (fun result ->
+    let (code, output, error) = result
+    (code, Stdlib.String.fromBlobWithReplacement output, Stdlib.String.fromBlobWithReplacement error))
+
+
+/// Run a program with arguments and capture its output.
+/// No bash, no shell — spawns the process directly.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.run reason=compiler-implementation
+let run (program: String) (args: List<String>) : Result.Result<Output, Posix.Error> =
+  (spawnAndWait program args Stdlib.Option.Option.None)
+  |> Stdlib.Result.map (fun result ->
+    Output
+      { exitCode = Stdlib.Tuple3.first result
+        stdout = Stdlib.Tuple3.second result
+        stderr = Stdlib.Tuple3.third result })
+
+
+/// Run a program ON THIS TERMINAL and return its exit code.
+///
+/// Inherits stdin, stdout and stderr instead of capturing them, which is what
+/// anything that DRAWS needs: an editor with a redirected stdout paints into a pipe
+/// and reads keys from nowhere. Use `run` when you want the output, this when you
+/// want the program to be usable.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.runInteractive reason=compiler-implementation
+let runInteractive
+  (program: String)
+  (args: List<String>)
+  : Result.Result<Int, Posix.Error> =
+  Stdlib.Cli.Process.__childInteractive program args |> Stdlib.Result.mapError Stdlib.Cli.Posix.__fromErrno
+
+
+/// Run a program and return stdout as text, or stderr as error.
+/// Returns String errors because it mixes spawn failures with command failures.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.exec reason=compiler-implementation
+let exec (program: String) (args: List<String>) : Result.Result<String, String> =
+  (run program args)
+  |> Stdlib.Result.mapError (fun e -> e.message)
+  |> Stdlib.Result.andThen (fun output ->
+    if output.exitCode == 0 then
+      Stdlib.Result.Result.Ok(Stdlib.String.trimEnd output.stdout)
+    else
+      let err = Stdlib.String.trimEnd output.stderr
+
+      if err == "" then
+        Stdlib.Result.Result.Error
+          $"Command failed with exit code {Stdlib.Cli.Posix.__decimal output.exitCode}"
+      else
+        Stdlib.Result.Result.Error err)
+
+
+/// Kill a process by PID.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.kill reason=compiler-implementation
+let kill (pid: Int) : Result.Result<Unit, Posix.Error> =
+  Posix.kill pid Posix.sigterm
+
+
+/// Force-kill a process by PID.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.forceKill reason=compiler-implementation
+let forceKill (pid: Int) : Result.Result<Unit, Posix.Error> =
+  Posix.kill pid Posix.sigkill
+
+
+/// Run a program in a specific directory.
+// Uses sh -c because the minimal owned-launch primitive has no cwd parameter.
+// Ideally this would pass cwd directly to the child process (like Python's
+// subprocess.run(cwd=...)) without involving a shell.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.runIn reason=compiler-implementation
+let runIn
+  (directory: String)
+  (program: String)
+  (args: List<String>)
+  : Result.Result<Output, Posix.Error> =
+  let quotedArgs =
+    args |> Stdlib.List.map (fun a -> shellQuote a) |> Stdlib.String.join " "
+
+  run
+    "/bin/sh"
+    [ "-c"
+      $"cd {shellQuote directory} && {shellQuote program} {quotedArgs}" ]
+
+
+/// Run a program silently, discarding output. Returns exit code only.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.runSilent reason=compiler-implementation
+let runSilent
+  (program: String)
+  (args: List<String>)
+  : Result.Result<Int, Posix.Error> =
+  (run program args)
+  |> Stdlib.Result.map (fun output -> output.exitCode)
+
+
+/// Run a program with environment variables set.
+/// Uses /usr/bin/env to avoid shell interpretation.
+/// Env var names must not contain '=' or spaces.
+/// Returns String errors because it mixes spawn failures with validation errors.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.runWithEnv reason=compiler-implementation
+let runWithEnv
+  (program: String)
+  (args: List<String>)
+  (env: List<(String * String)>)
+  : Result.Result<Output, String> =
+  let invalid =
+    env
+    |> Stdlib.List.filter (fun pair ->
+      let (k, _v) = pair
+      (Stdlib.String.contains k "=") || (Stdlib.String.contains k " "))
+
+  if (Stdlib.List.length invalid) > 0 then
+    let badName =
+      (Stdlib.List.head invalid)
+      |> Builtin.unwrap
+      |> Stdlib.Tuple2.first
+
+    Stdlib.Result.Result.Error
+      $"Invalid env var name: '{badName}' (must not contain '=' or spaces)"
+  else
+    let envArgs =
+      env
+      |> Stdlib.List.map (fun pair ->
+        let (k, v) = pair
+        $"{k}={v}")
+
+    (run
+      "/usr/bin/env"
+      (Stdlib.List.append envArgs (Stdlib.List.append [ program ] args)))
+    |> Stdlib.Result.mapError (fun e -> e.message)
+
+
+/// Run a program with a timeout in milliseconds.
+/// Returns Error if the command times out.
+/// Returns String errors because it mixes spawn failures with validation/timeout errors.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.runWithTimeout reason=compiler-implementation
+let runWithTimeout
+  (timeoutMs: Int)
+  (program: String)
+  (args: List<String>)
+  : Result.Result<Output, String> =
+  if timeoutMs <= 0 then
+    Stdlib.Result.Result.Error "timeoutMs must be positive"
+  else
+
+  (spawnAndWait program args (Stdlib.Option.Option.Some timeoutMs))
+  |> Stdlib.Result.mapError (fun e -> e.message)
+  |> Stdlib.Result.map (fun result ->
+    Output
+      { exitCode = Stdlib.Tuple3.first result
+        stdout = Stdlib.Tuple3.second result
+        stderr = Stdlib.Tuple3.third result })
+
+
+/// Pipe the output of one command into another via shell.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.pipe reason=compiler-implementation
+let pipe
+  (program1: String)
+  (args1: List<String>)
+  (program2: String)
+  (args2: List<String>)
+  : Result.Result<Output, Posix.Error> =
+  let quotedArgs1 =
+    args1 |> Stdlib.List.map (fun a -> shellQuote a) |> Stdlib.String.join " "
+
+  let quotedArgs2 =
+    args2 |> Stdlib.List.map (fun a -> shellQuote a) |> Stdlib.String.join " "
+
+  run
+    "/bin/sh"
+    [ "-c"
+      $"{shellQuote program1} {quotedArgs1} | {shellQuote program2} {quotedArgs2}" ]
+
+
+/// Run a pipeline of raw shell commands connected by pipes.
+/// UNSAFE: commands are passed directly to the shell with NO escaping.
+/// Caller is responsible for sanitizing all inputs.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.shellPipeline reason=compiler-implementation
+let shellPipeline (commands: List<String>) : Result.Result<Output, Posix.Error> =
+  let cmd = Stdlib.String.join commands " | "
+  run "/bin/sh" [ "-c", cmd ]
+
+
+/// Check if a process is running.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.isRunning reason=compiler-implementation
+let isRunning (pid: Int) : Bool =
+  Posix.isProcessRunning pid
+
+
+/// Wait for a process to finish by polling.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.waitFor reason=compiler-implementation
+let waitFor (pid: Int) : Unit =
+  if Posix.isProcessRunning pid then
+    let _ = Posix.sleep 100.0
+    waitFor pid
+  else
+    ()
+
+
+/// Shared child IO, output limits, retries and deadlines. Runtime leaves only
+/// launch/supervise owned children; descriptor leaves only attempt one syscall.
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__ChildBuffer reason=compiler-implementation
+type __ChildBuffer = { chunks: List<Blob>, size: Int }
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childEmpty reason=compiler-implementation
+let __childEmpty () : __ChildBuffer = __ChildBuffer { chunks = [], size = 0 }
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childAppend reason=compiler-implementation
+let __childAppend (buffer: __ChildBuffer) (bytes: Blob) : __ChildBuffer =
+  let remaining = 67108864 - buffer.size
+  let length = Stdlib.Blob.length bytes
+  let keep = if remaining < length then remaining else length
+  if keep <= 0 then buffer
+  else
+    let kept = if keep == Stdlib.Blob.length bytes then bytes else Stdlib.Blob.slice bytes 0 keep
+    __ChildBuffer { chunks = Stdlib.List.push buffer.chunks kept, size = buffer.size + keep }
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childBytes reason=compiler-implementation
+let __childBytes (buffer: __ChildBuffer) : Blob = Stdlib.Blob.concat (Stdlib.List.reverse buffer.chunks)
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childPollChild reason=compiler-implementation
+let __childPollChild (child: Int) : Result.Result<Stdlib.Option.Option<Int>, Int> =
+  match Builtin.runtimeChildPoll child with
+  | Error 4 -> __childPollChild child
+  | result -> result
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childWaitChild reason=compiler-implementation
+let __childWaitChild (child: Int) : Result.Result<Int, Int> =
+  match Builtin.runtimeChildWait child with
+  | Error 4 -> __childWaitChild child
+  | result -> result
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childKillChild reason=compiler-implementation
+let __childKillChild (child: Int) : Result.Result<Unit, Int> =
+  match Builtin.runtimeChildKill child with
+  | Error 4 -> __childKillChild child
+  | result -> result
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childCloseChild reason=compiler-implementation
+let __childCloseChild (child: Int) : Result.Result<Unit, Int> =
+  match Builtin.runtimeChildClose child with
+  | Error 4 -> __childCloseChild child
+  | result -> result
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childFinish reason=compiler-implementation
+let __childFinish (child: Int) (result: Result.Result<'a, Int>) : Result.Result<'a, Int> =
+  let closed = __childCloseChild child
+  match result with
+  | Error e -> Error e
+  | Ok value -> closed |> Stdlib.Result.map (fun _ -> value)
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childRead reason=compiler-implementation
+let __childRead (fd: Int) (eof: Bool) : Result.Result<(Blob * Bool), Int> =
+  if eof then Ok (((Stdlib.Blob.fromList []), true))
+  else
+    match Builtin.syscallRead fd 65536 with
+    | Error 4 -> __childRead fd false
+    | Error e -> if e == 11 || e == 35 then Ok (((Stdlib.Blob.fromList []), false)) else Error e
+    | Ok chunk -> Ok ((chunk, Stdlib.Blob.length chunk == 0))
+
+/// One write per turn, interleaved with both readers, so a child producing
+/// output while accepting a large input cannot deadlock on a full pipe.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childWrite reason=compiler-implementation
+let __childWrite (fd: Int) (pending: Blob) : Result.Result<Blob, Int> =
+  let length = Stdlib.Blob.length pending
+  if length == 0 then Ok pending
+  else
+    let count = if length < 65536 then length else 65536
+    let chunk = if count == length then pending else Stdlib.Blob.slice pending 0 count
+    match Builtin.syscallWrite fd chunk with
+    | Error 4 -> __childWrite fd pending
+    | Error e -> if e == 11 || e == 35 then Ok pending else Error e
+    | Ok written ->
+      if written <= 0 || written > count then Error 5
+      else Ok (Stdlib.Blob.slice pending written (length - written))
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childPoll reason=compiler-implementation
+let __childPoll (fds: List<(Int * Int)>) (milliseconds: Int) : Result.Result<Unit, Int> =
+  let result = if Stdlib.Cli.Posix.__abiMac () then Builtin.syscallPollDarwin fds milliseconds else Builtin.syscallPpoll fds milliseconds
+  match result with
+  | Error 4 -> __childPoll fds milliseconds
+  | Error e -> Error e
+  | Ok _ -> Ok ()
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childDescriptors reason=compiler-implementation
+let __childDescriptors (stdin: Int) (stdout: Int) (stderr: Int) (pending: Blob) (outEOF: Bool) (errEOF: Bool) : List<(Int * Int)> =
+  let input = if Stdlib.Blob.length pending == 0 then [] else [(stdin, 4)]
+  let output = if outEOF then [] else [(stdout, 1)]
+  let error = if errEOF then [] else [(stderr, 1)]
+  Stdlib.List.append input (Stdlib.List.append output error)
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childCapture reason=compiler-implementation
+let __childCapture
+  (child: Int) (stdout: Int) (stderr: Int) (deadline: Stdlib.Option.Option<Int>)
+  (output: __ChildBuffer) (error: __ChildBuffer) (outEOF: Bool) (errEOF: Bool)
+  : Result.Result<(Int * Blob * Blob), Int> =
+  let remaining = match deadline with | None -> 100 | Some end_ -> end_ - Stdlib.DateTime.__monotonicMilliseconds ()
+  if remaining <= 0 then
+    let _ = __childKillChild child
+    Error (if Stdlib.Cli.Posix.__abiMac () then 60 else 110)
+  else
+    __childRead stdout outEOF |> Stdlib.Result.andThen (fun out ->
+      let (outChunk, outEOF) = out
+      __childRead stderr errEOF |> Stdlib.Result.andThen (fun err ->
+        let (errChunk, errEOF) = err
+        let output = __childAppend output outChunk
+        let error = __childAppend error errChunk
+        __childPollChild child |> Stdlib.Result.andThen (fun status ->
+          if outEOF && errEOF then
+            match status with
+            | Some code -> Ok ((code, __childBytes output, __childBytes error))
+            | None ->
+              match deadline with
+              | None -> __childWaitChild child |> Stdlib.Result.map (fun code -> (code, __childBytes output, __childBytes error))
+              | Some _ ->
+                let _ = Stdlib.DateTime.__sleepMilliseconds 10.0
+                __childCapture child stdout stderr deadline output error outEOF errEOF
+          else
+            let wait = if remaining < 100 then remaining else 100
+            __childPoll (__childDescriptors (-1) stdout stderr (Stdlib.Blob.fromList []) outEOF errEOF) wait
+            |> Stdlib.Result.andThen (fun _ -> __childCapture child stdout stderr deadline output error outEOF errEOF))))
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childRun reason=compiler-implementation
+let __childRun (program: String) (args: List<String>) (timeoutMs: Stdlib.Option.Option<Int>) : Result.Result<(Int * Blob * Blob), Int> =
+  Builtin.runtimeChildStart program args false |> Stdlib.Result.andThen (fun child ->
+    let result = Builtin.runtimeChildDescriptors child |> Stdlib.Result.andThen (fun ports ->
+      match ports with
+      | [_stdin, stdout, stderr] ->
+        let closed = match Builtin.runtimeChildClosePort child 0 with | Error 4 -> Ok () | result -> result
+        closed |> Stdlib.Result.andThen (fun _ ->
+          let deadline = match timeoutMs with | None -> None | Some ms -> Some (Stdlib.DateTime.__monotonicMilliseconds () + ms)
+          __childCapture child stdout stderr deadline (__childEmpty ()) (__childEmpty ()) false false)
+      | _ -> Error 9)
+    __childFinish child result)
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childInteractive reason=compiler-implementation
+let __childInteractive (program: String) (args: List<String>) : Result.Result<Int, Int> =
+  Builtin.runtimeChildStart program args true |> Stdlib.Result.andThen (fun child -> __childFinish child (__childWaitChild child))
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childNewline reason=compiler-implementation
+let __childNewline (bytes: Blob) : Bool =
+  let length = Stdlib.Blob.length bytes
+  length > 0 && (Stdlib.Blob.toList (Stdlib.Blob.slice bytes (length - 1) 1) == [10uy])
+
+/// Empty-input communication is immediately nonblocking. Input-driven calls
+/// wait in at most 100 polling turns; complete newline responses can finish
+/// earlier. Each turn drains both streams and advances a partial input write.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childCommunicateLoop reason=compiler-implementation
+let __childCommunicateLoop
+  (child: Int) (ports: (Int * Int * Int)) (pending: Blob)
+  (turns: Int) (output: __ChildBuffer) (error: __ChildBuffer) (eof: (Bool * Bool))
+  : Result.Result<(Int * Blob * Blob), Int> =
+  let (stdin, stdout, stderr) = ports
+  let (outEOF, errEOF) = eof
+  __childWrite stdin pending |> Stdlib.Result.andThen (fun pending ->
+    __childRead stdout outEOF |> Stdlib.Result.andThen (fun out ->
+      let (outChunk, outEOF) = out
+      __childRead stderr errEOF |> Stdlib.Result.andThen (fun err ->
+        let (errChunk, errEOF) = err
+        let output = __childAppend output outChunk
+        let error = __childAppend error errChunk
+        __childPollChild child |> Stdlib.Result.andThen (fun status ->
+          let code = match status with | Some code -> code | None -> 0
+          let complete = Stdlib.Blob.length pending == 0 && ((__childNewline outChunk) || (__childNewline errChunk))
+          if turns <= 0 || complete || (outEOF && errEOF) then Ok ((code, __childBytes output, __childBytes error))
+          else
+            __childPoll (__childDescriptors stdin stdout stderr pending outEOF errEOF) 100
+            |> Stdlib.Result.andThen (fun _ -> __childCommunicateLoop child ports pending (turns - 1) output error (outEOF, errEOF))))))
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childSaveHistory reason=compiler-implementation
+let __childSaveHistory (child: Int) (index: Int) (chunk: Blob) : Result.Result<Unit, Int> =
+  Builtin.runtimeChildBufferGet child index |> Stdlib.Result.andThen (fun previous ->
+    let next = __childAppend (__childAppend (__childEmpty ()) previous) chunk
+    Builtin.runtimeChildBufferSet child index (__childBytes next))
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childCommunicate reason=compiler-implementation
+let __childCommunicate (child: Int) (input: String) : Result.Result<(Int * Blob * Blob), Int> =
+  Builtin.runtimeChildDescriptors child |> Stdlib.Result.andThen (fun ports ->
+    match ports with
+    | [stdin, stdout, stderr] ->
+      let pending = if input == "" then (Stdlib.Blob.fromList []) else Stdlib.Blob.fromString (Stdlib.String.append input "\n")
+      let turns = if input == "" then 0 else 100
+      __childCommunicateLoop child (stdin, stdout, stderr) pending turns (__childEmpty ()) (__childEmpty ()) (false, false)
+      |> Stdlib.Result.andThen (fun result ->
+        let (code, output, error) = result
+        __childSaveHistory child 0 output |> Stdlib.Result.andThen (fun _ ->
+          __childSaveHistory child 1 error |> Stdlib.Result.map (fun _ -> (code, output, error))))
+    | _ -> Error 9)
+
+/// After terminating the owned child, drain currently available bytes, not
+/// future output from an unowned grandchild retaining a pipe. Bound draining
+/// turns as well as stored bytes so such a grandchild cannot keep cleanup busy.
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childDrain reason=compiler-implementation
+let __childDrain (stdout: Int) (stderr: Int) (turns: Int) (output: __ChildBuffer) (error: __ChildBuffer) : Result.Result<(Blob * Blob), Int> =
+  if turns <= 0 then Ok ((__childBytes output, __childBytes error))
+  else
+    __childRead stdout false |> Stdlib.Result.andThen (fun out ->
+      let (outChunk, _outEOF) = out
+      __childRead stderr false |> Stdlib.Result.andThen (fun err ->
+        let (errChunk, _errEOF) = err
+        let output = __childAppend output outChunk
+        let error = __childAppend error errChunk
+        if Stdlib.Blob.length outChunk == 0 && Stdlib.Blob.length errChunk == 0 then Ok ((__childBytes output, __childBytes error))
+        else __childDrain stdout stderr (turns - 1) output error))
+
+// @compiler replace: packages/darklang/stdlib/cli/process.dark#Darklang.Stdlib.Cli.Process.__childTerminate reason=compiler-implementation
+let __childTerminate (child: Int) : Result.Result<(Int * Blob * Blob), Int> =
+  let result = __childKillChild child |> Stdlib.Result.andThen (fun _ ->
+    __childWaitChild child |> Stdlib.Result.andThen (fun code ->
+      Builtin.runtimeChildDescriptors child |> Stdlib.Result.andThen (fun ports ->
+        match ports with
+        | [_stdin, stdout, stderr] ->
+          Builtin.runtimeChildBufferGet child 0 |> Stdlib.Result.andThen (fun previousOut ->
+            Builtin.runtimeChildBufferGet child 1 |> Stdlib.Result.andThen (fun previousErr ->
+              __childDrain stdout stderr 1024 (__childAppend (__childEmpty ()) previousOut) (__childAppend (__childEmpty ()) previousErr)
+              |> Stdlib.Result.map (fun pair -> let (output, error) = pair in (code, output, error))))
+        | _ -> Error 9)))
+  __childFinish child result
