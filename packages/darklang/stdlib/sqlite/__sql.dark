@@ -15,8 +15,9 @@ type __Select = { fields: List<(__Expr * String)>, from_: List<__Join>, distinct
   predicate: Stdlib.Option.Option<__Expr>, group: List<__Expr>, having: Stdlib.Option.Option<__Expr>,
   order: List<(__Expr * Bool)>, limit: Stdlib.Option.Option<__Expr>, compounds: List<(Bool * __Select)>, ctes: List<__Cte>, recursive: Bool }
 type __Conflict = Abort | Ignore | Replace | Upsert of List<String> * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
+type __Input = Values of List<List<__Expr>> | Selection of __Select
 type __Statement = Drop of String * Bool
-  | Insert of String * List<String> * List<List<__Expr>> * __Conflict
+  | Insert of String * List<String> * __Input * __Conflict
   | Update of String * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
   | Delete of String * Stdlib.Option.Option<__Expr> | Select of __Select | Catalog of List<__Token>
 
@@ -226,7 +227,7 @@ let __predicate (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Op
   | _ -> Ok ((None,tokens))
 
 let __fieldName (expr: __Expr) : String =
-  match expr with | Column s -> Stdlib.List.last (Stdlib.String.split s ".") |> Stdlib.Option.withDefault s | Count -> "count(*)" | Star -> "*" | _ -> "expression"
+  match expr with | Literal (Int n) -> Stdlib.Int64.toString n | Parameter name -> name | Column s -> Stdlib.List.last (Stdlib.String.split s ".") |> Stdlib.Option.withDefault s | Count -> "count(*)" | Star -> "*" | _ -> "expression"
 let __fields (tokens: List<__Token>) : Stdlib.Result.Result<(List<(__Expr * String)> * List<__Token>), String> =
   __expression tokens 1 |> Stdlib.Result.andThen (fun (expr,rest) ->
     __alias rest |> Stdlib.Result.map (fun (alias,rest) -> (Stdlib.Option.withDefault alias (__fieldName expr),rest))
@@ -398,8 +399,10 @@ let __statement (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * Li
           (match rest with
           | Symbol "(" :: tail -> __names tail |> Stdlib.Result.andThen (fun (names,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (names,rest)))
           | _ -> Ok (([],rest))) |> Stdlib.Result.andThen (fun (names,rest) ->
-            __eat rest "values" |> Stdlib.Result.andThen __valueRows |> Stdlib.Result.andThen (fun (rows,rest) ->
-              __upsert rest conflict |> Stdlib.Result.map (fun (conflict,rest) -> (Insert (name,names,rows,conflict),rest))))))
+            (if __queryStart rest then __query rest |> Stdlib.Result.map (fun (query,rest) -> (Selection query,rest))
+             else __eat rest "values" |> Stdlib.Result.andThen __valueRows |> Stdlib.Result.map (fun (rows,rest) -> (Values rows,rest)))
+            |> Stdlib.Result.andThen (fun (input,rest) ->
+              __upsert rest conflict |> Stdlib.Result.map (fun (conflict,rest) -> (Insert (name,names,input,conflict),rest))))))
     else if command == "update" then __name rest |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "set" |> Stdlib.Result.andThen __assignments
       |> Stdlib.Result.andThen (fun (assignments,rest) -> __predicate rest |> Stdlib.Result.map (fun (predicate,rest) -> (Update (name,assignments,predicate),rest))))
     else if command == "delete" then __eat rest "from" |> Stdlib.Result.andThen __name |> Stdlib.Result.andThen (fun (name,rest) ->

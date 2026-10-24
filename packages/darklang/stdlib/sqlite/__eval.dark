@@ -171,8 +171,22 @@ let __functionValid (name: String) (count: Int) : Bool =
   else if name == "length" || name == "lower" || name == "upper" || name == "typeof" then count == 1
   else if name == "substr" || name == "substring" then count == 2 || count == 3
   else if name == "char" then true
-  else if name == "datetime" then count == 1
-  else if name == "strftime" then count == 2 else false
+  else if name == "datetime" then count >= 1
+  else if name == "strftime" then count >= 2 else false
+
+let __dateModifiers (date: DateTime) (modifiers: List<Stdlib.Sqlite.Value>) : Stdlib.Result.Result<DateTime,String> =
+  match modifiers with
+  | [] -> Ok date
+  | modifier :: rest ->
+    let parts = Stdlib.List.filter (Stdlib.String.split (Stdlib.String.toLowercase (Stdlib.String.trim (__text modifier))) " ") (fun part -> part != "")
+    match parts with
+    | [number,unit] -> Stdlib.Int.parse number |> Stdlib.Result.mapError (fun _ -> "SQLite: unsupported date modifier") |> Stdlib.Result.andThen (fun amount ->
+      let factor = if unit == "second" || unit == "seconds" then 1000 else if unit == "minute" || unit == "minutes" then 60000 else if unit == "hour" || unit == "hours" then 3600000 else if unit == "day" || unit == "days" then 86400000 else 0
+      let milliseconds = Stdlib.DateTime.toMilliseconds date + amount * factor
+      if factor == 0 then Error "SQLite: unsupported date modifier"
+      else if milliseconds < -62135596800000 || milliseconds > 253402300799999 then Error "SQLite: date outside supported range"
+      else __dateModifiers (Stdlib.DateTime.fromMilliseconds milliseconds) rest)
+    | _ -> Error "SQLite: unsupported date modifier"
 
 let __call (name: String) (args: List<Stdlib.Sqlite.Value>) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
   if Stdlib.Bool.not (__functionValid name (Stdlib.List.length args)) then Error ("SQLite: unsupported function or wrong argument count: " + name)
@@ -216,17 +230,19 @@ let __call (name: String) (args: List<Stdlib.Sqlite.Value>) : Stdlib.Result.Resu
       |> Stdlib.Result.andThen (fun json -> __jsonPath json (__text path))
     | _ -> Error "SQLite: invalid JSON arguments"
   else
-    let source = match args with | [value] -> __text value | [_,value] -> __text value | _ -> ""
+    let dateArgs = if name == "datetime" then args else Stdlib.List.drop args 1
+    let source = match dateArgs with | value :: _ -> __text value | _ -> ""
+    let source = if Stdlib.Int.fromInt64 (Stdlib.String.__byteLength source) == 19 then Stdlib.String.replaceAll source " " "T" + "Z" else source
     let date = if source == "now" then Ok (Stdlib.DateTime.now ()) else Stdlib.DateTime.parse source |> Stdlib.Result.mapError (fun _ -> "SQLite: invalid date")
     match date with
     | Error _ -> Ok Stdlib.Sqlite.Value.Null
-    | Ok date ->
+    | Ok date -> __dateModifiers date (Stdlib.List.drop dateArgs 1) |> Stdlib.Result.andThen (fun date ->
       let iso = Stdlib.DateTime.toString date
       if name == "datetime" then Ok (Stdlib.Sqlite.Value.Text (Stdlib.String.replaceAll (Stdlib.Sqlite.__Sql.__slice iso 0 19) "T" " "))
       else
-        let format = match args with | [value,_] -> __text value | _ -> ""
+        let format = match args with | value :: _ -> __text value | _ -> ""
         if format != "%Y-%m-%dT%H:%M:%fZ" then Error "SQLite: unsupported strftime format"
-        else Ok (Stdlib.Sqlite.Value.Text (if Stdlib.Int.fromInt64 (Stdlib.String.__byteLength iso) == 20 then Stdlib.Sqlite.__Sql.__slice iso 0 19 + ".000Z" else iso))
+        else Ok (Stdlib.Sqlite.Value.Text (if Stdlib.Int.fromInt64 (Stdlib.String.__byteLength iso) == 20 then Stdlib.Sqlite.__Sql.__slice iso 0 19 + ".000Z" else iso)))
 
 let __binaryValue (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
   if operator == "and" then

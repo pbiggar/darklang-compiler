@@ -65,8 +65,13 @@ one-million-row resource limit. Named and ordinal ordering, aliases and DISTINCT
 are handled before LIMIT. JSON table inputs expose key/value reads; wildcard
 projection of that restricted virtual source returns an error.
 
-Unsupported execution features return errors: views/triggers, relational expressions
-in writes, INSERT SELECT, operational pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
+Relational expressions are also available in INSERT VALUES, INSERT SELECT,
+UPDATE assignments/predicates and DELETE predicates. INSERT SELECT materializes
+its input before applying target writes. The branch/replay statement tests execute
+the interpreter's JSON-ID updates, scalar commit lookup, projection copy and
+scoped delete without changing their SQL.
+
+Unsupported execution features return errors: views/triggers, operational pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
 rowid alias through `UPDATE`. Reference clauses are preserved in the catalog;
 foreign-key enforcement/checking is pending. Writes to stores containing views
 or triggers are rejected. This subset does not implement all SQLite numeric-string
@@ -120,8 +125,9 @@ The scalar extension includes searched/simple CASE, COALESCE/IFNULL/NULLIF,
 concatenation, arithmetic, LIKE, length, substr, char, ASCII case conversion,
 typeof, JSON extraction of `$`, `$[index]` and `$.field`, json_each key/value rows, datetime and the package
 schema's strftime format. UTF-8 processing preserves SQLite text bytes and counts
-codepoints. General JSON paths, date modifiers and strftime formats remain
-unsupported. Native differential tests cover typed cells and the unchanged
+codepoints. General JSON paths and strftime formats remain unsupported. The required integer
+second/minute/hour/day date modifiers are supported, including the package
+writer's next-second timestamp and store-health next-day check. Native differential tests cover typed cells and the unchanged
 package-store schema in addition to the original page interoperability suite.
 
 Remaining milestones, in dependency order:
@@ -134,8 +140,9 @@ Remaining milestones, in dependency order:
 3. Complete differential corpus coverage for relational queries. Focused joins,
    correlated and tuple lookups, grouping, JSON joins and recursive cycle cases pass;
    full interpreter query/workflow parity is still being measured.
-4. INSERT SELECT and expression/subquery writes. Multirow VALUES, REPLACE and
-   targeted UPSERT/excluded semantics are covered.
+4. Complete source-template and workflow coverage for writes. INSERT SELECT,
+   expression/subquery writes, multirow VALUES, REPLACE and targeted UPSERT/excluded
+   semantics are covered by focused and native interoperability cases.
 5. Long-lived connections with SQLite locking, WAL, checkpointing, data_version,
    required pragmas, consistent backup/restore and VACUUM.
 6. Interpreter package authoring, branch/merge, projection rebuild, migration and

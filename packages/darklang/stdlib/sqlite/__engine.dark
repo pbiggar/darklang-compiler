@@ -253,13 +253,13 @@ let __createIndex (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (de
         |> Stdlib.Result.andThen (fun s -> __catalogAdd s "index" definition.name definition.table root (Stdlib.Sqlite.Value.Text definition.sql))
         |> Stdlib.Result.andThen __bumpSchema |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] })))
 
-let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (assignments: List<(String * Stdlib.Sqlite.__Sql.__Expr)>)
+let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (assignments: List<(String * Stdlib.Sqlite.__Sql.__Expr)>) (ctx: Stdlib.Option.Option<Stdlib.Sqlite.__Query.__Context>)
   : Stdlib.Result.Result<__Outcome, String> =
   if Stdlib.Bool.not (__unique (Stdlib.List.map assignments (fun (name,_) -> name))) then Error "SQLite: duplicate UPDATE target"
   else if Stdlib.List.any assignments (fun (name,_) -> Stdlib.Bool.not (Stdlib.List.any table.columns (fun c -> __lower c.name == __lower name))) then Error "SQLite: unknown UPDATE target"
   else
     Stdlib.List.fold rows (Ok s) (fun result row -> result |> Stdlib.Result.andThen (fun s ->
-      __values table.columns row.values params (Stdlib.List.map assignments (fun (_,expr) -> expr)) |> Stdlib.Result.andThen (fun changes ->
+      __writeValues ctx table row params (Stdlib.List.map assignments (fun (_,expr) -> expr)) |> Stdlib.Result.andThen (fun changes ->
         let values = Stdlib.List.fold (Stdlib.List.map2shortest assignments changes (fun (name,_) value -> (name,value))) row.values (fun values (name,value) ->
             let affinity = Stdlib.Sqlite.__Eval.__affinity table.columns (Stdlib.Sqlite.__Sql.__Expr.Column name)
             Stdlib.Dict.setOverridingDuplicates values (__lower name) (Stdlib.Sqlite.__Eval.__coerce affinity value))
@@ -325,7 +325,7 @@ let __insertWithConflict (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (ro
             let values = Stdlib.List.fold (Stdlib.Dict.toList candidate.values) values (fun values (name,value) -> Stdlib.Dict.setOverridingDuplicates values ("excluded." + name) value)
             let scoped = { row with values = values }
             __matches (__upsertColumns table) scoped params predicate |> Stdlib.Result.andThen (fun yes ->
-              if yes then __updateRows s table [scoped] params assignments else Ok (__Outcome { state = s, affected = 0, rows = [] }))))
+              if yes then __updateRows s table [scoped] params assignments None else Ok (__Outcome { state = s, affected = 0, rows = [] }))))
 
 let __alter (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<__Outcome,String> =
   Stdlib.Sqlite.__Sql.__eat tokens "alter" |> Stdlib.Result.andThen (fun rest -> Stdlib.Sqlite.__Sql.__eat rest "table")
@@ -454,6 +454,44 @@ let __queryContext (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (r
 let __queryOutput (relation: Stdlib.Sqlite.__Query.__Relation) : List<Dict<String,Stdlib.Sqlite.Value>> =
   Stdlib.List.map relation.rows (fun row -> Stdlib.Dict.fromListOverwritingDuplicates (Stdlib.List.map2shortest relation.fields row (fun field value -> (field.name,value))))
 
+let __writeScope (table: __Table) (row: __Row) : Stdlib.Result.Result<Stdlib.Sqlite.__Query.__Scope,String> =
+  __relation table.columns [row] true |> Stdlib.Result.andThen (fun relation -> match relation.rows with
+    | [values] -> Ok (Stdlib.Sqlite.__Query.__scope (Stdlib.Sqlite.__Query.__qualify relation.fields table.name) values [])
+    | _ -> Error "SQLite: invalid write row")
+let __validateWrite (ctx: Stdlib.Sqlite.__Query.__Context) (table: __Table) (exprs: List<Stdlib.Sqlite.__Sql.__Expr>)
+  (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Unit,String> =
+  let row = __Row { key = 0, values = Stdlib.Dict.fromListOverwritingDuplicates (Stdlib.List.map table.columns (fun column -> (__lower column.name,Stdlib.Sqlite.Value.Null))) }
+  __writeScope table row |> Stdlib.Result.andThen (fun scope ->
+    Stdlib.Sqlite.__Query.__validateMany ctx scope false exprs |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Query.__validateOptional ctx scope false predicate))
+let __writeValues (ctx: Stdlib.Option.Option<Stdlib.Sqlite.__Query.__Context>) (table: __Table) (row: __Row) (params: Dict<String,Stdlib.Sqlite.Value>)
+  (exprs: List<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<List<Stdlib.Sqlite.Value>,String> =
+  match ctx with
+  | None -> __values table.columns row.values params exprs
+  | Some ctx -> __writeScope table row |> Stdlib.Result.andThen (fun scope -> Stdlib.Sqlite.__Query.__values ctx scope None exprs)
+let __filterWrites (ctx: Stdlib.Sqlite.__Query.__Context) (table: __Table) (rows: List<__Row>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<List<__Row>,String> =
+  Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun output ->
+    __writeScope table row |> Stdlib.Result.andThen (fun scope -> Stdlib.Sqlite.__Query.__matches ctx scope None predicate)
+    |> Stdlib.Result.map (fun yes -> if yes then output @ [row] else output)))
+let __inputReferences (input: Stdlib.Sqlite.__Sql.__Input) : List<String> =
+  match input with
+  | Values rows -> Stdlib.List.flatten (Stdlib.List.map (Stdlib.List.flatten rows) Stdlib.Sqlite.__Query.__referencesExpr)
+  | Selection query -> Stdlib.Sqlite.__Query.__references query
+let __conflictReferences (conflict: Stdlib.Sqlite.__Sql.__Conflict) : List<String> =
+  match conflict with
+  | Upsert (_,assignments,predicate) -> Stdlib.List.flatten (Stdlib.List.map (Stdlib.List.map assignments (fun (_,expr) -> expr) @ Stdlib.Sqlite.__Query.__optionalExpr predicate) Stdlib.Sqlite.__Query.__referencesExpr)
+  | _ -> []
+let __inputRows (ctx: Stdlib.Sqlite.__Query.__Context) (input: Stdlib.Sqlite.__Sql.__Input) (width: Int) : Stdlib.Result.Result<List<List<Stdlib.Sqlite.Value>>,String> =
+  match input with
+  | Values rows ->
+    if Stdlib.List.any rows (fun row -> Stdlib.List.length row != width) then Error "SQLite: INSERT column/value mismatch"
+    else
+      let scope = Stdlib.Sqlite.__Query.__scope [] [] []
+      Stdlib.Sqlite.__Query.__validateMany ctx scope false (Stdlib.List.flatten rows)
+      |> Stdlib.Result.andThen (fun _ -> Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun output ->
+        Stdlib.Sqlite.__Query.__values ctx scope None row |> Stdlib.Result.map (fun values -> output @ [values]))))
+  | Selection query -> Stdlib.Sqlite.__Query.__execute ctx query [] |> Stdlib.Result.andThen (fun relation ->
+    if Stdlib.List.length relation.fields != width then Error "SQLite: INSERT SELECT column count mismatch" else Ok relation.rows)
+
 let __runRaw (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String, Stdlib.Sqlite.Value>)
   : Stdlib.Result.Result<__Outcome, String> =
   __schema s (match statement with | Select _ -> true | _ -> false) |> Stdlib.Result.andThen (fun (s,tables) ->
@@ -474,25 +512,28 @@ let __runRaw (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.
         |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__drop s [table.root] [])
         |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__deleteAt s 1 table.schemaKey 0)
         |> Stdlib.Result.andThen __bumpSchema |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] }))
-    | Insert (name,names,expressionRows,conflict) -> __find tables name |> Stdlib.Result.andThen (fun table ->
-      __validateConflict table params conflict |> Stdlib.Result.andThen (fun _ ->
-      Stdlib.List.fold expressionRows (Ok (__Outcome { state = s, affected = 0, rows = [] })) (fun result expressions ->
-        result |> Stdlib.Result.andThen (fun previous ->
-          __values [] (Dict {}) params expressions |> Stdlib.Result.andThen (fun values ->
-            let names = if Stdlib.List.isEmpty names then Stdlib.List.map table.columns (fun c -> c.name) else names
-            __input table names values |> Stdlib.Result.andThen (fun input ->
-              __rows previous.state table |> Stdlib.Result.andThen (fun (s,rows) -> __insertWithConflict s table rows input params conflict)
-              |> Stdlib.Result.map (fun outcome -> { outcome with affected = previous.affected + outcome.affected })))))))
+    | Insert (name,names,input,conflict) -> __find tables name |> Stdlib.Result.andThen (fun table ->
+      let names = if Stdlib.List.isEmpty names then Stdlib.List.map table.columns (fun c -> c.name) else names
+      (if Stdlib.Bool.not (__unique names) || Stdlib.List.any names (fun name -> Stdlib.Bool.not (Stdlib.List.any table.columns (fun column -> __lower column.name == __lower name))) then Error "SQLite: invalid INSERT target columns" else __validateConflict table params conflict)
+      |> Stdlib.Result.andThen (fun _ -> __queryContext s tables (__inputReferences input @ __conflictReferences conflict) params)
+      |> Stdlib.Result.andThen (fun (s,context) -> __inputRows context input (Stdlib.List.length names) |> Stdlib.Result.andThen (fun rows ->
+        Stdlib.List.fold rows (Ok (__Outcome { state = s, affected = 0, rows = [] })) (fun result values -> result |> Stdlib.Result.andThen (fun previous ->
+          __input table names values |> Stdlib.Result.andThen (fun input ->
+            __rows previous.state table |> Stdlib.Result.andThen (fun (s,rows) -> __insertWithConflict s table rows input params conflict)
+            |> Stdlib.Result.map (fun outcome -> { outcome with affected = previous.affected + outcome.affected })))))))
     | Delete (name,predicate) -> __find tables name |> Stdlib.Result.andThen (fun table ->
-      __validatePredicate table.columns params predicate |> Stdlib.Result.andThen (fun _ -> __rows s table)
-      |> Stdlib.Result.andThen (fun (s,rows) -> __filtered table.columns rows params predicate |> Stdlib.Result.andThen (fun rows ->
-        Stdlib.List.fold rows (Ok s) (fun result row -> result |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__deleteAt s table.root row.key 0))
-        |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = Stdlib.List.length rows, rows = [] }))))
+      let references = Stdlib.List.flatten (Stdlib.List.map (Stdlib.Sqlite.__Query.__optionalExpr predicate) Stdlib.Sqlite.__Query.__referencesExpr)
+      __queryContext s tables references params |> Stdlib.Result.andThen (fun (s,context) ->
+        __validateWrite context table [] predicate |> Stdlib.Result.andThen (fun _ -> __rows s table)
+        |> Stdlib.Result.andThen (fun (s,rows) -> __filterWrites context table rows predicate |> Stdlib.Result.andThen (fun rows ->
+          Stdlib.List.fold rows (Ok s) (fun result row -> result |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__deleteAt s table.root row.key 0))
+          |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = Stdlib.List.length rows, rows = [] })))))
     | Update (name,assignments,predicate) -> __find tables name |> Stdlib.Result.andThen (fun table ->
-      let checks = [__validatePredicate table.columns params predicate] @ Stdlib.List.map assignments (fun (_,expr) -> Stdlib.Sqlite.__Eval.__validate table.columns params false expr)
-      Stdlib.List.fold checks (Ok ()) (fun result check -> result |> Stdlib.Result.andThen (fun _ -> check))
-      |> Stdlib.Result.andThen (fun _ -> __rows s table) |> Stdlib.Result.andThen (fun (s,rows) ->
-        __filtered table.columns rows params predicate |> Stdlib.Result.andThen (fun rows -> __updateRows s table rows params assignments)))
+      let expressions = Stdlib.List.map assignments (fun (_,expr) -> expr)
+      let references = Stdlib.List.flatten (Stdlib.List.map (expressions @ Stdlib.Sqlite.__Query.__optionalExpr predicate) Stdlib.Sqlite.__Query.__referencesExpr)
+      __queryContext s tables references params |> Stdlib.Result.andThen (fun (s,context) ->
+        __validateWrite context table expressions predicate |> Stdlib.Result.andThen (fun _ -> __rows s table)
+        |> Stdlib.Result.andThen (fun (s,rows) -> __filterWrites context table rows predicate |> Stdlib.Result.andThen (fun rows -> __updateRows s table rows params assignments (Some context)))))
     | Select query ->
       __queryContext s tables (Stdlib.Sqlite.__Query.__references query) params |> Stdlib.Result.andThen (fun (s,context) ->
         Stdlib.Sqlite.__Query.__execute context query [] |> Stdlib.Result.map (fun relation -> __Outcome { state = s, affected = -1, rows = __queryOutput relation })))

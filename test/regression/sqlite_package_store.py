@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Exchange the interpreter's unchanged indexed package schema with the Dark reader."""
 import json
+import datetime
 import os
+import re
 from pathlib import Path
 import sqlite3
 import struct
@@ -51,6 +53,21 @@ def encoded(value):
     return 'T' + value.encode().hex().upper()
 
 
+def has_order(sql):
+    depth, previous = 0, ''
+    tokens = re.findall(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|/\*.*?\*/|[()]|[A-Za-z_][A-Za-z0-9_]*",sql,re.S)
+    for token in tokens:
+        if token=='(':
+            depth += 1
+        elif token==')':
+            depth -= 1
+        elif depth==0 and token[0].isalpha():
+            if previous=='ORDER' and token.upper()=='BY':
+                return True
+            previous=token.upper()
+    return False
+
+
 def main():
     compiler = str(Path(sys.argv[1]).resolve())
     fixtures = Path(sys.argv[2]).resolve()
@@ -73,6 +90,7 @@ def main():
         # record with decomposed text: SQL must preserve it rather than normalize.
         connection.execute("INSERT INTO config_v0(key,value) VALUES (?,?)", ('unicode', 'e\u0301雪'))
         connection.execute("ALTER TABLE config_v0 ADD COLUMN compatibility_probe TEXT DEFAULT 'old-row-default'")
+        connection.execute("INSERT INTO package_ops(id,op_blob,origin_ts,applied) VALUES ('audit-op',X'00','2020-01-01T00:00:00.000Z',1)")
         connection.commit()
 
         def run(sql, bindings=None, mode='query', path=db):
@@ -83,7 +101,7 @@ def main():
             assert result.returncode == 0, (sql, result.stdout, result.stderr)
             return result.stdout.rstrip('\n')
 
-        def check(sql, bindings=None):
+        def check(sql, bindings=None, ordered=True):
             bindings = bindings or {}
             cursor = connection.execute(sql, {k[1:]: v for k, v in bindings.items()})
             names = [column[0] for column in cursor.description]
@@ -91,6 +109,16 @@ def main():
             output = run(sql, bindings)
             assert output.startswith('Ok '), (sql,output)
             actual = [dict(cell.split('=',1) for cell in row.split('|')) for row in output[3:].split(';')] if output[3:] else []
+            if re.fullmatch(r"SELECT\s+datetime\('now'\)\s+AS\s+now",sql.strip(),re.I):
+                after = connection.execute(sql).fetchone()[0]
+                assert len(actual)==1 and set(actual[0])=={'now'}
+                stamp = lambda encoded:datetime.datetime.strptime(bytes.fromhex(encoded[1:]).decode(),'%Y-%m-%d %H:%M:%S')
+                observed, before, after = stamp(actual[0]['now']),stamp(expected[0]['now']),datetime.datetime.strptime(after,'%Y-%m-%d %H:%M:%S')
+                assert min(before,after)<=observed<=max(before,after),(sql,actual,expected,after)
+                return
+            if not ordered:
+                actual.sort(key=lambda row:json.dumps(row,sort_keys=True))
+                expected.sort(key=lambda row:json.dumps(row,sort_keys=True))
             assert actual == expected, (sql, actual, expected)
 
         def execute(sql, bindings=None, count=1):
@@ -133,6 +161,30 @@ def main():
         before = db.read_bytes()
         assert run("INSERT INTO package_dependencies VALUES ('fn-a','type-a','type','','','')",mode='exec').startswith('Error ')
         assert db.read_bytes()==before,'unique expression index failure changed the file'
+        if '--audit' in sys.argv:
+            failures, passed = [], 0
+            for entry in corpus['entries']:
+                if entry['kind'] != 'statement' or not re.match(r'^(SELECT|WITH)\b',entry['sql'],re.I):
+                    continue
+                names = re.findall(r'[@:$]([A-Za-z_][A-Za-z_0-9]*)',entry['sql'])
+                bindings = {}
+                for name in names:
+                    lower = name.lower()
+                    value = {'owner':'Darklang','modules':'Example','name':'a','item_type':'fn','hash':'fn-a','item_hash':'fn-a','itemhash':'fn-a','value_type':b'type','valuetype':b'type'}.get(lower,'0')
+                    bindings['@'+name] = value
+                # Python binds by name; the Dark API preserves the prefix too.
+                bindings = {prefix+name:bindings['@'+name] for prefix,name in re.findall(r'([@:$])([A-Za-z_][A-Za-z_0-9]*)',entry['sql'])}
+                try:
+                    check(entry['sql'],bindings,ordered=has_order(entry['sql']))
+                except (AssertionError,sqlite3.Error) as error:
+                    failures.append({'source':entry['source'],'line':entry['line'],'sql':entry['sql'],'error':str(error)[:2000]})
+                else:
+                    passed += 1
+            report = {'revision':corpus['interpreter_revision'],'passed':passed,'failed':len(failures),'failures':failures,'qualification':'One seeded fixture and sample bindings; not workflow or dynamic-template coverage'}
+            destination=Path.cwd()/'TestResults/sqlite-package-query-audit.json'
+            destination.parent.mkdir(exist_ok=True)
+            destination.write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+            print(f"Source query audit: {passed} passed, {len(failures)} failed; {destination}",flush=True)
         # Run the interpreter's literal UPSERTs, retaining their $/@ bindings,
         # qualified predicates and excluded-column references.
         def source_sql(path, line):
@@ -153,6 +205,19 @@ def main():
         doc_params.update({'$text':'second','$ts':'2'})
         execute(docs_sql,doc_params)
         assert connection.execute('SELECT text,origin_ts FROM location_docs').fetchall()==[('second','2')]
+        # The actual branch/replay writes use JSON membership, a scalar
+        # subquery, INSERT SELECT, then a scoped DELETE.
+        execute("INSERT INTO op_branches(op_id,branch_id,source) VALUES ('op-b','branch-test','authored')")
+        execute("UPDATE package_ops SET effective=0 WHERE id='op-b'")
+        playback = {'$ids':'["op-b"]','$b':'branch-test','$e':'op-a','$p':'parent-test'}
+        execute(source_sql('PackageOpPlayback.fs',772),playback)
+        execute("UPDATE package_ops SET commit_hash='commit-a' WHERE id='op-a'")
+        execute(source_sql('PackageOpPlayback.fs',788),playback)
+        assert connection.execute("SELECT commit_hash,effective FROM package_ops WHERE id='op-b'").fetchone()==('commit-a',1)
+        execute(source_sql('PackageOpPlayback.fs',804),playback)
+        execute(source_sql('PackageOpPlayback.fs',804),playback,count=0)
+        execute(source_sql('PackageOpPlayback.fs',818),playback)
+        assert connection.execute("SELECT branch_id,source FROM op_branches WHERE op_id='op-b'").fetchall()==[('parent-test','authored')]
         next_rowid = connection.execute('SELECT max(rowid)+1 FROM config_v0').fetchone()[0]
         execute("INSERT OR REPLACE INTO config_v0(key,value) VALUES ('setting','replaced')")
         assert connection.execute("SELECT rowid,value FROM config_v0 WHERE key='setting'").fetchone()==(next_rowid,'replaced')
