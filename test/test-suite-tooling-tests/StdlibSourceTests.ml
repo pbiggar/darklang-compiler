@@ -10,8 +10,7 @@ type testResult = (unit, string) result
 let ( let* ) = Result.bind
 
 let stdlibFiles () =
-  try
-    Ok (R.filesUnder "packages" ".dark")
+  try Ok (R.filesUnder "packages" ".dark")
   with exn ->
     Error ("Failed to list embedded library files: " ^ Printexc.to_string exn)
 
