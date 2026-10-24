@@ -236,8 +236,7 @@ let __readRootsFromSources (files: List<String>) (directories: List<String>)
   | _ :: _ -> Ok roots
 
 let loadSystemRoots () : Stdlib.Result.Result<List<Blob>, String> =
-  let (files, directories) = Stdlib.__Tls13Client.__rootSources
-    (Stdlib.Cli.Env.get "SSL_CERT_FILE") (Stdlib.Cli.Env.get "SSL_CERT_DIR") in
+  let (files, directories) = Stdlib.__Tls13Client.__rootSources (Stdlib.Cli.Env.get "SSL_CERT_FILE") (Stdlib.Cli.Env.get "SSL_CERT_DIR")
   Stdlib.__Tls13Client.__readRootsFromSources files directories
 
 let __authenticate (flight: Stdlib.__Tls13Handshake.ServerFlight)
