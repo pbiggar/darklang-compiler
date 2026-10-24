@@ -1,9 +1,10 @@
 (* CompilerAnnotations.mli - Per-item compiler decisions kept in imported source comments. *)
 type phase = Compile | Runtime
-type failureClass = AotRejection | MissingSupport
+type failureClass = AotRejection | MissingSupport | UpstreamBug
 
 type disposition =
   | Run
+  | ErrorMessage of { phase : phase; diagnostic : string; reason : string }
   | Blocked of { reason : string; diagnostic : string option }
   | Excluded of string
   | Replace of { target : string; reason : string }

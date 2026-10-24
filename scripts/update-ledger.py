@@ -100,7 +100,7 @@ def summarize(root, rows):
             if disposition['status'] == 'xfail':
                 classification = disposition.get('classification')
                 phase = disposition.get('phase')
-                if classification not in {'aot-rejection', 'missing-support'}:
+                if classification not in {'aot-rejection', 'missing-support', 'upstream-bug'}:
                     raise ValueError('Expected failure requires a classification: ' + row['source'] + '#' + item['name'])
                 if phase not in {'compile', 'runtime'} or (classification == 'aot-rejection' and phase != 'compile'):
                     raise ValueError('Invalid expected failure phase: ' + row['source'] + '#' + item['name'])
@@ -137,6 +137,7 @@ def markdown(summary):
     lines += ['', '## Expected test failures', '',
               'Verified AOT rejection contracts cover programs rejected under the compiler’s static rules; they are not unfinished support.',
               'Missing support includes compiler bugs, unavailable dependencies and test-runner gaps. Counts describe source contracts; execution receipts remain separate.', '',
+              'Upstream bugs record interpreter behavior or test expectations that the compiler deliberately rejects as incorrect; they are separate from missing support.', '',
               '| Class | Compile | Runtime | Total |', '| --- | ---: | ---: | ---: |']
     for classification, values in summary['expected_failures'].items():
         phases = values['phases']

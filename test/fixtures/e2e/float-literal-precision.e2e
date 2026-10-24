@@ -1,0 +1,26 @@
+// Float literals preserve the decimal precision specified by their source.
+0.1 = 0.1
+0.3 = 0.3
+0.10000000000000001 = 0.1
+10000000000000002.0 = 10000000000000002.0
+0.000001e1 = 1e-5
+0.00000001e1 = 1e-7
+00.0000001 = 1e-7
+0001e300 = 1e300
+5e-324 > 0.0 = true
+1.0 / -0.0 < 0.0 = true
+0e999999999999999999999 = 0.0
+10000000000000001.0 = compileerror="Float literal loses precision specified in the source"
+10000000000000000.1 = compileerror="Float literal loses precision specified in the source"
+0.10000000000000000 = compileerror="Float literal loses precision specified in the source"
+9007199254740993.0 = compileerror="Float literal loses precision specified in the source"
+9007199254740995.0 = compileerror="Float literal loses precision specified in the source"
+1.7976931348623158e308 = compileerror="Float literal loses precision specified in the source"
+2.4703282292062328e-324 = compileerror="Float literal loses precision specified in the source"
+1e309 = compileerror="Float literal overflows binary64"
+1e401 = compileerror="Float literal overflows binary64"
+1e999999999999999999999 = compileerror="Float literal overflows binary64"
+2e-324 = compileerror="Nonzero float literal underflows to zero"
+1e-401 = compileerror="Nonzero float literal underflows to zero"
+-1e-401 = compileerror="Nonzero float literal underflows to zero"
+1e-999999999999999999999 = compileerror="Nonzero float literal underflows to zero"

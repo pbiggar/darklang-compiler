@@ -128,7 +128,7 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         else Ok ()
       in
       let jsonStart = elapsed () in
-      let planned =
+      let* planned =
         JsonPlanning.rewriteProgramWithSession
           (Option.map
              (fun (session : CompilationSession.compilationSession) ->

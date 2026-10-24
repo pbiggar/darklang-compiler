@@ -714,7 +714,7 @@ module Float =
   Stdlib.Json.parse<Float> "1e3" = Result.Ok 1000.0
   Stdlib.Json.parse<Float> "-1e3" = Result.Ok -1000.0
 
-  Stdlib.Json.serialize<Float> 3.14159265358979323846 = "3.141592653589793"
+  Stdlib.Json.serialize<Float> 3.141592653589793 = "3.141592653589793"
 
   Stdlib.Json.serialize<Float> 1.618033988749895 = "1.618033988749895"
 
@@ -935,7 +935,7 @@ module Uuid =
 
 
 module BadTypes =
-  // @compiler blocked: compiler-gap
+  // @compiler error-message compile: "Cannot parse JSON into function type (Int64) -> Int64: JSON cannot represent executable functions" reason=diagnostic-difference
   Stdlib.Json.parse<Int64 -> Int64> "{}" = error="Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization, and cannot be used as arguments to Builtin.jsonParse or Builtin.jsonSerialize"
   #compileerror="Expected TInt64, got TInt"
   Stdlib.Json.serialize<Int64 -> Int64> (fun i -> 5) = error="Cannot serialize (lambda) into JSON"
@@ -1184,7 +1184,7 @@ module Dict =
   Stdlib.Json.serialize<Dict<String, String>> (Dict { "a": "b", "c": "d" }) = """{"a":"b","c":"d"}"""
   Stdlib.Json.parse<Dict<String, String>> """{"a":"b","c":"d"}""" = Result.Ok(Dict { "a": "b", "c": "d" })
 
-  // @compiler blocked: compiler-gap
+  // @compiler error-message runtime: "Cannot serialize dictionary into JSON: keys must be String, but this dictionary has Int64 keys" reason=diagnostic-difference
   Stdlib.Json.serialize<Dict<Int64, String>> (Dict { 1L: "a" }) = error="Cannot serialize { 1: \"a\" } into JSON"
 
   // @compiler blocked: compiler-gap

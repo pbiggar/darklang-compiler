@@ -63,8 +63,9 @@ let main includePackages allBlocked root manifest output =
                               "missing-intrinsic";
                               "test-counter";
                             ])
-                | CompilerAnnotations.Run | CompilerAnnotations.Excluded _
-                | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ ->
+                | CompilerAnnotations.Run | CompilerAnnotations.ErrorMessage _
+                | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
+                | CompilerAnnotations.Xfail _ ->
                     false)
             | W.DModule _ | W.DTest _ | W.DAssertion _ -> false))
   in
@@ -350,6 +351,7 @@ let main includePackages allBlocked root manifest output =
                            && (match entry.I.disposition with
                              | CompilerAnnotations.Blocked _ -> true
                              | CompilerAnnotations.Run
+                             | CompilerAnnotations.ErrorMessage _
                              | CompilerAnnotations.Excluded _
                              | CompilerAnnotations.Replace _
                              | CompilerAnnotations.Xfail _ ->
