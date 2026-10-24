@@ -1060,7 +1060,7 @@ let registryWithExternalSpecs (specialization : S.specializationResult) =
       SM.add (name, types) (S.specName name types) registry)
     specialization.S.externalSpecs specialization.S.specRegistry
 
-let monomorphizeWithGenericFuncDefs definitions program =
+let monomorphizeWithGenericFuncDefs ?prepare definitions program =
   let program = StaticCallReduction.reduce definitions program in
   let specs = collectInitialMonomorphizationSpecs program in
   let* specialization =
@@ -1075,9 +1075,48 @@ let monomorphizeWithGenericFuncDefs definitions program =
     @ C.programTopLevels program
   in
   let program = C.programFromCheckedParts (symbols, tops) in
-  replaceTypeAppsInProgramWithRegistry
-    (registryWithExternalSpecs specialization)
-    program
+  let registry = registryWithExternalSpecs specialization in
+  let rec close registry program =
+    let program =
+      match prepare with None -> program | Some prepare -> prepare program
+    in
+    let missing =
+      SS.filter
+        (fun spec -> not (SM.mem spec registry))
+        (collectInitialMonomorphizationSpecs program)
+    in
+    if Option.is_none prepare || SS.is_empty missing then
+      replaceTypeAppsInProgramWithRegistry registry program
+    else
+      let* specialization =
+        specializeFromSpecs (C.programSymbols program) definitions missing
+      in
+      let registry =
+        SM.fold SM.add (registryWithExternalSpecs specialization) registry
+      in
+      let symbols, functions =
+        S.importSpecializedFunctions specialization.S.symbols
+          specialization.S.specializedFuncs
+      in
+      let existing =
+        C.programTopLevels program
+        |> List.filter_map (function
+          | C.FunctionDef func -> Some func.C.name
+          | _ -> None)
+        |> Names.of_list
+      in
+      let added =
+        List.filter_map
+          (fun (func : C.functionDef) ->
+            if Names.mem func.C.name existing then None
+            else Some (C.FunctionDef func))
+          functions
+      in
+      close registry
+        (C.programFromCheckedParts
+           (symbols, added @ C.programTopLevels program))
+  in
+  close registry program
 
 (*
    Check if a program needs lambda lowering (lambda inlining + lifting)

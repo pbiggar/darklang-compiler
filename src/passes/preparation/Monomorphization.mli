@@ -39,6 +39,7 @@ val replaceTypeAppsInProgramWithRegistry :
   (CheckedAST.program, string) result
 
 val monomorphizeWithGenericFuncDefs :
+  ?prepare:(CheckedAST.program -> CheckedAST.program) ->
   SpecializationIdentity.genericFuncDefs ->
   CheckedAST.program ->
   (CheckedAST.program, string) result
