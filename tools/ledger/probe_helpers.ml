@@ -46,27 +46,27 @@ let main includePackages allBlocked root manifest output =
         |> List.filter (fun node ->
             match node.S.declaration with
             | W.DExpr _ when not includePackages -> false
-            | W.DTrait _ | W.DImpl _ when not allBlocked -> false
-            | W.DFunction _ | W.DType _ | W.DValue _ | W.DExpr _
-            | W.DTrait _ | W.DImpl _ -> (
+            | (W.DTrait _ | W.DImpl _) when not allBlocked -> false
+            | W.DFunction _ | W.DType _ | W.DValue _ | W.DExpr _ | W.DTrait _
+            | W.DImpl _ -> (
                 match node.S.disposition with
                 | CompilerAnnotations.Blocked { reason; _ } ->
-                    allBlocked || List.mem reason
-                      (if includePackages then
-                         [ "missing-implementation"; "upstream-dependency" ]
-                       else
-                         [
-                           "missing-implementation";
-                           "upstream-dependency";
-                           "compiler-gap";
-                           "missing-intrinsic";
-                           "test-counter";
-                         ])
+                    allBlocked
+                    || List.mem reason
+                         (if includePackages then
+                            [ "missing-implementation"; "upstream-dependency" ]
+                          else
+                            [
+                              "missing-implementation";
+                              "upstream-dependency";
+                              "compiler-gap";
+                              "missing-intrinsic";
+                              "test-counter";
+                            ])
                 | CompilerAnnotations.Run | CompilerAnnotations.Excluded _
                 | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ ->
                     false)
-            | W.DModule _ | W.DTest _ | W.DAssertion _ ->
-                false))
+            | W.DModule _ | W.DTest _ | W.DAssertion _ -> false))
   in
   let readLines path =
     In_channel.with_open_bin (Filename.concat root path) In_channel.input_all
@@ -127,7 +127,21 @@ let main includePackages allBlocked root manifest output =
     && S.kind left.S.declaration = S.kind right.S.declaration
   in
   let responsible accepted diagnostic =
-    if String.starts_with ~prefix:"Constructor identity collision " diagnostic
+    if
+      String.starts_with
+        ~prefix:"Declaration-only program must not contain entry expressions"
+        diagnostic
+    then
+      List.find_opt
+        (fun (node : S.node) ->
+          match node.S.declaration with
+          | W.DExpr _ -> true
+          | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _
+          | W.DModule _ | W.DTest _ | W.DAssertion _ ->
+              false)
+        accepted
+    else if
+      String.starts_with ~prefix:"Constructor identity collision " diagnostic
     then
       let direct =
         List.find_opt
@@ -218,24 +232,33 @@ let main includePackages allBlocked root manifest output =
                       (fun (node : S.node) ->
                         node.S.file = file && node.S.name = entry.I.name
                         && S.kind node.S.declaration = I.kindName entry.I.kind
-                        || (allBlocked && node.S.file = file
+                        || allBlocked && node.S.file = file
                            && (match entry.I.disposition with
-                              | CompilerAnnotations.Blocked _ -> true
-                              | _ -> false)
+                             | CompilerAnnotations.Blocked _ -> true
+                             | CompilerAnnotations.Run
+                             | CompilerAnnotations.Excluded _
+                             | CompilerAnnotations.Replace _
+                             | CompilerAnnotations.Xfail _ ->
+                                 false)
                            && List.mem entry.I.position
                                 (match node.S.declaration with
-                                 | W.DTrait trait_ ->
-                                     List.map
-                                       (fun (method_ : W.traitMethodDecl) ->
-                                         method_.W.keywordLet.Tokenizer.start)
-                                       trait_.W.methods
-                                 | W.DImpl impl ->
-                                     List.map
-                                       (function
-                                         | W.IMethod fn -> fn.W.keywordLet.Tokenizer.start
-                                         | W.IAlias value -> value.W.keywordVal.Tokenizer.start)
-                                       impl.W.members
-                                 | _ -> [])))
+                                | W.DTrait trait_ ->
+                                    List.map
+                                      (fun (method_ : W.traitMethodDecl) ->
+                                        method_.W.keywordLet.Tokenizer.start)
+                                      trait_.W.methods
+                                | W.DImpl impl ->
+                                    List.map
+                                      (function
+                                        | W.IMethod fn ->
+                                            fn.W.keywordLet.Tokenizer.start
+                                        | W.IAlias value ->
+                                            value.W.keywordVal.Tokenizer.start)
+                                      impl.W.members
+                                | W.DFunction _ | W.DValue _ | W.DType _
+                                | W.DModule _ | W.DTest _ | W.DAssertion _
+                                | W.DExpr _ ->
+                                    []))
                       accepted
                   then { entry with I.disposition = CompilerAnnotations.Run }
                   else entry)
@@ -282,7 +305,8 @@ let main includePackages allBlocked root manifest output =
       | W.DValue value -> value.W.keywordVal.Tokenizer.start.Tokenizer.row + 1
       | W.DExpr expression ->
           (W.exprRange expression).Tokenizer.start.Tokenizer.row + 1
-      | W.DTrait trait_ -> trait_.W.keywordTrait.Tokenizer.start.Tokenizer.row + 1
+      | W.DTrait trait_ ->
+          trait_.W.keywordTrait.Tokenizer.start.Tokenizer.row + 1
       | W.DImpl impl -> impl.W.keywordImpl.Tokenizer.start.Tokenizer.row + 1
       | W.DModule _ | W.DTest _ | W.DAssertion _ ->
           Crash.crash "Non-helper candidate"
@@ -312,5 +336,6 @@ let () =
   | [ _; "--all-blocked"; root; manifest; output ] ->
       main true true root manifest output
   | _ ->
-      prerr_endline "Usage: probe_helpers [--packages|--all-blocked] ROOT MANIFEST REPORT";
+      prerr_endline
+        "Usage: probe_helpers [--packages|--all-blocked] ROOT MANIFEST REPORT";
       exit 1
