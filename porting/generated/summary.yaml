@@ -1,7 +1,7 @@
 upstream:
   schema: 1
   upstream_repository: darklang/dark
-  upstream_revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
+  upstream_revision: 06be3203f31820bcaa99db7bca6756cda3ae5c8d
   target: linux-x64
 source_files: 433
 kinds:

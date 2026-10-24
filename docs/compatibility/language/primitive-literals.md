@@ -48,7 +48,8 @@ expression and pattern literals; runtime string parsing is unchanged.
 
 This language change matches the interpreter implementation merged in
 [darklang/dark#5985](https://github.com/darklang/dark/pull/5985).
-The interpreter revision currently pinned by the ledger predates that merge.
+The ledger pins that PR's merged head commit, preserving the existing source
+inventory while including the float-literal changes.
 
 Bare decimal literals lower to arbitrary-precision Int, matching the
 interpreter. Int128/UInt128 lower to managed fixed blocks containing two UInt64 limbs;
