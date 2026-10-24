@@ -267,6 +267,13 @@ let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdl
   | Column name -> __lookup row name
   | Parameter n ->
     match Stdlib.Dict.get params n with | Some value -> Ok value | None -> Error ("SQLite: missing bound parameter: " + n)
+  | Subquery _ -> Error "SQLite: relational expression requires a query context"
+  | Exists _ -> Error "SQLite: relational expression requires a query context"
+  | InList (_,_) -> Error "SQLite: relational expression requires a query context"
+  | InQuery (_,_) -> Error "SQLite: relational expression requires a query context"
+  | Tuple _ -> Error "SQLite: row value misused"
+  | QualifiedStar _ -> Error "SQLite: wildcard is not valid here"
+  | Slot _ -> Error "SQLite: query slot requires a row scope"
   | Count -> Error "SQLite: aggregate is not valid here"
   | Star -> Error "SQLite: wildcard is not valid here"
   | Unary (operator,inner) -> __eval columns row params inner |> Stdlib.Result.map (fun value ->
@@ -332,6 +339,13 @@ let __validate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<Strin
   | Column name ->
     if Stdlib.String.toLowercase name == "rowid" || Stdlib.List.any columns (fun c -> Stdlib.String.toLowercase c.name == Stdlib.String.toLowercase name) then Ok ()
     else Error ("SQLite: no such column: " + name)
+  | Subquery _ -> Error "SQLite: relational expression requires a query context"
+  | Exists _ -> Error "SQLite: relational expression requires a query context"
+  | InList (_,_) -> Error "SQLite: relational expression requires a query context"
+  | InQuery (_,_) -> Error "SQLite: relational expression requires a query context"
+  | Tuple _ -> Error "SQLite: row value misused"
+  | QualifiedStar _ -> Error "SQLite: wildcard is not valid here"
+  | Slot _ -> Error "SQLite: query slot requires a row scope"
   | Count -> if aggregate then Ok () else Error "SQLite: aggregate is not valid here"
   | Star -> Error "SQLite: wildcard is not valid here"
   | Unary (_,inner) -> __validate columns params false inner

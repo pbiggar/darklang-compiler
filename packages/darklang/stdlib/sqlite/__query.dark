@@ -1,0 +1,399 @@
+// Relational evaluation for package queries. Relations keep ordered cells until
+// the public boundary so tuple subqueries and duplicate column names retain meaning.
+module Darklang.Stdlib.Sqlite.__Query
+
+type __Field = { name: String, qualifier: String, affinity: String, hidden: Bool, restricted: Bool }
+type __Relation = { fields: List<__Field>, rows: List<List<Stdlib.Sqlite.Value>> }
+type __Scope = { fields: List<__Field>, values: List<Stdlib.Sqlite.Value>, outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)> }
+type __Context = { tables: Dict<String,__Relation>, params: Dict<String,Stdlib.Sqlite.Value>,
+  virtual_: String -> List<Stdlib.Sqlite.Value> -> Stdlib.Result.Result<__Relation,String> }
+type __Projected = { values: List<Stdlib.Sqlite.Value>, keys: List<Stdlib.Sqlite.Value> }
+type __Group = { key: List<Stdlib.Sqlite.Value>, rows: List<List<Stdlib.Sqlite.Value>> }
+
+let __lower (s: String) : String = Stdlib.String.toLowercase s
+let __nulls (fields: List<__Field>) : List<Stdlib.Sqlite.Value> = Stdlib.List.map fields (fun _ -> Stdlib.Sqlite.Value.Null)
+let __field (name: String) (affinity: String) : __Field = __Field { name = name, affinity = affinity, qualifier = "", hidden = false, restricted = false }
+let __scope (fields: List<__Field>) (values: List<Stdlib.Sqlite.Value>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : __Scope =
+  __Scope { fields = fields, values = values, outers = outers }
+let __qualify (fields: List<__Field>) (qualifier: String) : List<__Field> = Stdlib.List.map fields (fun field -> { field with qualifier = qualifier })
+let __lookupIn (fields: List<__Field>) (values: List<Stdlib.Sqlite.Value>) (name: String)
+  : Stdlib.Result.Result<Stdlib.Option.Option<(Stdlib.Sqlite.Value * String)>,String> =
+  if Stdlib.List.length fields != Stdlib.List.length values then Error "SQLite: invalid relation width"
+  else
+    let name = __lower name
+    let pairs = Stdlib.List.map2shortest fields values (fun field value -> (field,value))
+    let matches = Stdlib.List.filter pairs (fun (field,_) ->
+      if Stdlib.String.contains name "." then field.qualifier != "" && __lower (field.qualifier + "." + field.name) == name else __lower field.name == name)
+    match matches with
+    | [] -> Ok None
+    | [(field,value)] -> Ok (Some ((value,field.affinity)))
+    | _ -> Error ("SQLite: ambiguous column name: " + name)
+let __lookupOuter (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) (name: String) : Stdlib.Result.Result<(Stdlib.Sqlite.Value * String),String> =
+  match outers with
+  | [] -> Error ("SQLite: no such column: " + name)
+  | (fields,values) :: rest -> __lookupIn fields values name |> Stdlib.Result.andThen (fun found -> match found with
+    | Some value -> Ok value | None -> __lookupOuter rest name)
+let __lookup (scope: __Scope) (name: String) : Stdlib.Result.Result<(Stdlib.Sqlite.Value * String),String> =
+  __lookupIn scope.fields scope.values name |> Stdlib.Result.andThen (fun found -> match found with
+    | Some value -> Ok value | None -> __lookupOuter scope.outers name)
+let __affinity (scope: __Scope) (expr: Stdlib.Sqlite.__Sql.__Expr) : String =
+  match expr with
+  | Column name -> __lookup scope name |> Stdlib.Result.map (fun (_,affinity) -> affinity) |> Stdlib.Result.withDefault "blob"
+  | Slot index -> Stdlib.List.getAt scope.fields index |> Stdlib.Option.map (fun field -> field.affinity) |> Stdlib.Option.withDefault "blob"
+  | Cast (_,kind) -> kind
+  | _ -> "blob"
+let __binary (scope: __Scope) (left: Stdlib.Sqlite.__Sql.__Expr) (right: Stdlib.Sqlite.__Sql.__Expr) (op: String)
+  (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
+  let la = __affinity scope left
+  let ra = __affinity scope right
+  let (a,b) =
+    if la != "blob" && la != "text" && (ra == "blob" || ra == "text") then (a,Stdlib.Sqlite.__Eval.__coerce la b)
+    else if ra != "blob" && ra != "text" && (la == "blob" || la == "text") then (Stdlib.Sqlite.__Eval.__coerce ra a,b)
+    else if la == "text" && ra == "blob" then (a,Stdlib.Sqlite.__Eval.__coerce "text" b)
+    else if ra == "text" && la == "blob" then (Stdlib.Sqlite.__Eval.__coerce "text" a,b)
+    else (a,b)
+  Stdlib.Sqlite.__Eval.__binaryValue op a b
+let __compareRow (a: List<Stdlib.Sqlite.Value>) (b: List<Stdlib.Sqlite.Value>) : Int = Stdlib.Sqlite.__Index.__compare a b
+let __appendUnique (rows: List<List<Stdlib.Sqlite.Value>>) (row: List<Stdlib.Sqlite.Value>) : List<List<Stdlib.Sqlite.Value>> =
+  if Stdlib.List.any rows (fun old -> __compareRow old row == 0) then rows else rows @ [row]
+let __aggregate (expr: Stdlib.Sqlite.__Sql.__Expr) : Bool =
+  match expr with
+  | Count -> true
+  | Call (name,args) -> ((name == "count" || name == "max") && Stdlib.List.length args == 1) || Stdlib.List.any args __aggregate
+  | Binary (a,_,b) -> __aggregate a || __aggregate b
+  | Unary (_,inner) -> __aggregate inner
+  | Cast (inner,_) -> __aggregate inner
+  | Case (arms,fallback) -> __aggregate fallback || Stdlib.List.any arms (fun (a,b) -> __aggregate a || __aggregate b)
+  | _ -> false
+let __aggregateQuery (query: Stdlib.Sqlite.__Sql.__Select) : Bool =
+  Stdlib.Bool.not (Stdlib.List.isEmpty query.group) || Stdlib.List.any query.fields (fun (expr,_) -> __aggregate expr) ||
+    Stdlib.List.any query.order (fun (expr,_) -> __aggregate expr) || (match query.having with | None -> false | Some expr -> __aggregate expr)
+let __tuple (expr: Stdlib.Sqlite.__Sql.__Expr) : List<Stdlib.Sqlite.__Sql.__Expr> = match expr with | Tuple fields -> fields | _ -> [expr]
+
+let __scalar (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>) (expr: Stdlib.Sqlite.__Sql.__Expr)
+  : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  match expr with
+  | Literal value -> Ok value
+  | Parameter name -> match Stdlib.Dict.get ctx.params name with | Some value -> Ok value | None -> Error ("SQLite: missing bound parameter: " + name)
+  | Column name -> __lookup scope name |> Stdlib.Result.map (fun (value,_) -> value)
+  | Slot index -> match Stdlib.List.getAt scope.values index with | Some value -> Ok value | None -> Error "SQLite: invalid query slot"
+  | Star -> Error "SQLite: wildcard outside projection"
+  | QualifiedStar _ -> Error "SQLite: wildcard outside projection"
+  | Tuple _ -> Error "SQLite: row value misused"
+  | Cast (inner,kind) -> __scalar ctx scope group inner |> Stdlib.Result.andThen (fun value ->
+    Stdlib.Sqlite.__Eval.__eval [] (Dict {}) ctx.params (Stdlib.Sqlite.__Sql.__Expr.Cast (Stdlib.Sqlite.__Sql.__Expr.Literal value,kind)))
+  | Unary (op,inner) -> __scalar ctx scope group inner |> Stdlib.Result.andThen (fun value ->
+    Stdlib.Sqlite.__Eval.__eval [] (Dict {}) ctx.params (Stdlib.Sqlite.__Sql.__Expr.Unary (op,Stdlib.Sqlite.__Sql.__Expr.Literal value)))
+  | Binary (left,op,right) -> __scalar ctx scope group left |> Stdlib.Result.andThen (fun a ->
+    if op == "and" && Stdlib.Sqlite.__Eval.__truth a == Some false then Ok (Stdlib.Sqlite.__Eval.__bool false)
+    else if op == "or" && Stdlib.Sqlite.__Eval.__truth a == Some true then Ok (Stdlib.Sqlite.__Eval.__bool true)
+    else __scalar ctx scope group right |> Stdlib.Result.map (fun b -> __binary scope left right op a b))
+  | Case (arms,fallback) -> __case ctx scope group arms fallback
+  | Count -> match group with | None -> Error "SQLite: misuse of aggregate count" | Some rows -> Ok (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 (Stdlib.List.length rows)))
+  | Call (name,args) ->
+    if (name == "count" || name == "max") && Stdlib.List.length args == 1 then __aggregateValue ctx scope group name args
+    else if name == "coalesce" || name == "ifnull" then __coalesce ctx scope group args
+    else __values ctx scope group args |> Stdlib.Result.andThen (fun values ->
+      if name == "max" then
+        if Stdlib.List.any values (fun v -> Stdlib.Sqlite.__Eval.__rank v == 0) then Ok Stdlib.Sqlite.Value.Null else Ok (__maximum values)
+      else Stdlib.Sqlite.__Eval.__call name values)
+  | Subquery query -> __execute ctx query ([(scope.fields,scope.values)] @ scope.outers) |> Stdlib.Result.andThen (fun relation ->
+    if Stdlib.List.length relation.fields != 1 then Error "SQLite: scalar subquery must return one column"
+    else match relation.rows with | (value :: _) :: _ -> Ok value | _ -> Ok Stdlib.Sqlite.Value.Null)
+  | Exists query -> __execute ctx query ([(scope.fields,scope.values)] @ scope.outers) |> Stdlib.Result.map (fun relation -> Stdlib.Sqlite.__Eval.__bool (Stdlib.Bool.not (Stdlib.List.isEmpty relation.rows)))
+  | InList (left,values) -> __values ctx scope group (__tuple left) |> Stdlib.Result.andThen (fun key ->
+    Stdlib.List.fold values (Ok []) (fun result value -> result |> Stdlib.Result.andThen (fun rows -> __values ctx scope group (__tuple value) |> Stdlib.Result.map (fun row -> rows @ [row])))
+    |> Stdlib.Result.andThen (fun rows -> __membership scope (__tuple left) key rows))
+  | InQuery (left,query) -> __values ctx scope group (__tuple left) |> Stdlib.Result.andThen (fun key ->
+    __execute ctx query ([(scope.fields,scope.values)] @ scope.outers) |> Stdlib.Result.andThen (fun relation -> __membership scope (__tuple left) key relation.rows))
+
+let __values (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>) (exprs: List<Stdlib.Sqlite.__Sql.__Expr>)
+  : Stdlib.Result.Result<List<Stdlib.Sqlite.Value>,String> =
+  Stdlib.List.fold exprs (Ok []) (fun result expr -> result |> Stdlib.Result.andThen (fun values -> __scalar ctx scope group expr |> Stdlib.Result.map (fun value -> values @ [value])))
+let __case (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>)
+  (arms: List<(Stdlib.Sqlite.__Sql.__Expr * Stdlib.Sqlite.__Sql.__Expr)>) (fallback: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  match arms with
+  | [] -> __scalar ctx scope group fallback
+  | (condition,value) :: rest -> __scalar ctx scope group condition |> Stdlib.Result.andThen (fun yes ->
+    if Stdlib.Sqlite.__Eval.__truth yes == Some true then __scalar ctx scope group value else __case ctx scope group rest fallback)
+let __coalesce (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>) (args: List<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  match args with | [] -> Ok Stdlib.Sqlite.Value.Null | first :: rest -> __scalar ctx scope group first |> Stdlib.Result.andThen (fun value ->
+    if Stdlib.Sqlite.__Eval.__rank value == 0 then __coalesce ctx scope group rest else Ok value)
+let __maximum (values: List<Stdlib.Sqlite.Value>) : Stdlib.Sqlite.Value =
+  Stdlib.List.fold values Stdlib.Sqlite.Value.Null (fun largest value -> if Stdlib.Sqlite.__Eval.__compare value largest > 0 then value else largest)
+let __aggregateValue (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>) (name: String) (args: List<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  match (group,args) with
+  | (Some rows,[expr]) ->
+    Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun values -> __scalar ctx { scope with values = row } None expr |> Stdlib.Result.map (fun value -> values @ [value])))
+    |> Stdlib.Result.map (fun values -> if name == "count" then Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 (Stdlib.List.length (Stdlib.List.filter values (fun value -> Stdlib.Sqlite.__Eval.__rank value != 0)))) else __maximum values)
+  | _ -> Error "SQLite: misuse of aggregate"
+let __membership (scope: __Scope) (expressions: List<Stdlib.Sqlite.__Sql.__Expr>) (key: List<Stdlib.Sqlite.Value>) (rows: List<List<Stdlib.Sqlite.Value>>) : Stdlib.Result.Result<Stdlib.Sqlite.Value,String> =
+  Stdlib.List.fold rows (Ok ((false,false))) (fun result row -> result |> Stdlib.Result.andThen (fun (found,unknown) ->
+    if Stdlib.List.length key != Stdlib.List.length row then Error "SQLite: IN row width mismatch"
+    else
+      let comparisons = Stdlib.List.map2shortest (Stdlib.List.map2shortest expressions key (fun expr value -> (expr,value))) row (fun (expr,a) b ->
+        let affinity = __affinity scope expr
+        let b = if affinity == "blob" then b else Stdlib.Sqlite.__Eval.__coerce affinity b
+        Stdlib.Sqlite.__Eval.__truth (Stdlib.Sqlite.__Eval.__binaryValue "=" a b))
+      let false_ = Stdlib.List.contains comparisons (Some false)
+      let null_ = Stdlib.List.contains comparisons None
+      Ok ((found || (Stdlib.Bool.not false_ && Stdlib.Bool.not null_),unknown || (Stdlib.Bool.not false_ && null_)))))
+  |> Stdlib.Result.map (fun (found,unknown) -> if found then Stdlib.Sqlite.__Eval.__bool true else if unknown then Stdlib.Sqlite.Value.Null else Stdlib.Sqlite.__Eval.__bool false)
+
+let __validFunction (name: String) (count: Int) : Bool =
+  Stdlib.Sqlite.__Eval.__functionValid name count || (name == "count" && count == 1) || (name == "max" && count >= 1)
+let __validate (ctx: __Context) (scope: __Scope) (aggregate: Bool) (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Unit,String> =
+  match expr with
+  | Literal _ -> Ok ()
+  | Column name -> __lookup scope name |> Stdlib.Result.map (fun _ -> ())
+  | Parameter name -> if Stdlib.Dict.member ctx.params name then Ok () else Error ("SQLite: missing bound parameter: " + name)
+  | Slot index -> if index >= 0 && index < Stdlib.List.length scope.fields then Ok () else Error "SQLite: invalid query slot"
+  | Star -> Error "SQLite: wildcard outside projection"
+  | QualifiedStar _ -> Error "SQLite: wildcard outside projection"
+  | Tuple _ -> Error "SQLite: row value misused"
+  | Count -> if aggregate then Ok () else Error "SQLite: misuse of aggregate count"
+  | Cast (inner,kind) -> __validate ctx scope aggregate inner |> Stdlib.Result.andThen (fun _ ->
+    Stdlib.Sqlite.__Eval.__validate [] ctx.params false (Stdlib.Sqlite.__Sql.__Expr.Cast (Stdlib.Sqlite.__Sql.__Expr.Literal Stdlib.Sqlite.Value.Null,kind)))
+  | Unary (_,inner) -> __validate ctx scope aggregate inner
+  | Binary (left,_,right) -> __validate ctx scope aggregate left |> Stdlib.Result.andThen (fun _ -> __validate ctx scope aggregate right)
+  | Case (arms,fallback) -> Stdlib.List.fold arms (__validate ctx scope aggregate fallback) (fun result (a,b) ->
+    result |> Stdlib.Result.andThen (fun _ -> __validate ctx scope aggregate a) |> Stdlib.Result.andThen (fun _ -> __validate ctx scope aggregate b))
+  | Call (name,args) ->
+    let isAggregate = (name == "count" || name == "max") && Stdlib.List.length args == 1
+    if Stdlib.Bool.not (__validFunction name (Stdlib.List.length args)) then Error ("SQLite: unsupported function or wrong argument count: " + name)
+    else if isAggregate && Stdlib.Bool.not aggregate then Error "SQLite: misuse of aggregate"
+    else Stdlib.List.fold args (Ok ()) (fun result arg -> result |> Stdlib.Result.andThen (fun _ -> __validate ctx scope (aggregate && Stdlib.Bool.not isAggregate) arg))
+  | Subquery query -> __describe ctx query ([(scope.fields,scope.values)] @ scope.outers) |> Stdlib.Result.andThen (fun fields ->
+    if Stdlib.List.length fields == 1 then Ok () else Error "SQLite: scalar subquery must return one column")
+  | Exists query -> __describe ctx query ([(scope.fields,scope.values)] @ scope.outers) |> Stdlib.Result.map (fun _ -> ())
+  | InList (left,values) ->
+    let width = Stdlib.List.length (__tuple left)
+    __validateMany ctx scope aggregate (__tuple left) |> Stdlib.Result.andThen (fun _ ->
+      Stdlib.List.fold values (Ok ()) (fun result value -> result |> Stdlib.Result.andThen (fun _ ->
+        if Stdlib.List.length (__tuple value) != width then Error "SQLite: IN row width mismatch" else __validateMany ctx scope aggregate (__tuple value))))
+  | InQuery (left,query) -> __validateMany ctx scope aggregate (__tuple left) |> Stdlib.Result.andThen (fun _ ->
+    __describe ctx query ([(scope.fields,scope.values)] @ scope.outers) |> Stdlib.Result.andThen (fun fields ->
+      if Stdlib.List.length fields == Stdlib.List.length (__tuple left) then Ok () else Error "SQLite: IN row width mismatch"))
+let __validateMany (ctx: __Context) (scope: __Scope) (aggregate: Bool) (exprs: List<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Unit,String> =
+  Stdlib.List.fold exprs (Ok ()) (fun result expr -> result |> Stdlib.Result.andThen (fun _ -> __validate ctx scope aggregate expr))
+let __validateOptional (ctx: __Context) (scope: __Scope) (aggregate: Bool) (expr: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Unit,String> =
+  match expr with | None -> Ok () | Some expr -> __validate ctx scope aggregate expr
+
+let __sourceFields (ctx: __Context) (scope: __Scope) (join: Stdlib.Sqlite.__Sql.__Join) : Stdlib.Result.Result<List<__Field>,String> =
+  let qualifier = match join.source with | Table (name,_) -> Stdlib.Option.withDefault join.alias name | Derived _ -> Stdlib.Option.withDefault join.alias ""
+  (match join.source with
+   | Table (name,None) -> match Stdlib.Dict.get ctx.tables (__lower name) with | None -> Error ("SQLite: no such table: " + name) | Some relation -> Ok relation.fields
+   | Table (name,Some args) -> __validateMany ctx scope false args |> Stdlib.Result.andThen (fun _ ->
+     ctx.virtual_ name (Stdlib.List.map args (fun _ -> Stdlib.Sqlite.Value.Null)) |> Stdlib.Result.map (fun relation -> relation.fields))
+   | Derived query -> __describe ctx query scope.outers)
+  |> Stdlib.Result.map (fun fields -> __qualify fields qualifier)
+let __fromFields (ctx: __Context) (from_: List<Stdlib.Sqlite.__Sql.__Join>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<List<__Field>,String> =
+  Stdlib.List.fold from_ (Ok []) (fun result join -> result |> Stdlib.Result.andThen (fun fields ->
+    __sourceFields ctx (__scope fields (__nulls fields) outers) join |> Stdlib.Result.andThen (fun next ->
+      let fields = fields @ next
+      __validateOptional ctx (__scope fields (__nulls fields) outers) false join.predicate |> Stdlib.Result.map (fun _ -> fields))))
+let __starFields (fields: List<__Field>) (qualifier: Stdlib.Option.Option<String>) : List<(Stdlib.Sqlite.__Sql.__Expr * String)> =
+  let (_,selected) = Stdlib.List.fold fields (0,[]) (fun (i,selected) field ->
+    let matches = match qualifier with | None -> true | Some name -> __lower field.qualifier == __lower name
+    (i + 1,if field.hidden || Stdlib.Bool.not matches then selected else selected @ [(Stdlib.Sqlite.__Sql.__Expr.Slot i,field.name)]))
+  selected
+let __projection (fields: List<__Field>) (expressions: List<(Stdlib.Sqlite.__Sql.__Expr * String)>) : Stdlib.Result.Result<List<(Stdlib.Sqlite.__Sql.__Expr * String)>,String> =
+  Stdlib.List.fold expressions (Ok []) (fun result (expr,name) -> result |> Stdlib.Result.andThen (fun output ->
+    let selected = match expr with | Star -> __starFields fields None | QualifiedStar name -> __starFields fields (Some name) | _ -> [(expr,name)]
+    let restricted = match expr with
+      | Star -> Stdlib.List.any fields (fun field -> field.restricted)
+      | QualifiedStar name -> Stdlib.List.any fields (fun field -> field.restricted && __lower field.qualifier == __lower name)
+      | _ -> false
+    if restricted then Error "SQLite: table function wildcard is unsupported"
+    else if Stdlib.List.isEmpty selected then Error "SQLite: wildcard requires a source" else Ok (output @ selected)))
+let __outputFields (scope: __Scope) (projection: List<(Stdlib.Sqlite.__Sql.__Expr * String)>) : List<__Field> =
+  Stdlib.List.map projection (fun (expr,name) -> __field name (__affinity scope expr))
+let __orderIndex (fields: List<__Field>) (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Option.Option<Int>,String> =
+  match expr with
+  | Literal (Int n) -> if n <= 0L || Stdlib.Int.fromInt64 n > Stdlib.List.length fields then Error "SQLite: ORDER BY position out of range" else Ok (Some (Stdlib.Int.fromInt64 n - 1))
+  | Column name ->
+    let (_,found) = Stdlib.List.fold fields (0,None) (fun (i,found) field ->
+      (i + 1,if found == None && __lower field.name == __lower name then Some i else found))
+    Ok found
+  | _ -> Ok None
+let __describeCore (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<List<__Field>,String> =
+  __fromFields ctx query.from_ outers |> Stdlib.Result.andThen (fun fields ->
+    let scope = __scope fields (__nulls fields) outers
+    let aggregate = __aggregateQuery query
+    __projection fields query.fields |> Stdlib.Result.andThen (fun projection ->
+      __validateOptional ctx scope false query.predicate |> Stdlib.Result.andThen (fun _ -> __validateMany ctx scope false query.group)
+      |> Stdlib.Result.andThen (fun _ -> __validateMany ctx scope aggregate (Stdlib.List.map projection (fun (expr,_) -> expr)))
+      |> Stdlib.Result.andThen (fun _ -> __validateOptional ctx scope aggregate query.having)
+      |> Stdlib.Result.andThen (fun _ ->
+        let output = __outputFields scope projection
+        Stdlib.List.fold query.order (Ok ()) (fun result (expr,_) -> result |> Stdlib.Result.andThen (fun _ ->
+          __orderIndex output expr |> Stdlib.Result.andThen (fun index -> match index with | Some _ -> Ok () | None -> __validate ctx scope aggregate expr)))
+        |> Stdlib.Result.andThen (fun _ -> __validateOptional ctx (__scope [] [] outers) false query.limit)
+        |> Stdlib.Result.map (fun _ -> output))))
+
+let __rename (fields: List<__Field>) (names: List<String>) : Stdlib.Result.Result<List<__Field>,String> =
+  if Stdlib.List.isEmpty names then Ok fields
+  else if Stdlib.List.length names != Stdlib.List.length fields then Error "SQLite: CTE column count mismatch"
+  else Ok (Stdlib.List.map2shortest fields names (fun field name -> { field with name = name }))
+let __withMetadata (ctx: __Context) (ctes: List<Stdlib.Sqlite.__Sql.__Cte>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Context,String> =
+  Stdlib.List.fold ctes (Ok ctx) (fun result cte -> result |> Stdlib.Result.andThen (fun ctx ->
+    let anchor = { cte.query with compounds = [] }
+    __describe ctx anchor outers |> Stdlib.Result.andThen (fun fields -> __rename fields cte.columns)
+    |> Stdlib.Result.andThen (fun fields ->
+      let ctx = { ctx with tables = Stdlib.Dict.setOverridingDuplicates ctx.tables (__lower cte.name) (__Relation { fields = fields, rows = [] }) }
+      __describe ctx cte.query outers |> Stdlib.Result.map (fun _ -> ctx))))
+let __describe (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<List<__Field>,String> =
+  __withMetadata ctx query.ctes outers |> Stdlib.Result.andThen (fun ctx -> __describeCore ctx query outers |> Stdlib.Result.andThen (fun fields ->
+    Stdlib.List.fold query.compounds (Ok fields) (fun result (_,branch) -> result |> Stdlib.Result.andThen (fun fields ->
+      __describeCore ctx branch outers |> Stdlib.Result.andThen (fun other ->
+        if Stdlib.List.length fields == Stdlib.List.length other then Ok fields else Error "SQLite: compound SELECT column count mismatch")))))
+
+let __source (ctx: __Context) (scope: __Scope) (join: Stdlib.Sqlite.__Sql.__Join) : Stdlib.Result.Result<__Relation,String> =
+  let qualifier = match join.source with | Table (name,_) -> Stdlib.Option.withDefault join.alias name | Derived _ -> Stdlib.Option.withDefault join.alias ""
+  (match join.source with
+   | Table (name,None) -> match Stdlib.Dict.get ctx.tables (__lower name) with | None -> Error ("SQLite: no such table: " + name) | Some relation -> Ok relation
+   | Table (name,Some args) -> __values ctx scope None args |> Stdlib.Result.andThen (fun args -> ctx.virtual_ name args)
+   | Derived query -> __execute ctx query scope.outers)
+  |> Stdlib.Result.map (fun relation -> { relation with fields = __qualify relation.fields qualifier })
+let __matches (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) : Stdlib.Result.Result<Bool,String> =
+  match predicate with | None -> Ok true | Some expr -> __scalar ctx scope group expr |> Stdlib.Result.map (fun value -> Stdlib.Sqlite.__Eval.__truth value == Some true)
+let __from (ctx: __Context) (from_: List<Stdlib.Sqlite.__Sql.__Join>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  Stdlib.List.fold from_ (Ok (__Relation { fields = [], rows = [[]] })) (fun result join -> result |> Stdlib.Result.andThen (fun left ->
+    __sourceFields ctx (__scope left.fields (__nulls left.fields) outers) join |> Stdlib.Result.andThen (fun rightFields ->
+      let fields = left.fields @ rightFields
+      Stdlib.List.fold left.rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun output ->
+        __source ctx (__scope left.fields row outers) join |> Stdlib.Result.andThen (fun right ->
+          Stdlib.List.fold right.rows (Ok []) (fun result other -> result |> Stdlib.Result.andThen (fun matched ->
+            let values = row @ other
+            __matches ctx (__scope fields values outers) None join.predicate |> Stdlib.Result.map (fun yes -> if yes then matched @ [values] else matched)))
+          |> Stdlib.Result.map (fun matched -> output @ (if join.kind == "left" && Stdlib.List.isEmpty matched then [row @ __nulls rightFields] else matched)))))
+      |> Stdlib.Result.map (fun rows -> __Relation { fields = fields, rows = rows }))))
+let __filter (ctx: __Context) (relation: __Relation) (predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  Stdlib.List.fold relation.rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun rows ->
+    __matches ctx (__scope relation.fields row outers) None predicate |> Stdlib.Result.map (fun yes -> if yes then rows @ [row] else rows)))
+  |> Stdlib.Result.map (fun rows -> { relation with rows = rows })
+let __addGroup (groups: List<__Group>) (key: List<Stdlib.Sqlite.Value>) (row: List<Stdlib.Sqlite.Value>) : List<__Group> =
+  match groups with
+  | [] -> [__Group { key = key, rows = [row] }]
+  | first :: rest -> if __compareRow first.key key == 0 then [{ first with rows = first.rows @ [row] }] @ rest else [first] @ __addGroup rest key row
+let __groups (ctx: __Context) (relation: __Relation) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<List<__Group>,String> =
+  if Stdlib.List.isEmpty query.group then
+    if __aggregateQuery query then Ok [__Group { key = [], rows = relation.rows }]
+    else Ok (Stdlib.List.map relation.rows (fun row -> __Group { key = [], rows = [row] }))
+  else Stdlib.List.fold relation.rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun groups ->
+    __values ctx (__scope relation.fields row outers) None query.group |> Stdlib.Result.map (fun key -> __addGroup groups key row)))
+let __orderValues (ctx: __Context) (scope: __Scope) (group: Stdlib.Option.Option<List<List<Stdlib.Sqlite.Value>>>) (fields: List<__Field>)
+  (values: List<Stdlib.Sqlite.Value>) (order: List<(Stdlib.Sqlite.__Sql.__Expr * Bool)>) : Stdlib.Result.Result<List<Stdlib.Sqlite.Value>,String> =
+  Stdlib.List.fold order (Ok []) (fun result (expr,_) -> result |> Stdlib.Result.andThen (fun keys ->
+    __orderIndex fields expr |> Stdlib.Result.andThen (fun index ->
+      (match index with | None -> __scalar ctx scope group expr | Some index -> match Stdlib.List.getAt values index with | None -> Error "SQLite: invalid ORDER BY slot" | Some value -> Ok value)
+      |> Stdlib.Result.map (fun value -> keys @ [value]))))
+let __orderCompare (order: List<(Stdlib.Sqlite.__Sql.__Expr * Bool)>) (a: List<Stdlib.Sqlite.Value>) (b: List<Stdlib.Sqlite.Value>) : Int =
+  match (order,a,b) with
+  | ((_,descending) :: order,x :: xs,y :: ys) -> let cmp = Stdlib.Sqlite.__Eval.__compare x y in
+    if cmp == 0 then __orderCompare order xs ys else if descending then 0 - cmp else cmp
+  | _ -> 0
+let __appendProjected (rows: List<__Projected>) (row: __Projected) : List<__Projected> =
+  if Stdlib.List.any rows (fun old -> __compareRow old.values row.values == 0) then rows else rows @ [row]
+let __limit (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<Stdlib.Option.Option<Int>,String> =
+  match query.limit with
+  | None -> Ok None
+  | Some expr -> __scalar ctx (__scope [] [] outers) None expr |> Stdlib.Result.andThen (fun value ->
+    match Stdlib.Sqlite.__Eval.__numeric value with
+    | Int n -> Ok (if n < 0L then None else Some (Stdlib.Int.fromInt64 n))
+    | Real f ->
+      if Stdlib.Float.isNaN f || f < -9223372036854775808.0 || f >= 9223372036854775808.0 then Error "SQLite: LIMIT datatype mismatch"
+      else let n = Stdlib.Int.fromFloat f in if Stdlib.Int.toFloat n != f then Error "SQLite: LIMIT datatype mismatch" else Ok (if n < 0 then None else Some n)
+    | _ -> Error "SQLite: LIMIT datatype mismatch")
+let __executeCore (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  __from ctx query.from_ outers |> Stdlib.Result.andThen (fun relation -> __projection relation.fields query.fields |> Stdlib.Result.andThen (fun projection ->
+    let fields = __outputFields (__scope relation.fields (__nulls relation.fields) outers) projection
+    __filter ctx relation query.predicate outers |> Stdlib.Result.andThen (fun relation -> __groups ctx relation query outers |> Stdlib.Result.andThen (fun groups ->
+      Stdlib.List.fold groups (Ok []) (fun result group -> result |> Stdlib.Result.andThen (fun output ->
+        let row = Stdlib.List.head group.rows |> Stdlib.Option.withDefault (__nulls relation.fields)
+        let scope = __scope relation.fields row outers
+        let aggregate = if __aggregateQuery query then Some group.rows else None
+        __matches ctx scope aggregate query.having |> Stdlib.Result.andThen (fun yes ->
+          if Stdlib.Bool.not yes then Ok output
+          else __values ctx scope aggregate (Stdlib.List.map projection (fun (expr,_) -> expr)) |> Stdlib.Result.andThen (fun values ->
+            __orderValues ctx scope aggregate fields values query.order |> Stdlib.Result.map (fun keys -> output @ [__Projected { values = values, keys = keys }])))))
+      |> Stdlib.Result.andThen (fun projected ->
+        let projected = if query.distinct then Stdlib.List.fold projected [] __appendProjected else projected
+        Stdlib.List.sortByComparator projected (fun a b -> __orderCompare query.order a.keys b.keys))
+      |> Stdlib.Result.andThen (fun projected -> __limit ctx query outers |> Stdlib.Result.map (fun limit ->
+        let projected = match limit with | None -> projected | Some count -> Stdlib.List.take projected count
+        __Relation { fields = fields, rows = Stdlib.List.map projected (fun row -> row.values) }))))))
+
+let __applyCompoundTail (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (relation: __Relation) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  Stdlib.List.fold relation.rows (Ok []) (fun result values -> result |> Stdlib.Result.andThen (fun projected ->
+    __orderValues ctx (__scope relation.fields values outers) None relation.fields values query.order |> Stdlib.Result.map (fun keys -> projected @ [__Projected { values = values, keys = keys }])))
+  |> Stdlib.Result.andThen (fun projected -> Stdlib.List.sortByComparator projected (fun a b -> __orderCompare query.order a.keys b.keys))
+  |> Stdlib.Result.andThen (fun projected -> __limit ctx query outers |> Stdlib.Result.map (fun limit ->
+    let projected = match limit with | None -> projected | Some count -> Stdlib.List.take projected count
+    { relation with rows = Stdlib.List.map projected (fun row -> row.values) }))
+let __executeBody (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  if Stdlib.List.isEmpty query.compounds then __executeCore ctx query outers
+  else __executeCore ctx { query with order = [], limit = None, compounds = [] } outers |> Stdlib.Result.andThen (fun first ->
+    Stdlib.List.fold query.compounds (Ok first) (fun result (all,branch) -> result |> Stdlib.Result.andThen (fun left ->
+      __executeCore ctx branch outers |> Stdlib.Result.map (fun right ->
+        { left with rows = if all then left.rows @ right.rows else Stdlib.List.fold (left.rows @ right.rows) [] __appendUnique })))
+    |> Stdlib.Result.andThen (fun relation -> __applyCompoundTail ctx query relation outers))
+
+let __referencesExpr (expr: Stdlib.Sqlite.__Sql.__Expr) : List<String> =
+  match expr with
+  | Subquery query -> __references query
+  | Exists query -> __references query
+  | InQuery (left,query) -> __referencesExpr left @ __references query
+  | InList (left,values) -> __referencesExpr left @ Stdlib.List.flatten (Stdlib.List.map values __referencesExpr)
+  | Binary (left,_,right) -> __referencesExpr left @ __referencesExpr right
+  | Unary (_,inner) -> __referencesExpr inner
+  | Cast (inner,_) -> __referencesExpr inner
+  | Case (arms,fallback) -> __referencesExpr fallback @ Stdlib.List.flatten (Stdlib.List.map arms (fun (a,b) -> __referencesExpr a @ __referencesExpr b))
+  | Call (_,args) -> Stdlib.List.flatten (Stdlib.List.map args __referencesExpr)
+  | Tuple args -> Stdlib.List.flatten (Stdlib.List.map args __referencesExpr)
+  | _ -> []
+let __optionalExpr (expr: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>) : List<Stdlib.Sqlite.__Sql.__Expr> = match expr with | None -> [] | Some expr -> [expr]
+let __references (query: Stdlib.Sqlite.__Sql.__Select) : List<String> =
+  let sources = Stdlib.List.flatten (Stdlib.List.map query.from_ (fun join ->
+    (match join.source with | Table (name,None) -> [name] | Table (_,Some args) -> Stdlib.List.flatten (Stdlib.List.map args __referencesExpr) | Derived query -> __references query) @
+      Stdlib.List.flatten (Stdlib.List.map (__optionalExpr join.predicate) __referencesExpr)))
+  let expressions = Stdlib.List.map query.fields (fun (expr,_) -> expr) @ query.group @ Stdlib.List.map query.order (fun (expr,_) -> expr) @
+    __optionalExpr query.predicate @ __optionalExpr query.having @ __optionalExpr query.limit
+  sources @ Stdlib.List.flatten (Stdlib.List.map expressions __referencesExpr) @
+    Stdlib.List.flatten (Stdlib.List.map query.compounds (fun (_,query) -> __references query)) @
+    Stdlib.List.flatten (Stdlib.List.map query.ctes (fun cte -> __references cte.query))
+let __newRows (existing: List<List<Stdlib.Sqlite.Value>>) (rows: List<List<Stdlib.Sqlite.Value>>) : List<List<Stdlib.Sqlite.Value>> =
+  Stdlib.List.fold rows [] (fun output row ->
+    if Stdlib.List.any existing (fun old -> __compareRow old row == 0) then output else __appendUnique output row)
+let __recursiveLoop (ctx: __Context) (name: String) (fields: List<__Field>) (branches: List<(Bool * Stdlib.Sqlite.__Sql.__Select)>)
+  (all: Bool) (rows: List<List<Stdlib.Sqlite.Value>>) (delta: List<List<Stdlib.Sqlite.Value>>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>)
+  : Stdlib.Result.Result<__Relation,String> =
+  if Stdlib.List.isEmpty delta then Ok (__Relation { fields = fields, rows = rows })
+  else if Stdlib.List.length rows > 1000000 then Error "SQLite: recursive query row budget exceeded"
+  else
+    let ctx = { ctx with tables = Stdlib.Dict.setOverridingDuplicates ctx.tables (__lower name) (__Relation { fields = fields, rows = delta }) }
+    Stdlib.List.fold branches (Ok []) (fun result (_,query) -> result |> Stdlib.Result.andThen (fun output ->
+      __executeBody ctx query outers |> Stdlib.Result.map (fun relation -> output @ relation.rows)))
+    |> Stdlib.Result.andThen (fun generated ->
+      let next = if all then generated else __newRows rows generated
+      __recursiveLoop ctx name fields branches all (rows @ next) next outers)
+let __cte (ctx: __Context) (cte: Stdlib.Sqlite.__Sql.__Cte) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  let self = Stdlib.List.any (__references cte.query) (fun name -> __lower name == __lower cte.name)
+  if Stdlib.Bool.not self then __execute ctx cte.query outers |> Stdlib.Result.andThen (fun relation -> __rename relation.fields cte.columns |> Stdlib.Result.map (fun fields -> { relation with fields = fields }))
+  else
+    let anchor = { cte.query with compounds = [], order = [], limit = None }
+    __executeBody ctx anchor outers |> Stdlib.Result.andThen (fun relation -> __rename relation.fields cte.columns |> Stdlib.Result.andThen (fun fields ->
+      if Stdlib.List.isEmpty cte.query.compounds then Error "SQLite: recursive CTE needs an anchor and recursive branch"
+      else
+        let all = Stdlib.List.all cte.query.compounds (fun (all,_) -> all)
+        let noneAll = Stdlib.List.all cte.query.compounds (fun (all,_) -> Stdlib.Bool.not all)
+        if Stdlib.Bool.not all && Stdlib.Bool.not noneAll then Error "SQLite: mixed recursive UNION operators are unsupported"
+        else
+          let rows = if all then relation.rows else Stdlib.List.fold relation.rows [] __appendUnique
+          __recursiveLoop ctx cte.name fields cte.query.compounds all rows rows outers))
+let __withCtes (ctx: __Context) (ctes: List<Stdlib.Sqlite.__Sql.__Cte>) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Context,String> =
+  Stdlib.List.fold ctes (Ok ctx) (fun result cte -> result |> Stdlib.Result.andThen (fun ctx ->
+    __cte ctx cte outers |> Stdlib.Result.map (fun relation -> { ctx with tables = Stdlib.Dict.setOverridingDuplicates ctx.tables (__lower cte.name) relation })))
+let __execute (ctx: __Context) (query: Stdlib.Sqlite.__Sql.__Select) (outers: List<(List<__Field> * List<Stdlib.Sqlite.Value>)>) : Stdlib.Result.Result<__Relation,String> =
+  __describe ctx query outers |> Stdlib.Result.andThen (fun _ -> __withCtes ctx query.ctes outers)
+  |> Stdlib.Result.andThen (fun ctx -> __executeBody ctx query outers)

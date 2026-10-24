@@ -57,8 +57,16 @@ with another SQLite implementation.
 Records are limited to 64 MiB. The engine scans tables rather than using a query
 optimizer. Query results are fully materialized, matching the public API.
 
-Unsupported execution features return errors: views/triggers, joins, subqueries,
-recursive queries, general aggregates/grouping, INSERT SELECT, operational pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
+The relational evaluator supports inner/left/cross joins, derived tables, scalar
+and correlated subqueries, EXISTS, scalar/tuple IN and NOT IN, grouping with COUNT
+and MAX, UNION/UNION ALL, and materialized/recursive CTEs. Recursive UNION removes
+duplicates across iterations and terminates on cycles. Recursive output has a
+one-million-row resource limit. Named and ordinal ordering, aliases and DISTINCT
+are handled before LIMIT. JSON table inputs expose key/value reads; wildcard
+projection of that restricted virtual source returns an error.
+
+Unsupported execution features return errors: views/triggers, relational expressions
+in writes, INSERT SELECT, operational pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
 rowid alias through `UPDATE`. Reference clauses are preserved in the catalog;
 foreign-key enforcement/checking is pending. Writes to stores containing views
 or triggers are rejected. This subset does not implement all SQLite numeric-string
@@ -123,8 +131,9 @@ Remaining milestones, in dependency order:
    Column additions, column discovery and index recreation are covered.
    Index maintenance currently rebuilds affected trees;
    incremental index deletion/rebalancing remains a performance improvement.
-3. Aliases, joins, DISTINCT, subqueries/tuple IN, grouping/aggregates and recursive
-   CTE execution needed by dependency and branch queries.
+3. Complete differential corpus coverage for relational queries. Focused joins,
+   correlated and tuple lookups, grouping, JSON joins and recursive cycle cases pass;
+   full interpreter query/workflow parity is still being measured.
 4. INSERT SELECT and expression/subquery writes. Multirow VALUES, REPLACE and
    targeted UPSERT/excluded semantics are covered.
 5. Long-lived connections with SQLite locking, WAL, checkpointing, data_version,

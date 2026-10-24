@@ -161,6 +161,7 @@ packages/darklang/stdlib/sqlite/__sql.dark
 packages/darklang/stdlib/sqlite/__eval.dark
 packages/darklang/stdlib/sqlite/__index.dark
 packages/darklang/stdlib/sqlite/__schema.dark
+packages/darklang/stdlib/sqlite/__query.dark
 packages/darklang/stdlib/sqlite/__engine.dark
 packages/darklang/stdlib/__builtin/__sqlite.dark
 packages/darklang/stdlib/stream.dark

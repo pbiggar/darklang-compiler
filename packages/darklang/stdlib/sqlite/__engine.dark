@@ -6,7 +6,6 @@ type __IndexInfo = { definition: Stdlib.Sqlite.__Schema.__Index, root: Int, sche
 type __Table = { name: String, root: Int, columns: List<Stdlib.Sqlite.__Sql.__Column>, schemaKey: Int,
   definition: Stdlib.Sqlite.__Schema.__Definition, indexes: List<__IndexInfo> }
 type __Row = { key: Int, values: Dict<String, Stdlib.Sqlite.Value> }
-type __Projection = { output: Dict<String, Stdlib.Sqlite.Value>, keys: List<Stdlib.Sqlite.Value> }
 type __Outcome = { state: Stdlib.Sqlite.__Pager.__State, affected: Int, rows: List<Dict<String, Stdlib.Sqlite.Value>> }
 
 let __lower (s: String) : String = Stdlib.String.toLowercase s
@@ -212,6 +211,9 @@ let __createDefinition (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>
       Stdlib.List.fold key.fields (Ok ()) (fun result expr -> result |> Stdlib.Result.andThen (fun _ ->
         Stdlib.Sqlite.__Eval.__validate definition.columns (Dict {}) false expr)))))
   |> Stdlib.Result.andThen (fun _ ->
+    Stdlib.List.fold definition.columns (Ok ()) (fun result column -> result |> Stdlib.Result.andThen (fun _ ->
+      match column.fallback with | None -> Ok () | Some expr -> Stdlib.Sqlite.__Eval.__validate [] (Dict {}) false expr)))
+  |> Stdlib.Result.andThen (fun _ ->
     if Stdlib.String.startsWith (__lower definition.name) "sqlite_" then Error "SQLite: reserved table name"
     else if Stdlib.List.any tables (fun t -> __lower t.name == __lower definition.name) then
       if definition.ignore then Ok (__Outcome { state = s, affected = -1, rows = [] }) else Error "SQLite: table already exists"
@@ -250,71 +252,6 @@ let __createIndex (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (de
         Stdlib.Sqlite.__Index.__empty s root |> Stdlib.Result.andThen (fun s -> __rebuildIndex s table (__IndexInfo { definition = definition, root = root, schemaKey = 0 }))
         |> Stdlib.Result.andThen (fun s -> __catalogAdd s "index" definition.name definition.table root (Stdlib.Sqlite.Value.Text definition.sql))
         |> Stdlib.Result.andThen __bumpSchema |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] })))
-
-let __project (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<String, Stdlib.Sqlite.Value>) (fields: List<(Stdlib.Sqlite.__Sql.__Expr * String)>) (row: __Row)
-  : Stdlib.Result.Result<Dict<String, Stdlib.Sqlite.Value>, String> =
-  Stdlib.List.fold fields (Ok (Dict {})) (fun result (expr,alias) -> result |> Stdlib.Result.andThen (fun output ->
-    Stdlib.Sqlite.__Eval.__eval columns row.values params expr |> Stdlib.Result.map (fun value -> Stdlib.Dict.setOverridingDuplicates output alias value)))
-
-let __orderCompare (order: List<(Stdlib.Sqlite.__Sql.__Expr * Bool)>) (a: List<Stdlib.Sqlite.Value>) (b: List<Stdlib.Sqlite.Value>) : Int =
-  match (order,a,b) with
-  | ((_,desc) :: rest,x :: xs,y :: ys) -> let cmp = Stdlib.Sqlite.__Eval.__compare x y in
-    if cmp == 0 then __orderCompare rest xs ys else if desc then 0 - cmp else cmp
-  | _ -> 0
-
-let __sameOutput (a: Dict<String,Stdlib.Sqlite.Value>) (b: Dict<String,Stdlib.Sqlite.Value>) : Bool =
-  Stdlib.List.all (Stdlib.Dict.toList a) (fun (name,value) -> match Stdlib.Dict.get b name with
-    | None -> false | Some other -> Stdlib.Sqlite.__Eval.__compare value other == 0)
-let __appendDistinct (rows: List<__Projection>) (row: __Projection) : List<__Projection> =
-  if Stdlib.List.any rows (fun old -> __sameOutput old.output row.output) then rows else rows @ [row]
-
-let __selectRowsLimited (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (select: Stdlib.Sqlite.__Sql.__Select) (limit: Stdlib.Option.Option<Int>)
-  : Stdlib.Result.Result<__Outcome, String> =
-  let fields = Stdlib.List.fold select.fields [] (fun fields (expr,alias) ->
-    match expr with
-    | Star -> fields @ Stdlib.List.map columns (fun c -> (Stdlib.Sqlite.__Sql.__Expr.Column c.name,c.name))
-    | _ -> fields @ [(expr,alias)])
-  let aggregate = Stdlib.List.any fields (fun (expr,_) -> match expr with | Count -> true | _ -> false)
-  let aliases = Stdlib.List.map fields (fun (expr,name) -> Stdlib.Sqlite.__Sql.__Column { name = name, affinity = Stdlib.Sqlite.__Eval.__affinity columns expr, primary = false, notNull = false, fallback = None })
-  let validations = Stdlib.List.map fields (fun (expr,_) -> Stdlib.Sqlite.__Eval.__validate columns params true expr) @
-    Stdlib.List.map select.order (fun (expr,_) -> Stdlib.Sqlite.__Eval.__validate (columns @ aliases) params false expr) @
-    [__validatePredicate columns params select.predicate]
-  Stdlib.List.fold validations (Ok ()) (fun result check -> result |> Stdlib.Result.andThen (fun _ -> check))
-  |> Stdlib.Result.andThen (fun _ -> __filtered columns rows params select.predicate)
-  |> Stdlib.Result.andThen (fun rows ->
-    if aggregate then
-      if Stdlib.List.any fields (fun (expr,_) -> match expr with | Count -> false | _ -> true) || Stdlib.Bool.not (Stdlib.List.isEmpty select.order) then Error "SQLite: only standalone count(*) aggregates are supported"
-      else
-        let row = Stdlib.List.fold fields (Dict {}) (fun output (_,alias) ->
-          Stdlib.Dict.setOverridingDuplicates output alias (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 (Stdlib.List.length rows))))
-        Ok (__Outcome { state = s, affected = -1, rows = if limit == Some 0 then [] else [row] })
-    else
-      Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun acc ->
-        __project columns params fields row |> Stdlib.Result.andThen (fun output ->
-          let values = Stdlib.List.fold (Stdlib.Dict.toList output) row.values (fun values (name,value) -> Stdlib.Dict.setOverridingDuplicates values (__lower name) value)
-          __values (columns @ aliases) values params (Stdlib.List.map select.order (fun (expr,_) -> expr))
-          |> Stdlib.Result.map (fun keys -> acc @ [__Projection { output = output, keys = keys }]))))
-      |> Stdlib.Result.andThen (fun projected ->
-        let projected = if select.distinct then Stdlib.List.fold projected [] __appendDistinct else projected
-        Stdlib.List.sortByComparator projected (fun a b -> __orderCompare select.order a.keys b.keys))
-      |> Stdlib.Result.map (fun projected ->
-        let projected = match limit with | None -> projected | Some n -> Stdlib.List.take projected n
-        __Outcome { state = s, affected = -1, rows = Stdlib.List.map projected (fun row -> row.output) }))
-
-let __selectRows (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>)
-  (params: Dict<String,Stdlib.Sqlite.Value>) (select: Stdlib.Sqlite.__Sql.__Select) : Stdlib.Result.Result<__Outcome,String> =
-  (match select.limit with
-   | None -> Ok None
-   | Some expr -> Stdlib.Sqlite.__Eval.__validate [] params false expr |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Eval.__eval [] (Dict {}) params expr)
-     |> Stdlib.Result.andThen (fun value ->
-       match Stdlib.Sqlite.__Eval.__numeric value with
-       | Int n -> Ok (if n < 0L then None else Some (Stdlib.Int.fromInt64 n))
-       | Real f ->
-         if f < -9223372036854775808.0 || f >= 9223372036854775808.0 then Error "SQLite: LIMIT datatype mismatch"
-         else let n = Stdlib.Int.fromFloat f in
-           if Stdlib.Int.toFloat n != f then Error "SQLite: LIMIT datatype mismatch" else Ok (if n < 0 then None else Some n)
-       | _ -> Error "SQLite: LIMIT datatype mismatch"))
-  |> Stdlib.Result.andThen (fun limit -> __selectRowsLimited s columns rows params select limit)
 
 let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<__Row>) (params: Dict<String, Stdlib.Sqlite.Value>) (assignments: List<(String * Stdlib.Sqlite.__Sql.__Expr)>)
   : Stdlib.Result.Result<__Outcome, String> =
@@ -475,17 +412,47 @@ let __jsonEach (args: List<Stdlib.Sqlite.Value>) : Stdlib.Result.Result<(List<St
       (columns,rows))
   | _ -> Error "SQLite: json_each requires one JSON input"
 
-let __selectRelation (s: Stdlib.Sqlite.__Pager.__State) (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>)
-  (params: Dict<String,Stdlib.Sqlite.Value>) (select: Stdlib.Sqlite.__Sql.__Select) (name: String) : Stdlib.Result.Result<__Outcome,String> =
-  let prefix = __lower (Stdlib.Option.withDefault select.alias name) + "."
-  let rowid = Stdlib.Sqlite.__Sql.__Column { name = "rowid", affinity = "integer", primary = false, notNull = false, fallback = None }
-  let qualified = columns @ Stdlib.List.map (columns @ [rowid]) (fun column -> { column with name = prefix + column.name })
-  let rows = Stdlib.List.map rows (fun row ->
-    { row with values = Stdlib.List.fold (Stdlib.Dict.toList row.values) row.values (fun values (name,value) -> Stdlib.Dict.setOverridingDuplicates values (prefix + name) value) })
-  let fields = Stdlib.List.fold select.fields [] (fun fields (expr,alias) -> match expr with
-    | Star -> fields @ Stdlib.List.map columns (fun column -> (Stdlib.Sqlite.__Sql.__Expr.Column column.name,column.name))
-    | _ -> fields @ [(expr,alias)])
-  __selectRows s qualified rows params { select with fields = fields }
+let __relation (columns: List<Stdlib.Sqlite.__Sql.__Column>) (rows: List<__Row>) (rowids: Bool) : Stdlib.Result.Result<Stdlib.Sqlite.__Query.__Relation,String> =
+  let fields = Stdlib.List.map columns (fun column -> Stdlib.Sqlite.__Query.__field column.name column.affinity)
+  let hiddenNames = if rowids then Stdlib.List.filter ["rowid","_rowid_","oid"] (fun name -> Stdlib.Bool.not (Stdlib.List.any columns (fun c -> __lower c.name == name))) else []
+  let hidden = Stdlib.List.map hiddenNames (fun name ->
+    let field = Stdlib.Sqlite.__Query.__field name "integer"
+    { field with hidden = true })
+  Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun output ->
+    Stdlib.List.fold columns (Ok []) (fun result column -> result |> Stdlib.Result.andThen (fun values -> Stdlib.Sqlite.__Eval.__lookup row.values column.name |> Stdlib.Result.map (fun value -> values @ [value])))
+    |> Stdlib.Result.map (fun values -> output @ [values @ Stdlib.List.map hiddenNames (fun _ -> Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 row.key))])))
+  |> Stdlib.Result.map (fun rows -> Stdlib.Sqlite.__Query.__Relation { fields = fields @ hidden, rows = rows })
+
+let __catalogRelation (s: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * Stdlib.Sqlite.__Query.__Relation),String> =
+  let columns = __virtualColumns [("type","text"),("name","text"),("tbl_name","text"),("rootpage","integer"),("sql","text")]
+  Stdlib.Sqlite.__Btree.__scan s 1 |> Stdlib.Result.andThen (fun (s,entries) ->
+    Stdlib.List.fold entries (Ok []) (fun result entry -> result |> Stdlib.Result.andThen (fun rows ->
+      Stdlib.Sqlite.__Codec.__decodeRecord entry.payload |> Stdlib.Result.andThen (fun values ->
+        if Stdlib.List.length values != 5 then Error "SQLite: malformed schema record"
+        else
+          let pairs = Stdlib.List.map2shortest columns values (fun column value -> (__lower column.name,value))
+          Ok (rows @ [__Row { key = entry.key, values = Stdlib.Dict.fromListOverwritingDuplicates pairs }]))))
+    |> Stdlib.Result.andThen (fun rows -> __relation columns rows true |> Stdlib.Result.map (fun relation -> (s,relation))))
+
+let __queryContext (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (references: List<String>) (params: Dict<String,Stdlib.Sqlite.Value>)
+  : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * Stdlib.Sqlite.__Query.__Context),String> =
+  let references = Stdlib.List.fold references [] (fun names name -> if Stdlib.List.contains names (__lower name) then names else names @ [__lower name])
+  Stdlib.List.fold references (Ok ((s,Dict {}))) (fun result name -> result |> Stdlib.Result.andThen (fun (s,sources) ->
+    if name == "sqlite_schema" || name == "sqlite_master" then __catalogRelation s |> Stdlib.Result.map (fun (s,relation) -> (s,Stdlib.Dict.set sources name relation))
+    else match __find tables name with
+      | Error _ -> Ok ((s,sources))
+      | Ok table -> __rows s table |> Stdlib.Result.andThen (fun (s,rows) -> __relation table.columns rows true |> Stdlib.Result.map (fun relation -> (s,Stdlib.Dict.set sources name relation)))))
+  |> Stdlib.Result.map (fun (s,sources) ->
+    let context = Stdlib.Sqlite.__Query.__Context { tables = sources, params = params, virtual_ = fun name args ->
+      (if __lower name == "pragma_table_info" then __tableInfo tables args
+       else if __lower name == "json_each" then __jsonEach args else Error ("SQLite: unsupported table function " + name))
+      |> Stdlib.Result.andThen (fun (columns,rows) -> __relation columns rows false)
+      |> Stdlib.Result.map (fun relation ->
+        if __lower name == "json_each" then { relation with fields = Stdlib.List.map relation.fields (fun field -> { field with restricted = true }) } else relation) }
+    (s,context))
+
+let __queryOutput (relation: Stdlib.Sqlite.__Query.__Relation) : List<Dict<String,Stdlib.Sqlite.Value>> =
+  Stdlib.List.map relation.rows (fun row -> Stdlib.Dict.fromListOverwritingDuplicates (Stdlib.List.map2shortest relation.fields row (fun field value -> (field.name,value))))
 
 let __runRaw (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String, Stdlib.Sqlite.Value>)
   : Stdlib.Result.Result<__Outcome, String> =
@@ -526,20 +493,9 @@ let __runRaw (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.
       Stdlib.List.fold checks (Ok ()) (fun result check -> result |> Stdlib.Result.andThen (fun _ -> check))
       |> Stdlib.Result.andThen (fun _ -> __rows s table) |> Stdlib.Result.andThen (fun (s,rows) ->
         __filtered table.columns rows params predicate |> Stdlib.Result.andThen (fun rows -> __updateRows s table rows params assignments)))
-    | Select select ->
-      (match select.table with
-      | None -> __selectRows s [] [__Row { key = 0, values = Dict {} }] params select
-      | Some name ->
-        match select.arguments with
-        | None -> __find tables name |> Stdlib.Result.andThen (fun table ->
-          __rows s table |> Stdlib.Result.andThen (fun (s,rows) -> __selectRelation s table.columns rows params select table.name))
-        | Some args ->
-          __values [] (Dict {}) params args |> Stdlib.Result.andThen (fun args ->
-            (if __lower name == "pragma_table_info" then __tableInfo tables args
-             else if __lower name == "json_each" then
-               if Stdlib.List.any select.fields (fun (expr,_) -> match expr with | Star -> true | _ -> false) then Error "SQLite: json_each wildcard is unsupported" else __jsonEach args
-             else Error ("SQLite: unsupported table function " + name))
-            |> Stdlib.Result.andThen (fun (columns,rows) -> __selectRelation s columns rows params select name))))
+    | Select query ->
+      __queryContext s tables (Stdlib.Sqlite.__Query.__references query) params |> Stdlib.Result.andThen (fun (s,context) ->
+        Stdlib.Sqlite.__Query.__execute context query [] |> Stdlib.Result.map (fun relation -> __Outcome { state = s, affected = -1, rows = __queryOutput relation })))
 
 // Mutations maintain all affected index trees before their page transaction can
 // commit. Queries continue to use scans until query planning is introduced.

@@ -134,6 +134,13 @@ let __expressionText (expr: Stdlib.Sqlite.__Sql.__Expr) : String =
   | Unary (op,inner) -> op + __expressionText inner
   | Binary (left,op,right) -> "(" + __expressionText left + " " + op + " " + __expressionText right + ")"
   | Cast (inner,kind) -> "CAST(" + __expressionText inner + " AS " + kind + ")"
+  | Subquery _ -> "<subquery>"
+  | Exists _ -> "<exists>"
+  | InList (_,_) -> "<in>"
+  | InQuery (_,_) -> "<in>"
+  | Tuple _ -> "<tuple>"
+  | QualifiedStar name -> __quote name 34L + ".*"
+  | Slot _ -> "<query-slot>"
   | Count -> "count(*)"
   | Star -> "*"
   | Case (arms,fallback) -> "CASE " + Stdlib.String.join (Stdlib.List.map arms (fun (condition,value) -> "WHEN " + __expressionText condition + " THEN " + __expressionText value)) " " + " ELSE " + __expressionText fallback + " END"
