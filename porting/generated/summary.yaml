@@ -39,8 +39,8 @@ dispositions:
     run: 223
   tests:
     blocked: 46
-    run: 1684
-    xfail: 629
+    run: 1686
+    xfail: 627
 reasons:
   packages:
     aot-type-error: 8
@@ -76,7 +76,7 @@ reasons:
     compiler-leak: 1
     interpreter-fixture: 45
     test-counter: 7
-    upstream-dependency: 365
+    upstream-dependency: 363
 expected_failures:
   aot-rejection:
     phases:
@@ -118,12 +118,12 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/string.dark: 2
   missing-support:
     phases:
-      compile: 397
+      compile: 395
       runtime: 14
     reasons:
       compiler-gap: 39
       test-counter: 7
-      upstream-dependency: 365
+      upstream-dependency: 363
     sources:
       upstream/packages/darklang/tests/cli/builtinGroups.dark: 3
       upstream/packages/darklang/tests/cli/commandCompletions.dark: 8
@@ -136,7 +136,7 @@ expected_failures:
       upstream/packages/darklang/tests/cli/permissionsDisplay.dark: 2
       upstream/packages/darklang/tests/cli/permissionsGrammar.dark: 15
       upstream/packages/darklang/tests/cli/propagate.dark: 1
-      upstream/packages/darklang/tests/cli/tests-tui.dark: 24
+      upstream/packages/darklang/tests/cli/tests-tui.dark: 23
       upstream/packages/darklang/tests/cli/tests-workbench.dark: 2
       upstream/packages/darklang/tests/cli/tracesRendering.dark: 9
       upstream/packages/darklang/tests/language/apply.dark: 2
@@ -168,7 +168,7 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/httpclient.dark: 3
       upstream/packages/darklang/tests/stdlib/json.dark: 5
       upstream/packages/darklang/tests/stdlib/list.dark: 11
-      upstream/packages/darklang/tests/stdlib/live.dark: 2
+      upstream/packages/darklang/tests/stdlib/live.dark: 1
       upstream/packages/darklang/tests/stdlib/pretty.dark: 1
       upstream/packages/darklang/tests/stdlib/result.dark: 4
       upstream/packages/darklang/tests/stdlib/sqlite.dark: 7

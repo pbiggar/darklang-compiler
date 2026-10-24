@@ -83,7 +83,6 @@ test canvasStylingIsZeroWidth =
     Stdlib.Test.fail $"Expected SGR to consume no columns, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Canvas.compose'" class=missing-support reason=upstream-dependency
 test canvasUntouchedRowsAreEmpty =
   let region = canvasRegion ()
   let spans = Darklang.Stdlib.Cli.UI.Layout.at region 0 0 "x"

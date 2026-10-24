@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 1,922 blocked, 2 excluded, 35 replace, 1,744 run |
 | stdlib | 630 blocked, 3 excluded, 1,142 replace, 223 run |
-| tests | 46 blocked, 1,684 run, 629 xfail |
+| tests | 46 blocked, 1,686 run, 627 xfail |
 
 ## Expected test failures
 
@@ -22,7 +22,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
 | `aot-rejection` | 218 | 0 | 218 |
-| `missing-support` | 397 | 14 | 411 |
+| `missing-support` | 395 | 14 | 409 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -34,7 +34,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-type-error` | 143 |
 | `missing-support` | `compiler-gap` | 39 |
 | `missing-support` | `test-counter` | 7 |
-| `missing-support` | `upstream-dependency` | 365 |
+| `missing-support` | `upstream-dependency` | 363 |
 
 ### Remaining support by source
 
@@ -53,7 +53,7 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/cli/permissionsDisplay.dark](../../../upstream/packages/darklang/tests/cli/permissionsDisplay.dark) | 2 |
 | [packages/darklang/tests/cli/permissionsGrammar.dark](../../../upstream/packages/darklang/tests/cli/permissionsGrammar.dark) | 15 |
 | [packages/darklang/tests/cli/propagate.dark](../../../upstream/packages/darklang/tests/cli/propagate.dark) | 1 |
-| [packages/darklang/tests/cli/tests-tui.dark](../../../upstream/packages/darklang/tests/cli/tests-tui.dark) | 24 |
+| [packages/darklang/tests/cli/tests-tui.dark](../../../upstream/packages/darklang/tests/cli/tests-tui.dark) | 23 |
 | [packages/darklang/tests/cli/tests-workbench.dark](../../../upstream/packages/darklang/tests/cli/tests-workbench.dark) | 2 |
 | [packages/darklang/tests/cli/tracesRendering.dark](../../../upstream/packages/darklang/tests/cli/tracesRendering.dark) | 9 |
 | [packages/darklang/tests/language/apply.dark](../../../upstream/packages/darklang/tests/language/apply.dark) | 2 |
@@ -85,7 +85,7 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/stdlib/httpclient.dark](../../../upstream/packages/darklang/tests/stdlib/httpclient.dark) | 3 |
 | [packages/darklang/tests/stdlib/json.dark](../../../upstream/packages/darklang/tests/stdlib/json.dark) | 5 |
 | [packages/darklang/tests/stdlib/list.dark](../../../upstream/packages/darklang/tests/stdlib/list.dark) | 11 |
-| [packages/darklang/tests/stdlib/live.dark](../../../upstream/packages/darklang/tests/stdlib/live.dark) | 2 |
+| [packages/darklang/tests/stdlib/live.dark](../../../upstream/packages/darklang/tests/stdlib/live.dark) | 1 |
 | [packages/darklang/tests/stdlib/pretty.dark](../../../upstream/packages/darklang/tests/stdlib/pretty.dark) | 1 |
 | [packages/darklang/tests/stdlib/result.dark](../../../upstream/packages/darklang/tests/stdlib/result.dark) | 4 |
 | [packages/darklang/tests/stdlib/sqlite.dark](../../../upstream/packages/darklang/tests/stdlib/sqlite.dark) | 7 |
@@ -140,7 +140,7 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `compiler-leak` | 1 |
 | tests | `interpreter-fixture` | 45 |
 | tests | `test-counter` | 7 |
-| tests | `upstream-dependency` | 365 |
+| tests | `upstream-dependency` | 363 |
 
 ## Separate capability assessments
 
