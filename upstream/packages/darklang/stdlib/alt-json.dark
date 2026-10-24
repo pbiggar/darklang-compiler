@@ -1,7 +1,7 @@
 module Darklang.Stdlib.AltJson
 
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Imported Json has distinct Integer and Float cases; the compiler substitute exposes Number of Float."
 type Json =
   | Null
   | Bool of Bool

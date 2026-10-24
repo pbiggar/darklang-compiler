@@ -9,7 +9,7 @@ module Darklang.LanguageTools.PackageManager
 /// Context for choosing among multiple locations that share the same hash.
 /// When a hash maps to multiple named locations (e.g. Person and Person2 are
 /// structurally identical), we use context to pick the best display name.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Compiler substitute PickContext contains only currentModule; the imported record also requires preferredLocation."
 type PickContext =
   { currentModule: List<String>
 
@@ -26,7 +26,7 @@ type PickContext =
     preferredLocation: Stdlib.Option.Option<ProgramTypes.PackageLocation> }
 
 module PickContext =
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Imported initializer sets preferredLocation, absent from the compiler PickContext substitute."
   val empty =
     PickContext { currentModule = [], preferredLocation = Stdlib.Option.Option.None }
 

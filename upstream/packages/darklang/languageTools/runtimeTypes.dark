@@ -54,7 +54,7 @@ module FQFnName =
       method_: String
       implFn: ImplChoice }
 
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Imported FQFnName includes TraitMethod; the compiler substitute contains only Builtin and Package."
   type FQFnName =
     | Builtin of Builtin
     | Package of Package

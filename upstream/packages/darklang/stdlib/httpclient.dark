@@ -148,7 +148,7 @@ let head (uri: String) : Stdlib.Result.Result<Response, RequestError> =
 ///
 /// The underlying socket is released when the body stream drains to
 /// completion or is explicitly closed with `Stdlib.Stream.close`.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Imported stream takes method, uri and headers; the compiler implementation additionally requires a Blob body."
 let stream
   (method: String)
   (uri: String)

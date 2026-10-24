@@ -51,7 +51,7 @@ let evaluate
   : Stdlib.Option.Option<'a> =
   Builtin.pmEvaluateValue hash
 
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Imported findByType takes branchId: Uuid; the compiler substitute takes branchId: String."
 let findByType
   (branchId: Uuid)
   (targetNamespace: String)
