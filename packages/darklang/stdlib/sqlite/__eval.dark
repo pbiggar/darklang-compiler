@@ -1,0 +1,181 @@
+// SQL value affinity, three-valued predicates and scalar expression evaluation.
+module Darklang.Stdlib.Sqlite.__Eval
+
+let __numeric (v: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
+  match v with
+  | Text s ->
+    let s = Stdlib.String.trim s
+    match Stdlib.Int64.parse s with
+    | Ok i -> Stdlib.Sqlite.Value.Int i
+    | Error _ ->
+      match Stdlib.Float.parse s with
+      | Error _ -> v
+      | Ok f ->
+        if Stdlib.Float.isNaN f || f < -9223372036854775808.0 || f >= 9223372036854775808.0 then Stdlib.Sqlite.Value.Real f
+        else let n = Stdlib.Int.fromFloat f in
+          if Stdlib.Int.toFloat n == f then
+            match Stdlib.Int.toInt64 n with | Some i -> Stdlib.Sqlite.Value.Int i | None -> Stdlib.Sqlite.Value.Real f
+          else Stdlib.Sqlite.Value.Real f
+  | Real f ->
+    if f >= -9223372036854775808.0 && f < 9223372036854775808.0 then
+      let n = Stdlib.Int.fromFloat f
+      if Stdlib.Int.toFloat n == f then
+        match Stdlib.Int.toInt64 n with | Some i -> Stdlib.Sqlite.Value.Int i | None -> v
+      else v
+    else v
+  | _ -> v
+
+let __text (v: Stdlib.Sqlite.Value) : String =
+  match v with
+  | Null -> ""
+  | Int i -> Stdlib.Int64.toString i
+  | Real f -> Stdlib.Float.toString f
+  | Text s -> s
+  | Bytes b -> Stdlib.String.fromBlobWithReplacement b
+
+let __coerce (affinity: String) (v: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
+  if affinity == "integer" || affinity == "int" || affinity == "numeric" then __numeric v
+  else if affinity == "real" then
+    match __numeric v with
+    | Int i -> Stdlib.Sqlite.Value.Real (Stdlib.Int64.toFloat i)
+    | other -> other
+  else if affinity == "text" then
+    match v with
+    | Int _ -> Stdlib.Sqlite.Value.Text (__text v)
+    | Real _ -> Stdlib.Sqlite.Value.Text (__text v)
+    | _ -> v
+  else v
+
+let __intCompare (a: Int) (b: Int) : Int = if a < b then -1 else if a > b then 1 else 0
+let __bytesCompare (a: Blob) (b: Blob) (i: Int) : Int =
+  let an = Stdlib.Blob.length a
+  let bn = Stdlib.Blob.length b
+  if i == an || i == bn then __intCompare an bn
+  else
+    let x = Stdlib.Sqlite.__Codec.__byte a i
+    let y = Stdlib.Sqlite.__Codec.__byte b i
+    if x == y then __bytesCompare a b (i + 1) else __intCompare x y
+
+let __intRealCompare (n: Int64) (f: Float) : Int =
+  if f == 1.0 / 0.0 then -1 else if f == -1.0 / 0.0 then 1
+  else
+    let truncated = Stdlib.Int.fromFloat f
+    let cmp = __intCompare (Stdlib.Int.fromInt64 n) truncated
+    if cmp != 0 then cmp
+    else let t = Stdlib.Int.toFloat truncated in if f > t then -1 else if f < t then 1 else 0
+
+let __rank (v: Stdlib.Sqlite.Value) : Int =
+  match v with | Null -> 0 | Int _ -> 1 | Real _ -> 1 | Text _ -> 2 | Bytes _ -> 3
+let __compare (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.Value) : Int =
+  match (a,b) with
+  | (Int x,Int y) -> __intCompare (Stdlib.Int.fromInt64 x) (Stdlib.Int.fromInt64 y)
+  | (Real x,Real y) -> if x < y then -1 else if x > y then 1 else 0
+  | (Int n,Real f) -> __intRealCompare n f
+  | (Real f,Int n) -> 0 - __intRealCompare n f
+  | (Text x,Text y) -> __bytesCompare (Stdlib.Blob.fromString x) (Stdlib.Blob.fromString y) 0
+  | (Bytes x,Bytes y) -> __bytesCompare x y 0
+  | _ -> __intCompare (__rank a) (__rank b)
+
+let __truth (v: Stdlib.Sqlite.Value) : Stdlib.Option.Option<Bool> =
+  match v with
+  | Null -> None
+  | Int i -> Some (i != 0L)
+  | Real f -> Some (f != 0.0)
+  | Text s -> (match Stdlib.Float.parse s with | Ok f -> Some (f != 0.0) | Error _ -> Some false)
+  | Bytes b -> (match Stdlib.Float.parse (Stdlib.String.fromBlobWithReplacement b) with | Ok f -> Some (f != 0.0) | Error _ -> Some false)
+let __bool (b: Bool) : Stdlib.Sqlite.Value = Stdlib.Sqlite.Value.Int (if b then 1L else 0L)
+
+let __lookup (row: Dict<String, Stdlib.Sqlite.Value>) (name: String) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
+  match Stdlib.Dict.get row (Stdlib.String.toLowercase name) with
+  | Some v -> Ok v
+  | None -> Error ("SQLite: no such column: " + name)
+
+let __affinity (columns: List<Stdlib.Sqlite.__Sql.__Column>) (expr: Stdlib.Sqlite.__Sql.__Expr) : String =
+  match expr with
+  | Column name ->
+    match Stdlib.List.findFirst columns (fun c -> Stdlib.String.toLowercase c.name == Stdlib.String.toLowercase name) with
+    | Some c -> c.affinity
+    | None -> if Stdlib.String.toLowercase name == "rowid" then "integer" else "blob"
+  | Cast (_,affinity) -> affinity
+  | _ -> "blob"
+
+let __binaryValue (operator: String) (a: Stdlib.Sqlite.Value) (b: Stdlib.Sqlite.Value) : Stdlib.Sqlite.Value =
+  if operator == "and" then
+    match (__truth a,__truth b) with
+    | (Some false,_) -> __bool false
+    | (_,Some false) -> __bool false
+    | (Some true,Some true) -> __bool true
+    | _ -> Stdlib.Sqlite.Value.Null
+  else if operator == "or" then
+    match (__truth a,__truth b) with
+    | (Some true,_) -> __bool true
+    | (_,Some true) -> __bool true
+    | (Some false,Some false) -> __bool false
+    | _ -> Stdlib.Sqlite.Value.Null
+  else
+    let nullA = __rank a == 0
+    let nullB = __rank b == 0
+    if nullA || nullB then
+      if operator == "is" then __bool (nullA && nullB)
+      else if operator == "is not" then __bool (nullA != nullB)
+      else Stdlib.Sqlite.Value.Null
+    else
+      let cmp = __compare a b
+      let answer =
+        if operator == "=" || operator == "==" || operator == "is" then cmp == 0
+        else if operator == "!=" || operator == "<>" || operator == "is not" then cmp != 0
+        else if operator == "<" then cmp < 0 else if operator == ">" then cmp > 0
+        else if operator == "<=" then cmp <= 0 else cmp >= 0
+      __bool answer
+
+let __eval (columns: List<Stdlib.Sqlite.__Sql.__Column>) (row: Dict<String, Stdlib.Sqlite.Value>) (params: List<String>)
+  (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Stdlib.Sqlite.Value, String> =
+  match expr with
+  | Literal v -> Ok v
+  | Column name -> __lookup row name
+  | Parameter n ->
+    match Stdlib.List.getAt params n with | Some s -> Ok (Stdlib.Sqlite.Value.Text s) | None -> Error "SQLite: missing bound parameter"
+  | Count -> Error "SQLite: aggregate is not valid here"
+  | Star -> Error "SQLite: wildcard is not valid here"
+  | Cast (inner,kind) -> __eval columns row params inner |> Stdlib.Result.andThen (fun v ->
+    if __rank v == 0 then Ok v
+    else if kind == "blob" then
+      match v with | Bytes _ -> Ok v | _ -> Ok (Stdlib.Sqlite.Value.Bytes (Stdlib.Blob.fromString (__text v)))
+    else if kind == "text" then Ok (Stdlib.Sqlite.Value.Text (__text v))
+    else if kind == "integer" || kind == "int" then
+      match __numeric v with
+      | Int _ -> Ok (__numeric v)
+      | Real f ->
+        if f >= 9223372036854775808.0 then Ok (Stdlib.Sqlite.Value.Int 9223372036854775807L)
+        else if f <= -9223372036854775808.0 then Ok (Stdlib.Sqlite.Value.Int -9223372036854775808L)
+        else Ok (Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 (Stdlib.Int.fromFloat f)))
+      | _ -> Ok (Stdlib.Sqlite.Value.Int 0L)
+    else if kind == "real" then
+      match __coerce "real" v with | Real f -> Ok (Stdlib.Sqlite.Value.Real f) | _ -> Ok (Stdlib.Sqlite.Value.Real 0.0)
+    else Error "SQLite: unsupported CAST type")
+  | Binary (left,operator,right) ->
+    __eval columns row params left |> Stdlib.Result.andThen (fun a ->
+      __eval columns row params right |> Stdlib.Result.map (fun b ->
+        let la = __affinity columns left
+        let ra = __affinity columns right
+        let (a,b) =
+          if la != "blob" && la != "text" && (ra == "blob" || ra == "text") then (a,__coerce la b)
+          else if ra != "blob" && ra != "text" && (la == "blob" || la == "text") then (__coerce ra a,b)
+          else if la == "text" && ra == "blob" then (a,__coerce "text" b)
+          else if ra == "text" && la == "blob" then (__coerce "text" a,b)
+          else (a,b)
+        __binaryValue operator a b))
+
+let __validate (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: List<String>) (aggregate: Bool)
+  (expr: Stdlib.Sqlite.__Sql.__Expr) : Stdlib.Result.Result<Unit, String> =
+  match expr with
+  | Literal _ -> Ok ()
+  | Parameter n -> if n < Stdlib.List.length params then Ok () else Error "SQLite: missing bound parameter"
+  | Column name ->
+    if Stdlib.String.toLowercase name == "rowid" || Stdlib.List.any columns (fun c -> Stdlib.String.toLowercase c.name == Stdlib.String.toLowercase name) then Ok ()
+    else Error ("SQLite: no such column: " + name)
+  | Count -> if aggregate then Ok () else Error "SQLite: aggregate is not valid here"
+  | Star -> Error "SQLite: wildcard is not valid here"
+  | Cast (inner,kind) ->
+    if Stdlib.List.contains ["blob","text","integer","int","real"] kind then __validate columns params false inner else Error "SQLite: unsupported CAST type"
+  | Binary (left,_,right) -> __validate columns params false left |> Stdlib.Result.andThen (fun _ -> __validate columns params false right)

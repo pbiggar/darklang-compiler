@@ -1,4 +1,4 @@
-// Stdlib.Sqlite - portable cell values and pure field accessors; no database adapter.
+// Stdlib.Sqlite - shared cell values and accessors; the page-backed engine lives in sqlite/.
 
 module Darklang.Stdlib.Sqlite
 

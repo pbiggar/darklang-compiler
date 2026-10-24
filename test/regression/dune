@@ -101,3 +101,8 @@
  (alias runtest)
  (deps stdin_input_regression.py)
  (action (run python3 %{dep:stdin_input_regression.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps sqlite_interop.py)
+ (action (run python3 %{dep:sqlite_interop.py} %{exe:../../bin/dark.exe})))

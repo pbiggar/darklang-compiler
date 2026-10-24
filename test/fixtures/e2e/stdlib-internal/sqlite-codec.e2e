@@ -1,0 +1,10 @@
+// SQLite wire-format boundaries, including signed rowids and all nine varint bytes.
+Stdlib.Blob.toHex (Stdlib.Sqlite.__Codec.__var 127) = "7F"
+Stdlib.Blob.toHex (Stdlib.Sqlite.__Codec.__var 128) = "8100"
+Stdlib.Blob.toHex (Stdlib.Sqlite.__Codec.__var 16384) = "818000"
+Stdlib.Blob.toHex (Stdlib.Sqlite.__Codec.__var -1) = "FFFFFFFFFFFFFFFFFF"
+Stdlib.Sqlite.__Codec.__readVar (Stdlib.Blob.fromString "") 0 = Error "SQLite: truncated varint"
+Stdlib.Sqlite.__Codec.__decodeRecord (Stdlib.Blob.__fromInt64List [2L,10L]) = Error "SQLite: invalid record field"
+Stdlib.Sqlite.__Codec.__float 1 = 5e-324
+Stdlib.Sqlite.__Codec.__float 4608308318706860032 = 1.25
+Stdlib.Sqlite.__Eval.__compare (Stdlib.Sqlite.Value.Int 9007199254740993L) (Stdlib.Sqlite.Value.Real 9007199254740992.0) = 1
