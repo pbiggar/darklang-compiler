@@ -14,6 +14,26 @@ let map = Result.map
 
 let check checkExpression literal globals locals symbols expected
     (typeName : WT.qualifiedTypeIdentifier) caseName fields =
+  (* The interpreter assigns these bare names before type inference, so an
+     expected type or a colliding enum cannot change their owner. *)
+  let typeName =
+    match (typeName.modules, typeName.typ.name, caseName) with
+    | [], "", ("Some" | "None" | "Ok" | "Error") ->
+        let owner =
+          match caseName with "Some" | "None" -> "Option" | _ -> "Result"
+        in
+        {
+          typeName with
+          modules =
+            List.map
+              (fun name ->
+                ( ({ range = typeName.range; name } : WT.identifier),
+                  typeName.range ))
+              [ "Stdlib"; owner ];
+          typ = { typeName.typ with name = owner };
+        }
+    | _ -> typeName
+  in
   let check = checkExpression globals locals in
   let checkFields symbols fields types =
     let rec loop symbols reversed fields types =
@@ -85,7 +105,15 @@ let check checkExpression literal globals locals symbols expected
       let inferred =
         bind (findNamedType globals typeName) (fun (canonical, entry) ->
             bind (fieldsForInference canonical entry) (fun types ->
-                if typeName.typeArgs <> [] || entry.params = [] then Ok None
+                let hasExpectedOwner =
+                  match expected with
+                  | Some (AST.TSum (owner, _)) -> owner = canonical
+                  | _ -> false
+                in
+                if
+                  typeName.typeArgs <> [] || entry.params = []
+                  || hasExpectedOwner
+                then Ok None
                 else
                   match types with
                   | None -> Ok None
@@ -175,6 +203,18 @@ let check checkExpression literal globals locals symbols expected
           )
   in
   bind resolved (fun (canonical, entry, args) ->
+      (* A nullary constructor can leave parameters unconstrained. Register
+         those variables so later branches refine this constructor's layout too. *)
+      let typ, symbols =
+        WrittenCheckingState.freshenType globals.typeParams
+          (AST.TSum (canonical, args))
+          symbols
+      in
+      let args =
+        match typ with
+        | AST.TSum (_, args) -> args
+        | _ -> Crash.crash "Fresh constructor type is not an enum"
+      in
       match entry.definition with
       | WT.TDEnum cases -> (
           match

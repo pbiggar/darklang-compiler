@@ -666,7 +666,7 @@ test dropWhileRejectsNonBoolCondition =
   Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun _ -> 0L - 1L)
   => raises "Encountered a condition that must be a Bool, but got an Int64 (-1)"
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TSum" class=aot-rejection reason=aot-type-error
 test filterRejectsOptionCondition =
   Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
     match item with
@@ -710,7 +710,7 @@ test partitionRejectsStringCondition =
   Stdlib.List.partition [ true, false, true ] (fun _ -> "a")
   => raises "Encountered a condition that must be a Bool, but got a String (\"a\")"
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
+// @compiler xfail compile: "Expected TBool, got TSum" class=aot-rejection reason=aot-type-error
 test partitionRejectsOptionCondition =
   Stdlib.List.partition [ 1L, 2L, 3L ] (fun item ->
     match item with

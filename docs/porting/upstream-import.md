@@ -53,8 +53,8 @@ expected-failure contract. The native inventory preserves it. Use this to name
 the actual unavailable dependency or compiler limitation rather than treating
 an imported implementation as absent.
 Expected failures apply only to tests and require a nonempty diagnostic matcher
-and a compile/runtime phase, plus exactly one `class=aot-rejection` or
-`class=missing-support` field before `reason=TAG`. An AOT classification with a
+and a compile/runtime phase, plus exactly one `class=aot-rejection`,
+`class=missing-support` or `class=upstream-bug` field before `reason=TAG`. An AOT classification with a
 runtime phase is invalid. Replacement targets are repository-relative
 `path#declaration` references and require a reason.
 
@@ -66,10 +66,28 @@ negative test. A failure must match its phase and diagnostic; a signal cannot
 satisfy a runtime expected failure. Compiler expectation overrides remain
 separate from expected failures and can coexist with an annotation.
 
+For an accepted diagnostic difference, use a per-test annotation such as
+`// @compiler error-message compile: "Cannot parse JSON into function type" reason=diagnostic-difference`.
+Use `runtime:` when rejection depends on the value. The upstream test must
+already expect an error. These are runnable negative tests, not expected
+failures: compilation or execution must fail in the annotated phase with the
+compiler diagnostic. Wrong phases, unrelated messages, successful execution,
+signals and runtime leaks fail the test. The original upstream expectation
+remains unchanged. The ledger records these tests as `run`, with the override
+and its reason available in the native inventory.
+
 ## Classifying expected failures
 
 Read the original test, its selected dependencies and the actual diagnostic;
 neither `raises` nor compilation failure alone determines the class.
+
+- `upstream-bug`: an explicit language decision considers the interpreter
+  behavior or test expectation incorrect. Keep the original upstream test body
+  and a strict diagnostic matcher; use `reason=upstream-bug`, whose glossary
+  entry records the decision. This is separate from incomplete compiler support.
+  For signed-zero patterns, `0.0` and `-0.0` are distinct literals even though
+  numeric equality considers them equal. The upstream numeric-equality pattern
+  expectation is deliberately rejected.
 
 - `aot-rejection`: the compiler rejects a program invalid under its intended
   static rules, and the diagnostic identifies the invalid construct. Use the

@@ -1,0 +1,4 @@
+// Signed-zero patterns distinguish literal signs while numeric equality equates them.
+(match 0.0 with | -0.0 -> "negative" | 0.0 -> "positive" | _ -> "other") = "positive"
+(match -0.0 with | 0.0 -> "positive" | -0.0 -> "negative" | _ -> "other") = "negative"
+(0.0 == -0.0) = true

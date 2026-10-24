@@ -633,8 +633,9 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         | CompilerAnnotations.Xfail { phase = CompilerAnnotations.Compile; _ }
           ->
             false
-        | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
-        | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
+        | CompilerAnnotations.Run | CompilerAnnotations.ErrorMessage _
+        | CompilerAnnotations.Blocked _ | CompilerAnnotations.Excluded _
+        | CompilerAnnotations.Replace _
         | CompilerAnnotations.Xfail { phase = CompilerAnnotations.Runtime; _ }
           ->
             true)
@@ -1080,6 +1081,26 @@ let evaluateExpectations (test : e2eTest) run =
   let normal = evaluateNormalExpectations test run in
   match test.compilerDisposition with
   | CompilerAnnotations.Run -> normal
+  | CompilerAnnotations.ErrorMessage { phase; diagnostic; reason = _ } -> (
+      match (phase, run) with
+      | CompilerAnnotations.Compile, CompileFailed (code, _, _)
+        when code > 0 && code < 128 ->
+          evaluateNormalExpectations
+            {
+              test with
+              errorExpectation = Some CompileError;
+              expectedErrorMessage = Some diagnostic;
+            }
+            run
+      | CompilerAnnotations.Runtime, Ran (code, _, _, _, _)
+        when code >= 0 && code < 128 ->
+          evaluateNormalExpectations
+            { test with expectedErrorMessage = Some diagnostic }
+            run
+      | _ ->
+          failRun run
+            "Compiler error-message annotation did not match the required phase"
+      )
   | CompilerAnnotations.Blocked _ | CompilerAnnotations.Excluded _ ->
       failRun run "Blocked or excluded test reached execution"
   | CompilerAnnotations.Replace _ ->

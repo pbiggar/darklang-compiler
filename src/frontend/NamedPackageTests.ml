@@ -1,5 +1,6 @@
 (* NamedPackageTests.ml - Preserve scoped package tests for a separate execution adapter. *)
 [@@@warning "-4"]
+
 module WT = WrittenTypes
 module Names = Set.Make (String)
 
@@ -26,8 +27,11 @@ let rec partitionDeclarations modules names declarations =
         if Names.mem qualifiedName names then
           Error ("Duplicate named package test '" ^ qualifiedName ^ "'")
         else
-          collect (Names.add qualifiedName names) kept
-            ({ modules; qualifiedName; declaration } :: tests) rest
+          collect
+            (Names.add qualifiedName names)
+            kept
+            ({ modules; qualifiedName; declaration } :: tests)
+            rest
     | WT.DModule modul :: rest ->
         let* segments = WrittenSource.moduleSegments (snd modul.WT.name) in
         let* names, declarations, nested =
@@ -35,7 +39,8 @@ let rec partitionDeclarations modules names declarations =
         in
         collect names
           (WT.DModule { modul with WT.declarations } :: kept)
-          (List.rev_append nested tests) rest
+          (List.rev_append nested tests)
+          rest
     | declaration :: rest -> collect names (declaration :: kept) tests rest
   in
   collect names [] [] declarations
@@ -48,10 +53,13 @@ let partition validated =
     let* _, declarations, tests =
       partitionDeclarations [] Names.empty source.WT.declarations
     in
-    match Validation.validate Validation.Package { source with WT.declarations } with
+    match
+      Validation.validate Validation.Package { source with WT.declarations }
+    with
     | Ok declarations -> Ok { declarations; tests }
     | Error _ ->
-        Crash.crash "Removing named tests invalidated an already validated package"
+        Crash.crash
+          "Removing named tests invalidated an already validated package"
 
 let executable validated qualifiedName =
   let* package = partition validated in
@@ -61,7 +69,7 @@ let executable validated qualifiedName =
       package.tests
   with
   | None -> Error ("Unknown named package test '" ^ qualifiedName ^ "'")
-  | Some test ->
+  | Some test -> (
       let rec select modules declarations =
         Result.map List.concat
           (ResultList.traverse
@@ -88,7 +96,10 @@ let executable validated qualifiedName =
       in
       let source = Validation.ValidatedSourceFile.toWrittenTypes validated in
       let* declarations = select [] source.WT.declarations in
-      match Validation.validate Validation.Script { source with WT.declarations } with
+      match
+        Validation.validate Validation.Script { source with WT.declarations }
+      with
       | Ok executable -> Ok (executable, test)
       | Error _ ->
-          Crash.crash "Selecting a validated package test invalidated its source"
+          Crash.crash
+            "Selecting a validated package test invalidated its source")

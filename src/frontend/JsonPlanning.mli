@@ -12,7 +12,9 @@ val rewriteProgramWithSession :
   planningSession option ->
   Types.typeCheckEnv ->
   CheckedAST.program ->
-  CheckedAST.program
+  (CheckedAST.program, string) result
 
 val rewriteProgram :
-  Types.typeCheckEnv -> CheckedAST.program -> CheckedAST.program
+  Types.typeCheckEnv ->
+  CheckedAST.program ->
+  (CheckedAST.program, string) result
