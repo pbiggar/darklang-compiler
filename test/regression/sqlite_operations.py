@@ -53,6 +53,7 @@ def main():
         env=dict(os.environ,SQLITE_TEST_DB=str(db),SQLITE_TEST_TARGET=str(target),SQLITE_TEST_MODE='initialize')
         initialized=subprocess.run([str(binary)],env=env,capture_output=True,text=True,timeout=30)
         assert initialized.returncode==0 and initialized.stdout.startswith('Ok 1'),(initialized.stdout,initialized.stderr)
+        assert Path(str(db)+'-wal').stat().st_size==0,'last connection close did not checkpoint'
         connection=sqlite3.connect(db)
         assert connection.execute('PRAGMA journal_mode').fetchone()==('wal',)
         process=subprocess.Popen([str(binary)],env=dict(env,SQLITE_TEST_MODE='hold'),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1)
@@ -102,6 +103,14 @@ def main():
             assert connection.execute('SELECT v FROM t').fetchall()==[(4,)]
             assert command('ROLLBACK')=='Ok -1 '
             assert rows('SELECT v FROM t')==[{'v':'I4'}]
+            connection.execute('PRAGMA wal_autocheckpoint=0');connection.execute('PRAGMA synchronous=OFF')
+            before_auto=version()
+            for number in range(1100):
+                connection.execute('UPDATE t SET v=?',(number,));connection.commit()
+            assert Path(str(db)+'-wal').stat().st_size>1000*(4096+24)
+            assert command('UPDATE t SET v=4')=='Ok 1 '
+            assert Path(str(db)+'-wal').stat().st_size==0,'automatic checkpoint did not run with idle attachments'
+            assert version()!=before_auto,'checkpoint lost external commit notification'
             assert command(':backup')=='Copied'
             backup=sqlite3.connect(target)
             assert backup.execute('SELECT v FROM t').fetchall()==[(4,)]

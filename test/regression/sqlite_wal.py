@@ -40,7 +40,11 @@ def main():
         # EFBIG partway through the commit frame must roll back the append,
         # including its on-disk commit marker, before reporting an ordinary error.
         wal=Path(str(db)+'-wal')
+        for value in range(10,22):
+            connection.execute('UPDATE t SET v=?',(value,));connection.commit()
+        connection.execute('UPDATE t SET v=1');connection.commit()
         length=wal.stat().st_size
+        assert length>32768
         failed=run('UPDATE t SET v=98',limit=length+2*(4096+24)-10)
         assert failed.startswith('Error SQLite I/O: errno 27'),failed
         assert wal.stat().st_size==length,'failed append was left recoverable as committed'
@@ -90,10 +94,14 @@ def main():
             connection.execute('UPDATE t SET v=?',(100+number,))
             connection.commit()
         assert run(mode='query')=='4199'
+        block_reader=sqlite3.connect(db);block_reader.execute('BEGIN')
+        assert block_reader.execute('SELECT v FROM t').fetchall()==[(4199,)]
         assert run('UPDATE t SET v=4200')=='Ok 1'
         assert connection.execute('SELECT v FROM t').fetchall()==[(4200,)]
         connection.execute('UPDATE t SET v=4201');connection.commit()
         assert run(mode='query')=='4201'
+        assert block_reader.execute('SELECT v FROM t').fetchall()==[(4199,)]
+        block_reader.commit();block_reader.close()
         assert connection.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
         connection.close()
         # Terminating without SQLite close leaves committed frames for recovery.

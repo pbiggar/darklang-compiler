@@ -136,7 +136,7 @@ let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
         | Error rollback -> Error (e + "; rollback also failed: " + rollback))
 
 let __close (s: __State) : Stdlib.Result.Result<Unit, String> =
-  let wal = match s.wal with | None -> Ok () | Some wal -> Stdlib.Sqlite.__Wal.__close wal
+  let wal = match s.wal with | None -> Ok () | Some wal -> Stdlib.Sqlite.__Wal.__finish s.fd wal
   let db = Stdlib.Sqlite.__Io.__close s.fd
   match (wal,db) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ()
 

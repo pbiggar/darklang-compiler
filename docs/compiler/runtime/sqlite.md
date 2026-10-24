@@ -46,6 +46,9 @@ it returns an error instead of reading or writing through the wrong pager.
 
 `PRAGMA journal_mode=WAL` initializes WAL before the scoped connection opens.
 `PRAGMA wal_checkpoint(TRUNCATE)` respects active readers and reports contention.
+Automatic checkpointing runs at 1,000 frames, and the last attachment attempts a
+final checkpoint on close. Both preserve committed WAL data if cleanup is busy or
+fails.
 Backup/restore copies a consistent page snapshot through the destination pager,
 including into a live WAL database, preserving its inode. VACUUM rebuilds tables
 and indexes into a compact set of dirty pages, then installs them through the

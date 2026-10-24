@@ -262,3 +262,12 @@ let __checkpoint (db: Int) (state: __State) (timeout: Int) : Stdlib.Result.Resul
           checked)
       let _ = Stdlib.Sqlite.__Locks.__unlock state.shm 120 1
       result)
+
+// Last-attachment cleanup is best effort, just like automatic checkpointing.
+// Preserve the committed WAL if a checkpoint fails; closing must not turn a
+// previously successful commit into an apparent SQL failure.
+let __finish (db: Int) (state: __State) : Stdlib.Result.Result<Unit,String> =
+  let _ = __release state
+  let last = Stdlib.Sqlite.__Locks.__try state.shm 128 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive
+  let _ = match last with | Ok true -> __checkpoint db state 0 |> Stdlib.Result.map (fun _ -> ()) | _ -> Ok ()
+  __close state
