@@ -97,7 +97,14 @@ let __open (path: String) : Stdlib.Result.Result<__State, String> =
         if s.originalCount == 0 then Ok s
         else Stdlib.Sqlite.__Io.__readAt fd 18 1 |> Stdlib.Result.andThen (fun mode ->
           if __get mode 0 1 != 2 then Ok s
-          else Stdlib.Sqlite.__Wal.__open path s.size s.count |> Stdlib.Result.map (fun wal -> { s with count = wal.count, wal = Some wal }))))
+          else Stdlib.Sqlite.__Wal.__open path s.size s.count |> Stdlib.Result.andThen (fun wal ->
+            let state = { s with count = wal.count, wal = Some wal }
+            let loaded = __read state 1 |> Stdlib.Result.andThen (fun (state,header) ->
+              if __get header 56 4 != 1 && __get header 56 4 != 0 then Error "SQLite: only UTF-8 databases are supported"
+              else if __get header 44 4 > 4 then Error "SQLite: unsupported schema format"
+              else if __get header 20 1 != 0 || __get header 52 4 != 0 || __get header 64 4 != 0 then Error "SQLite: reserved bytes and auto-vacuum are unsupported"
+              else Ok state)
+            match loaded with | Ok state -> Ok state | Error e -> let _ = Stdlib.Sqlite.__Wal.__close wal in Error e))))
     match loaded with
     | Ok s -> Ok s
     | Error e -> let _ = Stdlib.Sqlite.__Io.__close fd in Error e)

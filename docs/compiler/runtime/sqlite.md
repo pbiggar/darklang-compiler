@@ -33,9 +33,9 @@ There is no fsync protocol or persistent rollback journal for power-loss safety.
 WAL snapshots read and append checksum-validated SQLite frames and maintain the
 shared-memory index under SQLite's reader, writer and attachment locks. Native
 interoperability covers committed-frame recovery after an unclean process exit,
-reader snapshots, writer exclusion and WAL restarts. Connection configuration,
-checkpointing and backup/compaction are implemented but their operational regression
-coverage is still in progress. Rollback-mode transactions use SQLite's native
+reader snapshots, writer exclusion and WAL restarts. Operational regressions cover held read/write transactions, per-connection
+`data_version`, busy-timeout configuration, checkpoint contention and truncation,
+consistent backup/restore, foreign-key checks and VACUUM compaction. Rollback-mode transactions use SQLite's native
 SHARED, RESERVED and PENDING byte ranges. OFD locks coordinate independent Dark
 connections and native SQLite connections, including connections in one process.
 Readers may coexist; writers wait for readers before committing. Native locking
@@ -126,7 +126,7 @@ chains. Their roots remain stable; rebuilding an affected index reclaims and
 reuses its other pages in the statement transaction. Package-store write and
 schema creation and typed mutation tests pass against native SQLite. Reading a
 view or firing triggers is not implemented. Existing records shorter than an
-added column use its declared default. WAL snapshots are supported; operational workflow validation is in progress.
+added column use its declared default. WAL snapshots and operational maintenance are supported; full source-workflow validation is in progress.
 
 The scalar extension includes searched/simple CASE, COALESCE/IFNULL/NULLIF,
 concatenation, arithmetic, LIKE, length, substr, char, ASCII case conversion,

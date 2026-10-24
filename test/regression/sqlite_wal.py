@@ -9,7 +9,7 @@ import sys
 import tempfile
 from sqlite_locking import PROGRAM as LOCK_PROGRAM
 
-PROGRAM = LOCK_PROGRAM.replace('Stdlib.Sqlite.scalarInt db "SELECT v FROM t" "v" |> Stdlib.Option.map Stdlib.Int64.toString |> Stdlib.Option.withDefault "missing"', 'match Stdlib.Sqlite.__Engine.__executeTyped db "SELECT v FROM t" (Dict {}) with\n    | Error e -> "Error " + e\n    | Ok result ->\n      match result.rows with\n      | [row] ->\n        match Stdlib.Dict.get row "v" with\n        | Some (Int n) -> Stdlib.Int64.toString n\n        | _ -> "wrong cell"\n      | _ -> "wrong rows"')
+PROGRAM = LOCK_PROGRAM.replace('Stdlib.Sqlite.scalarInt db "SELECT v FROM t" "v" |> Stdlib.Option.map Stdlib.Int64.toString |> Stdlib.Option.withDefault "missing"', 'match Stdlib.Sqlite.__Connection.__executeTyped db "SELECT v FROM t" (Dict {}) with\n    | Error e -> "Error " + e\n    | Ok result ->\n      match result.rows with\n      | [row] ->\n        match Stdlib.Dict.get row "v" with\n        | Some (Int n) -> Stdlib.Int64.toString n\n        | _ -> "wrong cell"\n      | _ -> "wrong rows"')
 
 def main():
     compiler = str(Path(sys.argv[1]).resolve())
@@ -54,6 +54,18 @@ def main():
         assert connection.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchall()[0][0]==0
         assert run('UPDATE t SET v=5')=='Ok 1'
         assert connection.execute('SELECT v FROM t').fetchall()==[(5,)]
+        # Cross the first (4062-frame) hash block boundary without making the
+        # database itself large. Both implementations must find the newest page.
+        connection.execute('PRAGMA synchronous=OFF')
+        for number in range(4100):
+            connection.execute('UPDATE t SET v=?',(100+number,))
+            connection.commit()
+        assert run(mode='query')=='4199'
+        assert run('UPDATE t SET v=4200')=='Ok 1'
+        assert connection.execute('SELECT v FROM t').fetchall()==[(4200,)]
+        connection.execute('UPDATE t SET v=4201');connection.commit()
+        assert run(mode='query')=='4201'
+        assert connection.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
         connection.close()
         # Terminating without SQLite close leaves committed frames for recovery.
         subprocess.run([sys.executable,'-c','import sqlite3,os,sys;c=sqlite3.connect(sys.argv[1]);c.execute("UPDATE t SET v=6");c.commit();os._exit(0)',str(db)],check=True)

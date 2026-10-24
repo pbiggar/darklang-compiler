@@ -21,16 +21,24 @@ let __observe (state: __State) : Stdlib.Result.Result<__State,String> =
 let __begin (state: __State) (immediate: Bool) : Stdlib.Result.Result<__State,String> =
   if state.active then Error "SQLite: transaction already active"
   else __observe state |> Stdlib.Result.andThen (fun state ->
-    Stdlib.Sqlite.__Pager.__refresh state.pager state.busy |> Stdlib.Result.andThen (fun pager ->
-      let pager = { pager with timeout = state.busy }
-      let locked =
-        if Stdlib.Bool.not immediate then Ok ()
-        else match pager.wal with
-        | Some wal -> Stdlib.Sqlite.__Locks.__wait wal.shm 120 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive state.busy
-        | None -> Stdlib.Sqlite.__Locks.__try pager.fd 1073741825 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired -> if acquired then Ok () else Error "SQLite: database is locked")
-      match locked with
-      | Ok _ -> Ok { state with pager = pager,active = true }
-      | Error e -> let _ = Stdlib.Sqlite.__Pager.__release pager in Error e))
+    // Take the WAL writer lease BEFORE choosing a snapshot. Otherwise a commit
+    // in between those steps would turn BEGIN IMMEDIATE into a stale read.
+    let leased = match state.pager.wal with
+      | Some wal when immediate -> Stdlib.Sqlite.__Locks.__wait wal.shm 120 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive state.busy
+      | _ -> Ok ()
+    leased |> Stdlib.Result.andThen (fun _ ->
+      let refreshed = Stdlib.Sqlite.__Pager.__refresh state.pager state.busy
+      match refreshed with
+      | Error e -> let _ = Stdlib.Sqlite.__Pager.__release state.pager in Error e
+      | Ok pager ->
+        let pager = { pager with timeout = state.busy }
+        let locked = match pager.wal with
+          | Some _ -> Ok ()
+          | None when immediate -> Stdlib.Sqlite.__Locks.__try pager.fd 1073741825 1 Stdlib.Sqlite.__Locks.__Kind.Exclusive |> Stdlib.Result.andThen (fun acquired -> if acquired then Ok () else Error "SQLite: database is locked")
+          | None -> Ok ()
+        match locked with
+        | Ok _ -> Ok { state with pager = pager,active = true }
+        | Error e -> let _ = Stdlib.Sqlite.__Pager.__release pager in Error e))
 let __rollback (state: __State) : Stdlib.Result.Result<__State,String> =
   if Stdlib.Bool.not state.active then Error "SQLite: no active transaction"
   else Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ -> { state with active = false })
@@ -40,7 +48,7 @@ let __commit (state: __State) : Stdlib.Result.Result<__State,String> =
     // Observe our own committed stamp before unlocking, so it cannot be mistaken
     // for another connection's commit when data_version is next polled.
     Stdlib.Sqlite.__Pager.__stamp state.pager |> Stdlib.Result.andThen (fun stamp ->
-      Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ -> { state with active = false,stamp = stamp })))
+      Stdlib.Sqlite.__Pager.__release state.pager |> Stdlib.Result.map (fun _ -> { state with active = false,stamp = stamp,version = state.version + (if Stdlib.Dict.isEmpty state.pager.dirty && stamp != state.stamp then 1 else 0) })))
 let __dataVersion (state: __State) : Stdlib.Result.Result<(__State * Int),String> =
   __observe state |> Stdlib.Result.map (fun state -> (state,state.version))
 let __checkpoint (state: __State) : Stdlib.Result.Result<__Outcome,String> =
@@ -163,5 +171,5 @@ let __executeTyped (path: String) (sql: String) (params: Dict<String,Stdlib.Sqli
       else Ok ()
     configured |> Stdlib.Result.andThen (fun _ -> __with path (fun state ->
       if Stdlib.List.any program __operational then __executePrepared state program params |> Stdlib.Result.map (fun outcome -> (outcome.connection,outcome))
-      else __begin state true |> Stdlib.Result.andThen (fun state ->
+      else __begin state (Stdlib.List.any program (fun statement -> match statement with | Select _ -> false | _ -> true)) |> Stdlib.Result.andThen (fun state ->
         __executePrepared state program params |> Stdlib.Result.andThen (fun outcome -> __commit outcome.connection |> Stdlib.Result.map (fun state -> (state,{ outcome with connection = state })))))))
