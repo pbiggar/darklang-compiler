@@ -135,6 +135,27 @@ def main():
             assert connection.execute("SELECT count(*) FROM t").fetchone() == (500,)
             assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
+        # Removing the last row in a non-root leaf must unlink the empty
+        # child and shrink the root; SQLite rejects dangling empty children.
+        allocated = small.stat().st_size
+        ok("DELETE FROM t WHERE id>=2",path=small)
+        with sqlite3.connect(small) as connection:
+            assert connection.execute("SELECT count(*) FROM t").fetchone()==(1,)
+            assert connection.execute("PRAGMA integrity_check").fetchall()==[("ok",)]
+        ok("DELETE FROM t",path=small)
+        with sqlite3.connect(small) as connection:
+            assert connection.execute("PRAGMA integrity_check").fetchall()==[("ok",)]
+        ok("INSERT INTO t VALUES (@p0,@p1)",["x"*80],mode="bulk",path=small)
+        assert small.stat().st_size==allocated,"deleting a tree did not reuse reclaimed pages"
+        # The schema root has 100 fewer bytes. Exercise root collapse where
+        # its last child's leaf needs splitting to fit beside that header.
+        names=["schema_"+str(i)+"x"*70 for i in range(20)]
+        ok(";".join("CREATE TABLE "+name+"(id INTEGER PRIMARY KEY,name TEXT,other TEXT)" for name in names),path=small)
+        for name in names:
+            ok("DROP TABLE "+name,path=small)
+            with sqlite3.connect(small) as connection:
+                assert connection.execute("PRAGMA integrity_check").fetchall()==[("ok",)]
+
         types = root / "types.db"
         ok("CREATE TABLE v (id INTEGER PRIMARY KEY, n INTEGER, f REAL, s TEXT, b BLOB)", path=types)
         ok("INSERT INTO v VALUES (-1, -9223372036854775808, 1.25, 'a''b', X'00FF')", path=types)
@@ -143,7 +164,7 @@ def main():
             connection.execute("INSERT INTO v VALUES (2,9223372036854775807,?,?,?)", (5e-324, "雪", b"big"*2000))
         assert "9223372036854775807" in ok("SELECT n FROM v WHERE id=2", mode="query", path=types)
         before = types.read_bytes()
-        for sql in ["SELECT missing FROM v WHERE id=999", "SELECT n FROM v JOIN v x", "CREATE INDEX nope ON v(n)"]:
+        for sql in ["SELECT missing FROM v WHERE id=999", "SELECT n FROM v JOIN v x", "CREATE INDEX nope ON v(missing)"]:
             assert run(sql, path=types).startswith("Error"), sql
             assert types.read_bytes() == before, sql
         before = types.read_bytes()

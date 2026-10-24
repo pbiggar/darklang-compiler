@@ -6,8 +6,9 @@ primitives. Generated programs do not link SQLite or libSQL or run database
 executables. The compiler's own hosted-package cache is a separate subsystem.
 
 The original upstream wrappers supply the public API. Three portable `Builtin`
-bridges delegate execution, querying and batching to the engine. Parameters are
-strings bound to `@p0`, `@p1`, etc.; output cells preserve NULL, signed 64-bit
+bridges delegate execution, querying and batching to the engine. Public parameters are
+strings bound to `@p0`, `@p1`, etc. The private engine accepts named typed cells.
+Output cells preserve NULL, signed 64-bit
 integers, IEEE doubles, UTF-8 text and binary blobs.
 
 ## Storage and transactions
@@ -17,8 +18,8 @@ descriptor. A transaction caches read pages and maintains separate dirty pages.
 Inserts split leaves and interior nodes, growing the root while preserving its
 page number. Large records use SQLite overflow chains. Dropping tables and
 deleting overflow records return pages to the SQLite freelist. Deleting ordinary
-rows compacts their leaf; underfull nodes remain allocated and can accept later
-inserts.
+rows compacts their leaf, unlinks empty children and collapses roots. Underfull
+nonempty nodes can accept later inserts.
 
 Commit writes dirty pages at their existing offsets, followed by the database
 header. It does not serialize or replace the entire file. A batch shares one
@@ -38,14 +39,15 @@ with another SQLite implementation.
 
 - UTF-8 SQLite 3 databases with power-of-two page sizes from 512 to 65536 bytes,
   no reserved page bytes, no auto-vacuum, and rollback-mode file headers.
-- Ordinary rowid tables, optionally with one `INTEGER PRIMARY KEY` alias.
-- Column types `INTEGER`, `INT`, `NUMERIC`, `REAL`, `TEXT`, and `BLOB`; `NOT NULL`.
+- Ordinary rowid tables, text/composite primary and unique keys, or an `INTEGER PRIMARY KEY` alias.
+- SQLite type affinities, `NOT NULL`, literal/function defaults and catalog references.
+- Ordinary, unique, composite, partial and expression indexes with BINARY ordering.
 - `CREATE TABLE [IF NOT EXISTS]` and `DROP TABLE [IF EXISTS]`.
-- `INSERT [OR IGNORE] INTO`, optional target columns, one `VALUES` tuple.
+- `INSERT [OR IGNORE] INTO`, optional target columns, one or more `VALUES` tuples.
 - `UPDATE ... SET` and `DELETE FROM`, optionally filtered by `WHERE`.
-- Single-table `SELECT`, or scalar `SELECT` without a table; columns, `*`,
+- Single-table `SELECT` with aliases and `DISTINCT`, or scalar `SELECT` without a table; columns, `*`,
   literals, `AS` aliases, comparisons, `IS [NOT]`, `AND`, `OR`, and parentheses.
-- `ORDER BY` column/scalar expressions with `ASC`/`DESC`, literal nonnegative
+- `ORDER BY` column/scalar expressions with `ASC`/`DESC`, bound or literal integer
   `LIMIT`, standalone `count(*)`, and casts to integer, real, text or blob.
 - SQL comments, escaped single-quoted strings, double-quoted/backtick identifiers,
   blob literals and string parameters.
@@ -53,13 +55,14 @@ with another SQLite implementation.
 Records are limited to 64 MiB. The engine scans tables rather than using a query
 optimizer. Query results are fully materialized, matching the public API.
 
-Unsupported statements and schema features return errors: indexes, views,
-triggers, joins, subqueries, recursive queries, JSON functions, defaults,
-foreign-key constraints, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a primary
-key through `UPDATE`. A database whose schema includes an unsupported object is
-rejected rather than modified with its indexes or triggers ignored. This subset
-does not implement all SQLite numeric-string conversion edge cases or arbitrary
-existing SQLite databases. It does not replace the interpreter's internal store.
+Unsupported execution features return errors: views/triggers, joins, subqueries,
+recursive queries, general aggregates/grouping, UPSERT, INSERT SELECT, REPLACE,
+migrations/metadata pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
+rowid alias through `UPDATE`. Reference clauses are preserved in the catalog;
+foreign-key enforcement/checking is pending. Writes to stores containing views
+or triggers are rejected. This subset does not implement all SQLite numeric-string
+conversion edge cases or arbitrary existing SQLite databases. It does not replace
+the interpreter's internal store.
 
 ## Verification
 
@@ -100,7 +103,7 @@ The catalog reader accepts rowid tables with text/composite keys, defaults,
 references and associated indexes for table-scan SELECTs. Index writes use record-key B-trees with promoted interior keys and overflow
 chains. Their roots remain stable; rebuilding an affected index reclaims and
 reuses its other pages in the statement transaction. Package-store write and
-schema-creation integration is currently under validation. Reading a
+schema creation and typed mutation tests pass against native SQLite. Reading a
 view or firing triggers is not implemented. Existing records shorter than an
 added column use its declared default. WAL files remain unsupported.
 
@@ -115,8 +118,7 @@ package-store schema in addition to the original page interoperability suite.
 Remaining milestones, in dependency order:
 
 1. Complete dynamic SQL workload captures and assertions for each call site.
-2. Finish schema/write integration validation, then implement migrations and
-   foreign-key checks. Index maintenance currently rebuilds affected trees;
+2. Implement migrations, metadata queries and foreign-key checks. Index maintenance currently rebuilds affected trees;
    incremental index deletion/rebalancing remains a performance improvement.
 3. Aliases, joins, DISTINCT, subqueries/tuple IN, grouping/aggregates and recursive
    CTE execution needed by dependency and branch queries.

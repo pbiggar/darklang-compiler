@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sqlite3
 import struct
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -95,7 +96,14 @@ def main():
         def execute(sql, bindings=None, count=1):
             output = run(sql,bindings,'exec')
             assert output == f'Ok {count}', (sql,output)
-            assert connection.execute('PRAGMA integrity_check').fetchall() == [('ok',)]
+            try:
+                integrity = connection.execute('PRAGMA integrity_check').fetchall()
+                assert integrity == [('ok',)], integrity
+            except (sqlite3.DatabaseError, AssertionError):
+                destination = Path.cwd()/'TestResults/sqlite-package-failed.db'
+                destination.parent.mkdir(exist_ok=True)
+                shutil.copyfile(db,destination)
+                raise
 
         corpus = json.loads((fixtures / 'corpus.json').read_text())
         reads = [entry for entry in corpus['entries'] if entry['source'].endswith('/RuntimeTypes.fs') and entry['kind']=='statement' and entry['sql'].lstrip().upper().startswith('SELECT')]
@@ -132,7 +140,7 @@ def main():
         with sqlite3.connect(created) as native:
             assert native.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
             expected = connection.execute("SELECT type,name,tbl_name FROM sqlite_schema WHERE type IN ('table','index') ORDER BY name").fetchall()
-            expected = [row for row in expected]  # ALTER above changes columns, not catalog object identity.
+            # ALTER above changes columns, not catalog object identity.
             assert native.execute("SELECT type,name,tbl_name FROM sqlite_schema WHERE type IN ('table','index') ORDER BY name").fetchall()==expected
             assert native.execute('SELECT count(*) FROM accounts_v0').fetchone()==(4,)
         connection.close()

@@ -246,6 +246,41 @@ let __walk (s: Stdlib.Sqlite.__Pager.__State) (pages: List<(Int * Int)>) (seen: 
 let __scan (s: Stdlib.Sqlite.__Pager.__State) (root: Int)
   : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<__Entry>), String> = __walk s [(root,0)] [] []
 
+// SQLite rejects an empty non-root child. Remove its parent pointer, then
+// collapse a one-child root while keeping the externally referenced page stable.
+let __removeChild (node: __Node) (child: Int) : __Node =
+  if node.right == child then
+    match Stdlib.List.reverse node.cells with
+    | [] -> { node with right = 0 }
+    | (last,_) :: rest -> __Node { cells = Stdlib.List.reverse rest, right = last }
+  else { node with cells = Stdlib.List.filter node.cells (fun (page,_) -> page != child) }
+
+let __collapse (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (node: __Node) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  if Stdlib.Bool.not (Stdlib.List.isEmpty node.cells) then __writeNode s page node
+  else if node.right == 0 then __writeLeaf s page []
+  else __readChild s page node.right
+
+let __readChild (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (child: Int) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  Stdlib.Sqlite.__Pager.__read s child |> Stdlib.Result.andThen (fun (s,b) ->
+    if __get b 0 1 == 13 then __leaf s.size child b |> Stdlib.Result.andThen (fun cells ->
+      if __leafFits s.size page cells then __writeLeaf s page cells |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Pager.__free s child)
+      else
+        // Page one has a smaller usable region. Keep two children if the
+        // remaining leaf cannot fit beside the database header.
+        __splitLeaf s child cells |> Stdlib.Result.andThen (fun edit -> match edit.split with
+          | None -> Error "SQLite: missing root-collapse split"
+          | Some ((pivot,right)) -> __writeNode edit.state page (__Node { cells = [(child,pivot)], right = right })))
+    else __node s.size child b |> Stdlib.Result.andThen (fun node ->
+      if __nodeFits s.size page node then __writeNode s page node |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Pager.__free s child)
+      else
+        let mid = Stdlib.List.length node.cells / 2
+        match Stdlib.List.getAt node.cells mid with
+        | None -> Error "SQLite: empty root-collapse interior"
+        | Some ((middle,pivot)) -> Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s,right) ->
+          __writeNode s child (__Node { cells = Stdlib.List.take node.cells mid, right = middle })
+          |> Stdlib.Result.andThen (fun s -> __writeNode s right (__Node { cells = Stdlib.List.drop node.cells (mid + 1), right = node.right }))
+          |> Stdlib.Result.andThen (fun s -> __writeNode s page (__Node { cells = [(child,pivot)], right = right })))))
+
 let __deleteAt (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (key: Int) (depth: Int)
   : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
   if depth > 64 then Error "SQLite: invalid B-tree depth"
@@ -255,7 +290,13 @@ let __deleteAt (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (key: Int) (depth:
       | None -> Ok s
       | Some ((_,raw)) -> __releaseCell s raw |> Stdlib.Result.andThen (fun s ->
         __writeLeaf s page (Stdlib.List.filter cells (fun (k,_) -> k != key))))
-    else __node s.size page b |> Stdlib.Result.andThen (fun node -> __deleteAt s (__choose node.cells node.right key) key (depth + 1)))
+    else __node s.size page b |> Stdlib.Result.andThen (fun node ->
+      let child = __choose node.cells node.right key
+      __deleteAt s child key (depth + 1) |> Stdlib.Result.andThen (fun s ->
+        Stdlib.Sqlite.__Pager.__read s child |> Stdlib.Result.andThen (fun (s,after) ->
+          if __get after 0 1 == 13 && __get after 3 2 == 0 then
+            Stdlib.Sqlite.__Pager.__free s child |> Stdlib.Result.andThen (fun s -> __collapse s page (__removeChild node child))
+          else Ok s))))
 
 let __drop (s: Stdlib.Sqlite.__Pager.__State) (pages: List<Int>) (seen: List<Int>)
   : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =

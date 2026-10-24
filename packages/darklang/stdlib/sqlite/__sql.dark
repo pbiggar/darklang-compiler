@@ -7,8 +7,9 @@ type __Expr = Literal of Stdlib.Sqlite.Value | Column of String | Parameter of S
   | Call of String * List<__Expr> | Unary of String * __Expr | Case of List<(__Expr * __Expr)> * __Expr
 type __Column = { name: String, affinity: String, primary: Bool, notNull: Bool, fallback: Stdlib.Option.Option<__Expr> }
 type __Select = { fields: List<(__Expr * String)>, table: Stdlib.Option.Option<String>,
-  predicate: Stdlib.Option.Option<__Expr>, order: List<(__Expr * Bool)>, limit: Stdlib.Option.Option<Int> }
-type __Statement = Create of String * Bool * List<__Column> | Drop of String * Bool
+  alias: Stdlib.Option.Option<String>, distinct: Bool,
+  predicate: Stdlib.Option.Option<__Expr>, order: List<(__Expr * Bool)>, limit: Stdlib.Option.Option<__Expr> }
+type __Statement = Drop of String * Bool
   | Insert of String * List<String> * List<List<__Expr>> * Bool
   | Update of String * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
   | Delete of String * Stdlib.Option.Option<__Expr> | Select of __Select | Catalog of List<__Token>
@@ -141,7 +142,10 @@ let __atom (tokens: List<__Token>) : Stdlib.Result.Result<(__Expr * List<__Token
           __eat remaining ")" |> Stdlib.Result.map (fun rest -> (Call (__lower word,args),rest))))
       | Symbol "." :: tail -> __name tail |> Stdlib.Result.map (fun (name,rest) -> (Column (word + "." + name),rest))
       | _ -> Ok ((Column word,rest))
-  | Quoted name :: rest -> Ok ((Column name,rest))
+  | Quoted name :: rest ->
+    match rest with
+    | Symbol "." :: tail -> __name tail |> Stdlib.Result.map (fun (column,rest) -> (Column (name + "." + column),rest))
+    | _ -> Ok ((Column name,rest))
   | _ -> Error "SQLite: expected expression"
 
 // Both searched CASE and simple CASE use the same lazy branch representation.
@@ -188,34 +192,13 @@ let __names (tokens: List<__Token>) : Stdlib.Result.Result<(List<String> * List<
     | Symbol "," :: tail -> __names tail |> Stdlib.Result.map (fun (names,rest) -> ([name] @ names,rest))
     | _ -> Ok (([name],rest)))
 
-let __constraints (column: __Column) (tokens: List<__Token>) : Stdlib.Result.Result<(__Column * List<__Token>), String> =
-  match tokens with
-  | Word word :: rest ->
-    if __lower word == "primary" then __eat rest "key" |> Stdlib.Result.andThen (fun rest ->
-      if column.affinity != "integer" then Error "SQLite: only INTEGER PRIMARY KEY is supported"
-      else __constraints { column with primary = true } rest)
-    else if __lower word == "not" then __eat rest "null" |> Stdlib.Result.andThen (fun rest -> __constraints { column with notNull = true } rest)
-    else Error ("SQLite: unsupported column constraint " + word)
-  | _ -> Ok ((column,tokens))
-
-let __columns (tokens: List<__Token>) : Stdlib.Result.Result<(List<__Column> * List<__Token>), String> =
-  __name tokens |> Stdlib.Result.andThen (fun (name,rest) ->
-    __name rest |> Stdlib.Result.andThen (fun (affinity,rest) ->
-      let affinity = __lower affinity
-      if Stdlib.Bool.not (Stdlib.List.contains ["integer","int","text","real","blob","numeric"] affinity) then Error "SQLite: unsupported column type"
-      else __constraints (__Column { name = name, affinity = affinity, primary = false, notNull = false, fallback = None }) rest
-      |> Stdlib.Result.andThen (fun (column,rest) ->
-        match rest with
-        | Symbol "," :: tail -> __columns tail |> Stdlib.Result.map (fun (columns,rest) -> ([column] @ columns,rest))
-        | _ -> Ok (([column],rest)))))
-
 let __predicate (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Option<__Expr> * List<__Token>), String> =
   match tokens with
   | Word word :: rest -> if __lower word == "where" then __expression rest 1 |> Stdlib.Result.map (fun (expr,rest) -> (Some expr,rest)) else Ok ((None,tokens))
   | _ -> Ok ((None,tokens))
 
 let __fieldName (expr: __Expr) : String =
-  match expr with | Column s -> s | Count -> "count(*)" | Star -> "*" | _ -> "expression"
+  match expr with | Column s -> Stdlib.List.last (Stdlib.String.split s ".") |> Stdlib.Option.withDefault s | Count -> "count(*)" | Star -> "*" | _ -> "expression"
 let __fields (tokens: List<__Token>) : Stdlib.Result.Result<(List<(__Expr * String)> * List<__Token>), String> =
   __expression tokens 1 |> Stdlib.Result.andThen (fun (expr,rest) ->
     (match rest with
@@ -235,30 +218,38 @@ let __order (tokens: List<__Token>) : Stdlib.Result.Result<(List<(__Expr * Bool)
     | Symbol "," :: tail -> __order tail |> Stdlib.Result.map (fun (order,rest) -> ([(expr,descending)] @ order,rest))
     | _ -> Ok (([(expr,descending)],rest)))
 
-let __limit (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Option<Int> * List<__Token>), String> =
+let __limit (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Option<__Expr> * List<__Token>), String> =
   match tokens with
   | Word word :: tail ->
     if __lower word != "limit" then Ok ((None,tokens))
-    else
-      (match tail with
-      | Atom value :: rest ->
-        (match value with
-        | Int n -> if n < 0L then Error "SQLite: negative LIMIT is unsupported" else Ok ((Some (Stdlib.Int.fromInt64 n),rest))
-        | _ -> Error "SQLite: LIMIT must be an integer literal")
-      | _ -> Error "SQLite: LIMIT must be an integer literal")
+    else __expression tail 1 |> Stdlib.Result.map (fun (expr,rest) -> (Some expr,rest))
+  | _ -> Ok ((None,tokens))
+
+let __alias (tokens: List<__Token>) : Stdlib.Result.Result<(Stdlib.Option.Option<String> * List<__Token>),String> =
+  match tokens with
+  | Word word :: rest ->
+    if __lower word == "as" then __name rest |> Stdlib.Result.map (fun (name,rest) -> (Some name,rest))
+    else if Stdlib.List.contains ["where","order","limit","group","union","join","inner","left","cross","on","offset","having"] (__lower word) then Ok ((None,tokens))
+    else Ok ((Some word,rest))
+  | Quoted word :: rest -> Ok ((Some word,rest))
   | _ -> Ok ((None,tokens))
 
 let __select (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * List<__Token>), String> =
+  let (distinct,tokens) = match tokens with
+    | Word word :: rest when __lower word == "distinct" -> (true,rest)
+    | Word word :: rest when __lower word == "all" -> (false,rest)
+    | _ -> (false,tokens)
   __fields tokens |> Stdlib.Result.andThen (fun (fields,rest) ->
     (match rest with
-    | Word word :: tail -> if __lower word == "from" then __name tail |> Stdlib.Result.map (fun (table,rest) -> (Some table,rest)) else Ok ((None,rest))
-    | _ -> Ok ((None,rest))) |> Stdlib.Result.andThen (fun (table,rest) ->
+    | Word word :: tail when __lower word == "from" -> __name tail |> Stdlib.Result.andThen (fun (table,rest) ->
+      __alias rest |> Stdlib.Result.map (fun (alias,rest) -> (Some table,alias,rest)))
+    | _ -> Ok ((None,None,rest))) |> Stdlib.Result.andThen (fun (table,alias,rest) ->
       __predicate rest |> Stdlib.Result.andThen (fun (predicate,rest) ->
         (match rest with
         | Word word :: tail -> if __lower word == "order" then __eat tail "by" |> Stdlib.Result.andThen __order else Ok (([],rest))
         | _ -> Ok (([],rest))) |> Stdlib.Result.andThen (fun (order,rest) ->
           __limit rest |> Stdlib.Result.map (fun (limit,rest) ->
-            (Select (__Select { fields = fields, table = table, predicate = predicate, order = order, limit = limit }),rest))))))
+            (Select (__Select { fields = fields, table = table, alias = alias, distinct = distinct, predicate = predicate, order = order, limit = limit }),rest))))))
 
 let __assignments (tokens: List<__Token>) : Stdlib.Result.Result<(List<(String * __Expr)> * List<__Token>), String> =
   __name tokens |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "=" |> Stdlib.Result.andThen (fun rest -> __expression rest 1)
@@ -386,4 +377,9 @@ let __catalogColumns (sql: String) : Stdlib.Result.Result<List<__Column>,String>
         | Some [Word _,Word _,Symbol "(",Quoted name,Symbol ")"] -> Some name
         | _ -> None
       Stdlib.List.map columns (fun column ->
-        if name == Some column.name && column.affinity == "integer" then { column with primary = true } else column)))
+        let eligible = Stdlib.List.any parts (fun part -> match part with
+          | Word n :: Word declared :: _ -> __lower n == __lower column.name && __lower declared == "integer"
+          | Quoted n :: Word declared :: _ -> __lower n == __lower column.name && __lower declared == "integer"
+          | _ -> false)
+        let named = match name with | None -> false | Some n -> __lower n == __lower column.name
+        if named && eligible then { column with primary = true } else column)))

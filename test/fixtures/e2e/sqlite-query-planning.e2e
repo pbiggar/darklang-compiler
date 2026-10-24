@@ -1,0 +1,6 @@
+// Single-source projection semantics needed by package listings and history limits.
+(let db = "/tmp/dark-sqlite-distinct.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (owner TEXT); INSERT INTO t VALUES ('a'),('a'),('b'),('c')" in Stdlib.Sqlite.queryP db "SELECT DISTINCT t.owner AS name FROM t AS t ORDER BY name LIMIT @p0" ["2"] |> Stdlib.Result.map (fun rows -> Stdlib.List.map rows (fun row -> Stdlib.Sqlite.textField row "name"))) = Ok [Some "a",Some "b"]
+(let db = "/tmp/dark-sqlite-alias.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (owner TEXT); INSERT INTO t VALUES ('x')" in Stdlib.Sqlite.query db "SELECT \"q\".\"owner\" FROM t q" |> Stdlib.Result.map (fun rows -> Stdlib.List.map rows (fun row -> Stdlib.Sqlite.textField row "owner"))) = Ok [Some "x"]
+Stdlib.Sqlite.queryP "/tmp/dark-sqlite-limit.db" "SELECT 1 AS n LIMIT @p0" ["0"] = Ok []
+Stdlib.Sqlite.queryP "/tmp/dark-sqlite-limit.db" "SELECT 1 AS n LIMIT @p0" ["-1"] |> Stdlib.Result.map (fun rows -> Stdlib.List.length rows) = Ok 1
+Stdlib.Result.isError (Stdlib.Sqlite.query "/tmp/dark-sqlite-limit.db" "SELECT 1 AS n LIMIT NULL") = true
