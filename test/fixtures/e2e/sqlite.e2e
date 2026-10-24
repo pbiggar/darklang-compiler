@@ -1,0 +1,5 @@
+// Page-backed SQLite: public API, parameter binding and transaction rollback.
+
+(let db = "/tmp/dark-sqlite-basic.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)" in let _ = Stdlib.Sqlite.execP db "INSERT INTO t (id,name) VALUES (@p0,@p1)" ["1", "o'brien"] in Stdlib.Sqlite.column db "SELECT name FROM t ORDER BY id" "name") = ["o'brien"]
+
+(let db = "/tmp/dark-sqlite-rollback.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)" in let _ = Stdlib.Sqlite.execP db "INSERT INTO t VALUES (@p0,@p1)" ["1", "alice"] in let batch = Stdlib.Sqlite.execBatch db [("INSERT INTO t VALUES (@p0,@p1)", [["2", "bob"], ["1", "duplicate"]])] in (Stdlib.Result.isError batch, Stdlib.Sqlite.column db "SELECT name FROM t ORDER BY id" "name")) = (true, ["alice"])
