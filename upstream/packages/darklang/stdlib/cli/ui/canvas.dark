@@ -153,7 +153,6 @@ let composeRow (width: Int) (rowSpans: List<Layout.Span>) : String =
 ///
 /// Spans are bucketed by row in one pass. Doing it the obvious way (filter the whole span list once per row)
 /// is quadratic, and a full-screen frame has enough of both to make that hurt.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Int_32ce65fa924cf1cc' is absent from symbols"
 let compose (width: Int) (height: Int) (spans: List<Layout.Span>) : List<String> =
   let w = Stdlib.max 1 width
   let h = Stdlib.max 0 height
