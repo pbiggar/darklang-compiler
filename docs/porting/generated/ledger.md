@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 3,235 blocked, 2 excluded, 35 replace, 431 run |
 | stdlib | 848 blocked, 3 excluded, 1,142 replace, 5 run |
-| tests | 1,511 run, 848 xfail |
+| tests | 1,519 run, 840 xfail |
 
 ## Expected test failures
 
@@ -23,8 +23,8 @@ Upstream bugs record interpreter behavior or test expectations that the compiler
 
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
-| `aot-rejection` | 212 | 0 | 212 |
-| `missing-support` | 627 | 8 | 635 |
+| `aot-rejection` | 216 | 0 | 216 |
+| `missing-support` | 617 | 6 | 623 |
 | `upstream-bug` | 0 | 1 | 1 |
 
 | Class | Reason | Tests |
@@ -34,8 +34,8 @@ Upstream bugs record interpreter behavior or test expectations that the compiler
 | `aot-rejection` | `aot-invalid-key` | 8 |
 | `aot-rejection` | `aot-match-error` | 26 |
 | `aot-rejection` | `aot-name-error` | 11 |
-| `aot-rejection` | `aot-type-error` | 138 |
-| `missing-support` | `compiler-gap` | 41 |
+| `aot-rejection` | `aot-type-error` | 142 |
+| `missing-support` | `compiler-gap` | 29 |
 | `missing-support` | `test-counter` | 7 |
 | `missing-support` | `upstream-dependency` | 587 |
 | `upstream-bug` | `upstream-bug` | 1 |
@@ -82,7 +82,7 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/language/runtimeToProgramTypes.dark](../../../upstream/packages/darklang/tests/language/runtimeToProgramTypes.dark) | 5 |
 | [packages/darklang/tests/language/traits.dark](../../../upstream/packages/darklang/tests/language/traits.dark) | 17 |
 | [packages/darklang/tests/language/tupleLiterals.dark](../../../upstream/packages/darklang/tests/language/tupleLiterals.dark) | 1 |
-| [packages/darklang/tests/language/unwrap.dark](../../../upstream/packages/darklang/tests/language/unwrap.dark) | 6 |
+| [packages/darklang/tests/language/unwrap.dark](../../../upstream/packages/darklang/tests/language/unwrap.dark) | 5 |
 | [packages/darklang/tests/language/values.dark](../../../upstream/packages/darklang/tests/language/values.dark) | 1 |
 | [packages/darklang/tests/languageTools/atRestTypeChecker.dark](../../../upstream/packages/darklang/tests/languageTools/atRestTypeChecker.dark) | 172 |
 | [packages/darklang/tests/languageTools/builtinIntrospection.dark](../../../upstream/packages/darklang/tests/languageTools/builtinIntrospection.dark) | 3 |
@@ -103,12 +103,10 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/stdlib/discovery.dark](../../../upstream/packages/darklang/tests/stdlib/discovery.dark) | 2 |
 | [packages/darklang/tests/stdlib/httpclient.dark](../../../upstream/packages/darklang/tests/stdlib/httpclient.dark) | 3 |
 | [packages/darklang/tests/stdlib/ints/int8.dark](../../../upstream/packages/darklang/tests/stdlib/ints/int8.dark) | 1 |
-| [packages/darklang/tests/stdlib/json.dark](../../../upstream/packages/darklang/tests/stdlib/json.dark) | 5 |
-| [packages/darklang/tests/stdlib/list.dark](../../../upstream/packages/darklang/tests/stdlib/list.dark) | 11 |
+| [packages/darklang/tests/stdlib/json.dark](../../../upstream/packages/darklang/tests/stdlib/json.dark) | 3 |
+| [packages/darklang/tests/stdlib/list.dark](../../../upstream/packages/darklang/tests/stdlib/list.dark) | 9 |
 | [packages/darklang/tests/stdlib/live.dark](../../../upstream/packages/darklang/tests/stdlib/live.dark) | 2 |
-| [packages/darklang/tests/stdlib/option.dark](../../../upstream/packages/darklang/tests/stdlib/option.dark) | 3 |
 | [packages/darklang/tests/stdlib/pretty.dark](../../../upstream/packages/darklang/tests/stdlib/pretty.dark) | 1 |
-| [packages/darklang/tests/stdlib/result.dark](../../../upstream/packages/darklang/tests/stdlib/result.dark) | 4 |
 | [packages/darklang/tests/stdlib/sqlite.dark](../../../upstream/packages/darklang/tests/stdlib/sqlite.dark) | 7 |
 | [packages/darklang/tests/stdlib/string.dark](../../../upstream/packages/darklang/tests/stdlib/string.dark) | 2 |
 
@@ -154,8 +152,9 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `aot-invalid-key` | 8 |
 | tests | `aot-match-error` | 26 |
 | tests | `aot-name-error` | 11 |
-| tests | `aot-type-error` | 138 |
-| tests | `compiler-gap` | 41 |
+| tests | `aot-type-error` | 142 |
+| tests | `compiler-gap` | 29 |
+| tests | `diagnostic-difference` | 2 |
 | tests | `test-counter` | 7 |
 | tests | `upstream-bug` | 1 |
 | tests | `upstream-dependency` | 587 |
