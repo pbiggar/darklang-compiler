@@ -58,8 +58,20 @@ def bindings(sql,fresh=False):
     return result
 
 
+def canonical_sql(sql):
+    if sql is None:return None
+    tokens=re.findall(r"X'(?:''|[^'])*'|'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|`[^`]*`|--[^\n]*|/\*.*?\*/|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|>=|<=|<>|!=|\|\||[^\s]",sql,re.S)
+    tokens=[token if token.startswith(("'",'"','`')) else token.upper() for token in tokens if not token.startswith(('--','/*'))]
+    for index in range(min(5,len(tokens)-2)):
+        if tokens[index:index+3]==['IF','NOT','EXISTS']:
+            del tokens[index:index+3]
+            break
+    return tokens
+
+
 def snapshot(connection):
     catalog=connection.execute('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name').fetchall()
+    catalog=[(kind,name,table,canonical_sql(sql)) for kind,name,table,sql in catalog]
     rows={}
     for type_,name,_,_ in catalog:
         if type_=='table':rows[name]=connection.execute('SELECT rowid,* FROM "'+name+'" ORDER BY rowid').fetchall()
@@ -72,19 +84,31 @@ def timestamp(value):
     except ValueError:return None
 
 
-def equivalent(actual,expected,before,after):
+def equivalent(actual,expected,before,after,clock_pairs=None):
     if isinstance(actual,(tuple,list)) and isinstance(expected,(tuple,list)):
-        return len(actual)==len(expected) and all(equivalent(a,b,before,after) for a,b in zip(actual,expected))
+        return len(actual)==len(expected) and all(equivalent(a,b,before,after,clock_pairs) for a,b in zip(actual,expected))
     if isinstance(actual,dict) and isinstance(expected,dict):
-        return actual.keys()==expected.keys() and all(equivalent(actual[k],expected[k],before,after) for k in actual)
+        return actual.keys()==expected.keys() and all(equivalent(actual[k],expected[k],before,after,clock_pairs) for k in actual)
     if actual==expected:return True
+    if clock_pairs is not None and isinstance(actual,str) and isinstance(expected,str) and (actual,expected) in clock_pairs:return True
     a,b=timestamp(actual),timestamp(expected)
     if a is None or b is None:return False
     # CURRENT_TIMESTAMP, datetime(now), and default millisecond strftime may
     # legitimately cross a clock tick between the two processes.
     lower=before-datetime.timedelta(seconds=1)
-    return lower<=a<=after and lower<=b<=after and len(actual)==len(expected)
+    valid=lower<=a<=after and lower<=b<=after and len(actual)==len(expected)
+    if valid and clock_pairs is not None:clock_pairs.add((actual,expected))
+    return valid
 
+
+def difference(actual,expected,path='database'):
+    if isinstance(actual,(tuple,list)) and isinstance(expected,(tuple,list)) and len(actual)==len(expected):
+        for index,(a,b) in enumerate(zip(actual,expected)):
+            if a!=b:return difference(a,b,path+'['+str(index)+']')
+    if isinstance(actual,dict) and isinstance(expected,dict) and actual.keys()==expected.keys():
+        for key in actual:
+            if actual[key]!=expected[key]:return difference(actual[key],expected[key],path+'.'+key)
+    return (path,actual,expected)
 
 def main():
     compiler,fixtures=map(lambda p:Path(p).resolve(),sys.argv[1:3])
@@ -92,8 +116,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix='dark-package-differential-') as temporary:
         root=Path(temporary);source,binary,seed,native_db,dark_db=(root/n for n in ['query.dark','query','seed.db','native.db','dark.db'])
         source.write_text(PROGRAM.replace('Stdlib.Sqlite.__Engine.__executeTyped','Stdlib.Sqlite.__Connection.__executeTyped'))
-        compiled=subprocess.run([str(compiler),'--allow-internal','-q',str(source),'-o',str(binary)],capture_output=True,text=True,timeout=240)
-        assert compiled.returncode==0,compiled.stdout+compiled.stderr
+        if 'SQLITE_TEST_DRIVER' in os.environ:binary=Path(os.environ['SQLITE_TEST_DRIVER']).resolve()
+        else:
+            compiled=subprocess.run([str(compiler),'--allow-internal','-q',str(source),'-o',str(binary)],capture_output=True,text=True,timeout=240)
+            assert compiled.returncode==0,compiled.stdout+compiled.stderr
         fixture(seed,(fixtures/'schema.sql').read_text())
         cases=[e for e in corpus['entries'] if e['kind']=='statement']+concrete_templates(corpus)
         cases=[e for e in cases if not re.match(r'^(SELECT|WITH)\b',e['sql'],re.I)]
@@ -134,11 +160,12 @@ def main():
                     try:
                         assert dark.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
                         actual=snapshot(dark)
-                        assert equivalent(actual,expected,before,after),(actual,expected)
+                        assert equivalent(actual,expected,before,after),difference(actual,expected)
                     finally:dark.close()
                 except (AssertionError,sqlite3.Error) as error:
                     failures.append(dict(source=entry['source'],line=entry['line'],variant=entry.get('variant'),fresh=fresh,sql=entry['sql'],error=str(error)[:3000]))
                 else:passed+=1
+                if failures and len(failures)<=3:print(str(failures[-1])[:600],flush=True)
                 if (passed+len(failures))%50==0:print(f"Mutation cases: {passed} passed, {len(failures)} failed",flush=True)
                 native.close()
         missing=[(e['source'],e['line']) for e in cases if (e['source'],e['line']) not in successful]

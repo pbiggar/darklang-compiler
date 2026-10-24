@@ -33,11 +33,7 @@ let __compact (source: Stdlib.Sqlite.__Pager.__State) (target: Stdlib.Sqlite.__P
         Stdlib.Sqlite.__Engine.__schema target false |> Stdlib.Result.andThen (fun (target,tables) ->
           Stdlib.Sqlite.__Engine.__createIndex target tables index.definition |> Stdlib.Result.map (fun outcome -> outcome.state))))))
 let __vacuum (source: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
-  Stdlib.Cli.Posix.mkstemp "dark-sqlite-vacuum-" |> Stdlib.Sqlite.__Io.__posix |> Stdlib.Result.andThen (fun (fd,path) ->
-    let _ = Stdlib.Sqlite.__Io.__close fd
-    let result = Stdlib.Sqlite.__Pager.__open path |> Stdlib.Result.andThen (fun target ->
-      let result = __compact source target |> Stdlib.Result.andThen (fun compact -> Stdlib.Sqlite.__Pager.__copy compact source)
-      let closed = Stdlib.Sqlite.__Pager.__close target
-      match (result,closed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok state,Ok _) -> Ok state)
-    let removed = Stdlib.Cli.Posix.unlink path |> Stdlib.Sqlite.__Io.__posix
-    match (result,removed) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok state,Ok _) -> Ok state)
+  // The compact builder starts with page 1 and allocates only dirty pages. It
+  // never reads from or commits its borrowed descriptor. This avoids a temporary
+  // file and still installs the rebuilt pages through the destination transaction.
+  __compact source { source with wal = None } |> Stdlib.Result.andThen (fun compact -> Stdlib.Sqlite.__Pager.__copy compact source)

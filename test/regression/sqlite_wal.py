@@ -31,9 +31,11 @@ def main():
         connection=sqlite3.connect(db)
         assert connection.execute('PRAGMA journal_mode=WAL').fetchone()==('wal',)
         connection.execute('PRAGMA wal_autocheckpoint=0')
-        connection.execute('CREATE TABLE t(v INTEGER)')
-        connection.execute('INSERT INTO t VALUES (1)')
-        connection.commit()
+        # Native WAL initialization leaves schema format/encoding zero until
+        # the first table. Dark must initialize those fields in its first commit.
+        assert run('CREATE TABLE t(v INTEGER)')=='Ok -1'
+        assert run('INSERT INTO t VALUES (1)')=='Ok 1'
+        assert connection.execute('SELECT v FROM t').fetchall()==[(1,)]
         output=run(mode='query'); assert output=='1',output
         # EFBIG partway through the commit frame must roll back the append,
         # including its on-disk commit marker, before reporting an ordinary error.

@@ -22,7 +22,7 @@ OWNED=['p.effective = 1 AND p.id NOT IN (SELECT op_id FROM op_branches)','p.id I
 DRAFTS=['p.commit_hash IS NULL AND p.effective=1 AND p.id NOT IN (SELECT op_id FROM op_branches)','p.commit_hash IS NULL AND p.id IN (SELECT op_id FROM op_branches WHERE branch_id=@p0)']
 PARENTS=['p.commit_hash IS NOT NULL AND p.effective=1 AND p.id NOT IN (SELECT op_id FROM op_branches)',f'p.commit_hash IS NOT NULL AND (p.id IN (SELECT op_id FROM op_branches WHERE branch_id IN ({CHAIN} SELECT bid FROM chain)) OR (p.effective=1 AND p.id NOT IN (SELECT op_id FROM op_branches)))']
 PURGE=['locations',*CONTENT,'package_ops','package_dependencies','deprecations','location_docs','conflicts','op_branches','branch_name_bases','seed_ops']
-PROJECTIONS=[*CONTENT,'locations','package_dependencies','deprecations','location_docs','conflicts']
+PROJECTIONS=[*CONTENT,'locations','package_dependencies','deprecations']
 
 
 def variants(entry):

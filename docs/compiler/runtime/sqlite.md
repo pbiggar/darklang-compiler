@@ -1,156 +1,141 @@
 # SQLite in Dark
 
 `Stdlib.Sqlite` uses the embedded Dark engine under
-`packages/darklang/stdlib/sqlite/`. Its only host boundary is existing filesystem
-primitives. Generated programs do not link SQLite or libSQL or run database
-executables. The compiler's own hosted-package cache is a separate subsystem.
+`packages/darklang/stdlib/sqlite/`. Generated programs do not link SQLite or
+libSQL or invoke database executables. The host boundary consists of filesystem,
+clock, entropy and descriptor/locking primitives. The compiler's hosted-package
+cache is a separate subsystem.
 
-The original upstream wrappers supply the public API. Three portable `Builtin`
-bridges delegate execution, querying and batching to the engine. Public parameters are
-strings bound to `@p0`, `@p1`, etc. The private engine accepts named typed cells.
-Output cells preserve NULL, signed 64-bit
-integers, IEEE doubles, UTF-8 text and binary blobs.
+The upstream convenience wrappers retain their public API. Public parameters are
+strings bound to `@p0`, `@p1`, etc. Private execution accepts case-sensitive named
+`@name`, `$name` and `:name` bindings, preserving NULL, signed 64-bit integers,
+IEEE doubles, UTF-8 text and binary blobs. Prepared programs contain syntax only;
+every execution receives fresh bindings.
 
 ## Storage and transactions
 
-The engine reads SQLite 3 table B-tree pages on demand through an open file
-descriptor. A transaction caches read pages and maintains separate dirty pages.
-Inserts split leaves and interior nodes, growing the root while preserving its
-page number. Large records use SQLite overflow chains. Dropping tables and
-deleting overflow records return pages to the SQLite freelist. Deleting ordinary
-rows compacts their leaf, unlinks empty children and collapses roots. Underfull
-nonempty nodes can accept later inserts.
+The pager reads SQLite 3 pages on demand through an open descriptor. Transactions
+cache read pages and keep dirty pages separately. Table B-trees split leaves and
+interiors while preserving roots; large records use overflow chains. Deletion
+unlinks empty children, collapses roots and reuses freelist pages. Index B-trees
+use promoted interior keys, overflow chains and stable roots. Mutations rebuild
+affected indexes, reclaiming their old pages inside the transaction.
 
-Commit writes dirty pages at their existing offsets, followed by the database
-header. It does not serialize or replace the entire file. A batch shares one
-pager and commits only after every statement and parameter row succeeds. SQL
-errors discard dirty pages without changing the database. Before images are
-retained for attempting rollback after an ordinary commit write error; if that
-rollback also fails, the returned error reports both failures. Newly appended
-pages may remain beyond the restored logical database size.
+Rollback-mode commit writes dirty pages at their existing offsets and writes the
+header last. Before images support an attempted rollback after an ordinary write
+error. WAL mode reads committed snapshots and appends checksum-protected frames,
+then publishes SQLite's shared-memory index. SHARED/RESERVED/PENDING database
+locks and WAL attachment/reader/writer/checkpoint locks coordinate native SQLite
+and independent Dark connections. OFD locks keep descriptors independent within
+a process. Linux is exercised; the Darwin OFD ABI is implemented but not
+host-tested here.
 
-There is no fsync protocol or persistent rollback journal for power-loss safety.
-WAL snapshots read and append checksum-validated SQLite frames and maintain the
-shared-memory index under SQLite's reader, writer and attachment locks. Native
-interoperability covers committed-frame recovery after an unclean process exit,
-reader snapshots, writer exclusion and WAL restarts. Operational regressions cover held read/write transactions, per-connection
-`data_version`, busy-timeout configuration, checkpoint contention and truncation,
-consistent backup/restore, foreign-key checks and VACUUM compaction. Rollback-mode transactions use SQLite's native
-SHARED, RESERVED and PENDING byte ranges. OFD locks coordinate independent Dark
-connections and native SQLite connections, including connections in one process.
-Readers may coexist; writers wait for readers before committing. Native locking
-regressions cover writer exclusion, committed read visibility and writer handoff.
-Linux is exercised here; the Darwin OFD ABI is implemented but not host-tested.
+SQL errors discard pending pages. Ordinary failed WAL appends are truncated back
+to the published snapshot before returning an error; failed rollback attempts are
+reported explicitly. There is no fsync protocol or persistent rollback journal
+for power-loss safety. Committed WAL recovery is implemented, but this engine
+does not claim SQLite's crash-durability guarantees.
 
-## Supported subset
+`__Connection` owns a persistent descriptor attachment, releases transaction locks
+between commands and reloads each new snapshot. It supports deferred/immediate
+transactions, commit/rollback, typed prepared commands, connection-local
+`busy_timeout`, `synchronous=NORMAL|OFF`, `foreign_keys`, and `data_version`.
+The version counter notices other connections' commits without counting its own.
+A rollback connection whose journal mode changes externally must be reopened;
+it returns an error instead of reading or writing through the wrong pager.
 
-- UTF-8 SQLite 3 databases with power-of-two page sizes from 512 to 65536 bytes,
-  no reserved page bytes, no auto-vacuum, and rollback or WAL file headers.
-- Ordinary rowid tables, text/composite primary and unique keys, or an `INTEGER PRIMARY KEY` alias.
-- SQLite type affinities, `NOT NULL`, literal/function defaults and catalog references.
-- Ordinary, unique, composite, partial and expression indexes with BINARY ordering.
-- `CREATE TABLE [IF NOT EXISTS]`, `DROP TABLE [IF EXISTS]`, index creation/deletion,
-  `ALTER TABLE ... ADD COLUMN` and `pragma_table_info(table)` column discovery.
-- `INSERT [OR IGNORE|REPLACE] INTO`, optional target columns, one or more `VALUES`
-  tuples, and targeted `ON CONFLICT ... DO NOTHING|UPDATE` with `excluded` and WHERE.
-- `UPDATE ... SET` and `DELETE FROM`, optionally filtered by `WHERE`.
-- Single-table `SELECT` with aliases and `DISTINCT`, or scalar `SELECT` without a table; columns, `*`,
-  literals, `AS` aliases, comparisons, `IS [NOT]`, `AND`, `OR`, and parentheses.
-- `ORDER BY` column/scalar expressions with `ASC`/`DESC`, bound or literal integer
-  `LIMIT`, standalone `count(*)`, and casts to integer, real, text or blob.
-- SQL comments, escaped single-quoted strings, double-quoted/backtick identifiers,
-  blob literals and string parameters.
+`PRAGMA journal_mode=WAL` initializes WAL before the scoped connection opens.
+`PRAGMA wal_checkpoint(TRUNCATE)` respects active readers and reports contention.
+Backup/restore copies a consistent page snapshot through the destination pager,
+including into a live WAL database, preserving its inode. VACUUM rebuilds tables
+and indexes into a compact set of dirty pages, then installs them through the
+same transaction. Ordinary statements do not serialize or replace the whole file.
 
-Records are limited to 64 MiB. The engine scans tables rather than using a query
-optimizer. Query results are fully materialized, matching the public API.
+## SQL subset
 
-The relational evaluator supports inner/left/cross joins, derived tables, scalar
-and correlated subqueries, EXISTS, scalar/tuple IN and NOT IN, grouping with COUNT
-and MAX, UNION/UNION ALL, and materialized/recursive CTEs. Recursive UNION removes
-duplicates across iterations and terminates on cycles. Recursive output has a
-one-million-row resource limit. Named and ordinal ordering, aliases and DISTINCT
-are handled before LIMIT. JSON table inputs expose key/value reads; wildcard
-projection of that restricted virtual source returns an error.
+- UTF-8 rowid databases with power-of-two page sizes from 512 to 65536 bytes,
+  no reserved page bytes and no auto-vacuum.
+- Text/composite primary and unique keys, `INTEGER PRIMARY KEY` aliases,
+  SQLite affinities, NOT NULL, defaults and the package schema's references.
+- Ordinary, unique, composite, partial and expression indexes, with BINARY ordering.
+- Table/index creation and deletion, `ALTER TABLE ... ADD COLUMN`, `sqlite_master`
+  / `sqlite_schema` reads and `pragma_table_info(table)` column discovery.
+- Multirow VALUES, INSERT SELECT, INSERT OR IGNORE/REPLACE, targeted UPSERT,
+  excluded-column references, UPDATE and DELETE with relational expressions.
+- Scalar SELECT, DISTINCT, inner/left/cross joins, derived tables, scalar and
+  correlated subqueries, EXISTS, scalar/tuple IN and NOT IN, GROUP BY/HAVING,
+  COUNT/MAX, UNION/UNION ALL, and materialized/recursive CTEs.
+- Column/alias/ordinal ordering, ASC/DESC query sorting and bound/literal LIMIT.
+- CASE, COALESCE/IFNULL/NULLIF, comparisons, SQL NULL/boolean logic, arithmetic,
+  concatenation, LIKE, length, substr, char, ASCII case conversion, typeof and casts.
+- JSON extraction of `$`, `$[index]` and `$.field`; json_each key/value rows.
+- ISO date/time inputs and now, datetime, the package schema's strftime format,
+  CURRENT_TIMESTAMP and integer second/minute/hour/day modifiers.
+- Package operational pragmas and foreign-key checking; scoped and explicit
+  transactions, consistent backup/restore and VACUUM.
 
-Relational expressions are also available in INSERT VALUES, INSERT SELECT,
-UPDATE assignments/predicates and DELETE predicates. INSERT SELECT materializes
-its input before applying target writes. The branch/replay statement tests execute
-the interpreter's JSON-ID updates, scalar commit lookup, projection copy and
-scoped delete without changing their SQL.
+The supported inline foreign keys are checked by `PRAGMA foreign_key_check`
+regardless of the connection's `foreign_keys` setting. Enabling enforcement checks
+mutations before commit. Package bulk import uses foreign_keys=OFF and performs
+its explicit check afterwards.
 
-Unsupported execution features return errors: views/triggers, operational pragmas, WAL, `AUTOINCREMENT`, `WITHOUT ROWID`, and changing a
-rowid alias through `UPDATE`. Reference clauses are preserved in the catalog;
-foreign-key enforcement/checking is pending. Writes to stores containing views
-or triggers are rejected. This subset does not implement all SQLite numeric-string
-conversion edge cases or arbitrary existing SQLite databases. It does not replace
-the interpreter's internal store.
+This is a restricted implementation, not all of SQLite. Views, triggers,
+AUTOINCREMENT, WITHOUT ROWID, arbitrary collations/JSON paths/date formats,
+Julian-date inputs and UPDATE of a rowid alias are unsupported. Writes to stores
+containing views or triggers are rejected. Catalog SQL is normalized when
+rewritten; its original whitespace/comments are not preserved. General numeric
+conversion edge cases outside the package workload are not promised.
 
-## Verification
+Queries use table scans and materialize their results. Index maintenance rebuilds
+whole affected trees. Records are limited to 64 MiB and recursive output to one
+million rows. Incremental index updates, query optimization, bounded caches and
+large-store performance remain future work.
 
-`test/fixtures/e2e/sqlite.e2e` exercises public API behavior. The pinned upstream
-SQLite tests run through their original convenience wrappers. Internal codec
-fixtures cover signed rowids, varint boundaries and IEEE representation.
+## Package-store coverage and verification
 
-`test/regression/sqlite_interop.py`, run by `dune runtest`, compiles a standalone
-Dark executable and exchanges files with Python's SQLite engine. It checks native
-`integrity_check`, cross-engine reads and writes, tree splits, overflow storage,
-freelist reuse, batch rollback, and unchanged bytes in unrelated pages after an
-update. Python SQLite is a test oracle only, never a runtime dependency of the
-generated program.
-
-## Interpreter package-store compatibility work
-
-The extension targets interpreter revision
+The target is interpreter revision
 `9ca42515810126f9cdf8ab9704ae44cc7e2e7241`. The unchanged initial schema is in
-`test/fixtures/sqlite-package/schema.sql`. `corpus.json` inventories 263 source
-SQL entries from LibDB and SCM, including 54 dynamic templates. The extraction
-excludes tracing and test-process queries, while retaining their shared tables.
+`test/fixtures/sqlite-package/schema.sql`. The corpus inventories 263 SQL source
+entries from LibDB and SCM, including 54 dynamic templates. Tracing and
+process-test query implementations are excluded; their shared schema remains.
 Regenerate with `python3 scripts/update-sqlite-package-corpus.py INTERPRETER`;
 `--check` verifies the pin and source hashes without writing files.
 
-The static corpus regression prepares 237 concrete statements against native
-SQLite. This verifies the reference inputs, **not Dark engine coverage**.
-Dynamic templates still require complete workload captures, including the
-variable table/column lists and shared CTE prefixes assembled at runtime.
+The static corpus prepares 237 concrete statements against native SQLite, which
+validates the reference input only. `sqlite_package_templates.py` constructs
+source-driven variants for every dynamic entry, including variable content-table
+columns, list lengths, search branches, main/branch predicates and CTE fragments.
+These are explicit constructions, not instrumentation of the running F# host.
 
-The engine now has a private typed binding interface (`__executeTyped`) with
-case-sensitive `@name`, `$name` and `:name` keys. Public string arguments still
-bind as `@p0`, `@p1`, etc. Prepared programs hold syntax without old bindings;
-`__transaction` supplies one scoped pager across reads and writes and commits
-only after the callback succeeds. Multiple statements are parsed together and
-share that transaction. These internal operations do not add public Stdlib API.
+The following regressions run under `dune runtest`. Native SQLite is an oracle,
+never a generated program's runtime dependency:
 
-The catalog reader accepts rowid tables with text/composite keys, defaults,
-references and associated indexes for table-scan SELECTs. Index writes use record-key B-trees with promoted interior keys and overflow
-chains. Their roots remain stable; rebuilding an affected index reclaims and
-reuses its other pages in the statement transaction. Package-store write and
-schema creation and typed mutation tests pass against native SQLite. Reading a
-view or firing triggers is not implemented. Existing records shorter than an
-added column use its declared default. WAL snapshots and operational maintenance are supported; full source-workflow validation is in progress.
+- `sqlite_interop.py`: table pages, splits, overflow, freelist reuse, deletion,
+  atomic batches, prepared rebinding and unchanged unrelated pages.
+- `sqlite_index_interop.py`: index leaf/interior splits, mixed typed keys,
+  overflow, stable roots and reuse at multiple page sizes.
+- `sqlite_locking.py`: writer exclusion, committed read visibility, reader/writer
+  handoff and independent descriptor locks.
+- `sqlite_wal.py`: bidirectional WAL interoperability, snapshots, reader-slot
+  sharing, hash-block transitions, restart, committed-frame recovery and ordinary
+  append-error rollback.
+- `sqlite_operations.py`: held transactions and data_version, configuration,
+  checkpoint contention/truncation, backup/restore, foreign keys and compaction.
+- `sqlite_package_store.py --audit`: typed read results for concrete queries and
+  constructed dynamic read variants, plus unchanged-schema interoperability.
+- `sqlite_package_differential.py`: every mutation shape against independent
+  native/Dark stores, comparing counts, logical catalogs, typed rows and integrity;
+  every source site must have a successful execution.
+- `sqlite_package_workflows.py`: SQL-level authoring, commit, branch merge,
+  projection replay, atomic failure, full-schema export/restore and migration.
 
-The scalar extension includes searched/simple CASE, COALESCE/IFNULL/NULLIF,
-concatenation, arithmetic, LIKE, length, substr, char, ASCII case conversion,
-typeof, JSON extraction of `$`, `$[index]` and `$.field`, json_each key/value rows, datetime and the package
-schema's strftime format. UTF-8 processing preserves SQLite text bytes and counts
-codepoints. General JSON paths and strftime formats remain unsupported. The required integer
-second/minute/hour/day date modifiers are supported, including the package
-writer's next-second timestamp and store-health next-day check. Native differential tests cover typed cells and the unchanged
-package-store schema in addition to the original page interoperability suite.
+Public API and internal E2E fixtures also run in the host suite. Timestamp
+comparisons allow independently sampled clock values within measured intervals;
+unordered result comparisons preserve multiplicity. Stored cells and explicit
+ordering are otherwise compared exactly.
 
-Remaining milestones, in dependency order:
-
-1. Complete dynamic SQL workload captures and assertions for each call site.
-2. Implement remaining metadata/operational pragmas and foreign-key checks.
-   Column additions, column discovery and index recreation are covered.
-   Index maintenance currently rebuilds affected trees;
-   incremental index deletion/rebalancing remains a performance improvement.
-3. Complete differential corpus coverage for relational queries. Focused joins,
-   correlated and tuple lookups, grouping, JSON joins and recursive cycle cases pass;
-   full interpreter query/workflow parity is still being measured.
-4. Complete source-template and workflow coverage for writes. INSERT SELECT,
-   expression/subquery writes, multirow VALUES, REPLACE and targeted UPSERT/excluded
-   semantics are covered by focused and native interoperability cases.
-5. Long-lived connections with SQLite locking, WAL, checkpointing, data_version,
-   required pragmas, consistent backup/restore and VACUUM.
-6. Interpreter package authoring, branch/merge, projection rebuild, migration and
-   export/restore workflow parity. The interpreter store is not switched over.
+These workflows exercise opaque serialized bodies and the interpreter's SQL;
+they do not execute its F# serializers or CLI. The interpreter repository has not
+been switched to this backend. Full compiler build, host suite, `dune runtest`
+and the source-ledger check are completion gates. The benchmark gate is not
+applicable in ChatGPT Work.

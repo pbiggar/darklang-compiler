@@ -69,6 +69,30 @@ def has_order(sql):
     return False
 
 
+def sample_bindings(entry):
+    names = re.findall(r'[@:$]([A-Za-z_][A-Za-z_0-9]*)',entry['sql'])
+    bindings = {}
+    for name in names:
+        lower = name.lower()
+        value = {'owner':'Darklang','modules':'Example','name':'a','item_type':'fn','hash':'fn-a','item_hash':'fn-a','itemhash':'fn-a','value_type':b'type','valuetype':b'type','p0':'branch-test','p1':'00000000-0000-0000-0000-000000000001','branch':'parent-test','c':'effective','searchtext':'a','directchildpattern':'Example.%','fqname':'Darklang.Example'}.get(lower,'0')
+        if re.fullmatch(r'(h|hash|target_hash_)\d+',lower):value='fn-a'
+        if re.fullmatch(r'id\d+',lower):value='dyn-branch'
+        if re.fullmatch(r'k\d+',lower):value='unicode'
+        if re.fullmatch(r'tok\d+',lower):value='a'
+        if re.fullmatch(r'(owner|modules|name|kind)\d+',lower):value={'owner':'Darklang','modules':'Example','name':'a','kind':'fn'}[re.sub(r'\d+$','',lower)]
+        if re.fullmatch(r'key\d+',lower):value='Darklang\x00Example\x00a'+('\x00item\x00' if entry['source'].endswith('/Inserts.fs') and entry['line']==130 else '')
+        if lower.startswith('target_hash_kind_'):value='fn'
+        bindings['@'+name] = value
+    # Python binds by name; the Dark API preserves the prefix too.
+    bindings = {prefix+name:bindings['@'+name] for prefix,name in re.findall(r'([@:$])([A-Za-z_][A-Za-z_0-9]*)',entry['sql'])}
+    for prefix,name in re.findall(r'json_each\(\s*([@:$])([A-Za-z_][A-Za-z_0-9]*)\s*\)',entry['sql'],re.I):bindings[prefix+name]='["fn-a","type-a"]'
+    if re.search(r"json_extract\(j\.value,\s*'\$\[0\]'",entry['sql']):
+        fourth='fn' if entry['source'].endswith('/propagation.dark') else 'fn-a'
+        bindings['@p0']=json.dumps([['Darklang','Example','a',fourth]])
+    for limit_name in re.findall(r'\bLIMIT\s+([@:$][A-Za-z_][A-Za-z_0-9]*)',entry['sql'],re.I):bindings[limit_name]=3
+    return bindings
+
+
 def main():
     compiler = str(Path(sys.argv[1]).resolve())
     fixtures = Path(sys.argv[2]).resolve()
@@ -76,9 +100,11 @@ def main():
         root = Path(temporary)
         source, binary, db = (root / name for name in ('query.dark', 'query', 'packages.db'))
         source.write_text(PROGRAM)
-        built = subprocess.run([compiler, '--allow-internal', '-q', str(source), '-o', str(binary)],
-                               capture_output=True, text=True, timeout=180)
-        assert built.returncode == 0, built.stdout + built.stderr
+        if 'SQLITE_TEST_DRIVER' in os.environ:binary=Path(os.environ['SQLITE_TEST_DRIVER']).resolve()
+        else:
+            built = subprocess.run([compiler, '--allow-internal', '-q', str(source), '-o', str(binary)],
+                                   capture_output=True, text=True, timeout=240)
+            assert built.returncode == 0, built.stdout + built.stderr
         connection = sqlite3.connect(db)
         connection.executescript((fixtures / 'schema.sql').read_text())
         connection.execute("INSERT INTO package_types(hash,pt_def,rt_def) VALUES (?,?,?)", ('type-a', b'pt\x00', b'rt\xff' * 4000))
@@ -165,43 +191,31 @@ def main():
         assert db.read_bytes()==before,'unique expression index failure changed the file'
         if '--audit' in sys.argv:
             connection.execute("INSERT INTO branches(id,name,parent_id) VALUES ('branch-test','work','parent-test'),('parent-test','parent','00000000-0000-0000-0000-000000000001')")
-            connection.execute("INSERT INTO commits(hash,message,origin_ts,parent) VALUES ('dyn-commit','main','1',''),('dyn-branch-commit','branch','2','dyn-commit')")
-            connection.execute("INSERT INTO package_ops(id,op_blob,applied,effective,origin_ts,commit_hash,created_at) VALUES ('dyn-main',X'0100',1,1,'1','dyn-commit','2020-01-01 00:00:00'),('dyn-branch',X'0200',0,0,'2','dyn-branch-commit','2020-01-01 00:00:01'),('dyn-draft',X'0300',0,1,'3',NULL,'2020-01-01 00:00:02')")
+            connection.execute("INSERT INTO commits(hash,message,origin_ts,parent) VALUES ('dyn-commit','main','2020-01-01T00:00:01.000Z',''),('dyn-branch-commit','branch','2020-01-01T00:00:02.000Z','dyn-commit')")
+            connection.execute("INSERT INTO package_ops(id,op_blob,applied,effective,origin_ts,commit_hash,created_at) VALUES ('dyn-main',X'0100',1,1,'2020-01-01T00:00:01.000Z','dyn-commit','2020-01-01 00:00:00'),('dyn-branch',X'0200',0,0,'2020-01-01T00:00:02.000Z','dyn-branch-commit','2020-01-01 00:00:01'),('dyn-draft',X'0300',0,1,'2020-01-01T00:00:03.000Z',NULL,'2020-01-01 00:00:02')")
             connection.execute("INSERT INTO op_branches(op_id,branch_id,source) VALUES ('dyn-branch','parent-test','op')")
+            connection.execute("INSERT INTO package_dependencies VALUES ('caller-a','old-hash','fn','Darklang','Example','a'),('caller-b','caller-a','fn',NULL,NULL,NULL),('caller-a','caller-b','fn',NULL,NULL,NULL)")
             connection.commit()
             failures, passed = [], 0
             read_cases = [entry for entry in corpus['entries'] if entry['kind']=='statement'] + concrete_templates(corpus)
             for entry in read_cases:
                 if not re.match(r'^(SELECT|WITH)\b',entry['sql'],re.I):
                     continue
-                names = re.findall(r'[@:$]([A-Za-z_][A-Za-z_0-9]*)',entry['sql'])
-                bindings = {}
-                for name in names:
-                    lower = name.lower()
-                    value = {'owner':'Darklang','modules':'Example','name':'a','item_type':'fn','hash':'fn-a','item_hash':'fn-a','itemhash':'fn-a','value_type':b'type','valuetype':b'type','p0':'branch-test','p1':'00000000-0000-0000-0000-000000000001','branch':'parent-test','c':'effective','searchtext':'a','directchildpattern':'Example.%','fqname':'Darklang.Example'}.get(lower,'0')
-                    if re.fullmatch(r'(h|hash|target_hash_)\d+',lower):value='fn-a'
-                    if re.fullmatch(r'id\d+',lower):value='dyn-branch'
-                    if re.fullmatch(r'k\d+',lower):value='unicode'
-                    if re.fullmatch(r'tok\d+',lower):value='a'
-                    if re.fullmatch(r'(owner|modules|name|kind)\d+',lower):value={'owner':'Darklang','modules':'Example','name':'a','kind':'fn'}[re.sub(r'\d+$','',lower)]
-                    if re.fullmatch(r'key\d+',lower):value='Darklang\x00Example\x00a'+('\x00item\x00' if entry['source'].endswith('/Inserts.fs') and entry['line']==130 else '')
-                    if lower.startswith('target_hash_kind_'):value='fn'
-                    bindings['@'+name] = value
-                # Python binds by name; the Dark API preserves the prefix too.
-                bindings = {prefix+name:bindings['@'+name] for prefix,name in re.findall(r'([@:$])([A-Za-z_][A-Za-z_0-9]*)',entry['sql'])}
-                for limit_name in re.findall(r'\bLIMIT\s+([@:$][A-Za-z_][A-Za-z_0-9]*)',entry['sql'],re.I):bindings[limit_name]=3
+                bindings=sample_bindings(entry)
                 try:
                     check(entry['sql'],bindings,ordered=has_order(entry['sql']))
                 except (AssertionError,sqlite3.Error) as error:
                     failures.append({'source':entry['source'],'line':entry['line'],'sql':entry['sql'],'error':str(error)[:2000]})
                 else:
                     passed += 1
+                if (passed+len(failures))%50==0:print(f'Read cases: {passed} passed, {len(failures)} failed',flush=True)
             report = {'revision':corpus['interpreter_revision'],'passed':passed,'failed':len(failures),'failures':failures,'qualification':'Concrete reads plus source-driven variants of all 54 dynamic templates; read data and binding samples, not full F# host execution'}
             destination=Path.cwd()/'TestResults/sqlite-package-query-audit.json'
             destination.parent.mkdir(exist_ok=True)
             destination.write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
             print(f"Source query audit: {passed} passed, {len(failures)} failed; {destination}",flush=True)
             assert not failures,failures[:3]
+            connection.execute("DELETE FROM package_dependencies WHERE item_hash IN ('caller-a','caller-b')")
             connection.execute("DELETE FROM op_branches WHERE op_id='dyn-branch'")
             connection.execute("DELETE FROM package_ops WHERE id IN ('dyn-main','dyn-branch','dyn-draft')")
             connection.execute("DELETE FROM commits WHERE hash IN ('dyn-commit','dyn-branch-commit')")

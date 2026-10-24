@@ -110,7 +110,7 @@
 (rule
  (alias runtest)
  (deps sqlite_package_store.py sqlite_package_templates.py (source_tree ../fixtures/sqlite-package))
- (action (run python3 %{dep:sqlite_package_store.py} %{exe:../../bin/dark.exe} ../fixtures/sqlite-package)))
+ (action (run python3 %{dep:sqlite_package_store.py} %{exe:../../bin/dark.exe} ../fixtures/sqlite-package --audit)))
 
 (rule
  (alias runtest)
@@ -138,3 +138,13 @@
  (alias runtest)
  (deps sqlite_operations.py sqlite_package_store.py sqlite_package_templates.py)
  (action (run python3 %{dep:sqlite_operations.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps sqlite_package_differential.py sqlite_package_corpus.py sqlite_package_store.py sqlite_package_templates.py (source_tree ../fixtures/sqlite-package))
+ (action (run python3 %{dep:sqlite_package_differential.py} %{exe:../../bin/dark.exe} ../fixtures/sqlite-package)))
+
+(rule
+ (alias runtest)
+ (deps sqlite_package_workflows.py sqlite_package_differential.py sqlite_package_corpus.py sqlite_package_store.py sqlite_package_templates.py (source_tree ../fixtures/sqlite-package))
+ (action (run python3 %{dep:sqlite_package_workflows.py} %{exe:../../bin/dark.exe} ../fixtures/sqlite-package)))

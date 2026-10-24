@@ -78,8 +78,8 @@ let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
     else if size < 512 || size > 65536 || (size & (size - 1)) != 0 || length % size != 0 then Error "SQLite: invalid page size"
     else if (__get header 18 1 != 1 && __get header 18 1 != 2) || __get header 18 1 != __get header 19 1 then Error "SQLite: unsupported journal format"
     else if __get header 20 1 != 0 || __get header 52 4 != 0 || __get header 64 4 != 0 then Error "SQLite: reserved bytes and auto-vacuum are unsupported"
-    else if __get header 56 4 != 1 && __get header 18 1 != 2 then Error "SQLite: only UTF-8 databases are supported"
-    else if (__get header 44 4 < 1 || __get header 44 4 > 4) && __get header 18 1 != 2 then Error "SQLite: unsupported schema format"
+    else if __get header 56 4 != 1 && __get header 56 4 != 0 && __get header 18 1 != 2 then Error "SQLite: only UTF-8 databases are supported"
+    else if __get header 44 4 > 4 && __get header 18 1 != 2 then Error "SQLite: unsupported schema format"
     else
       let declared = __get header 28 4
       let valid = __get header 24 4 == __get header 92 4 && declared != 0
@@ -120,6 +120,8 @@ let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
   else (match s.wal with | Some _ -> Ok () | None -> Stdlib.Sqlite.__Locks.__exclusive s.fd s.timeout) |> Stdlib.Result.andThen (fun _ -> __read s 1)
   |> Stdlib.Result.andThen (fun (s, header) ->
     let counter = (__get header 24 4 + 1) % 4294967296
+    let header = if __get header 56 4 == 0 then __put header 56 4 1 else header
+    let header = if __get header 44 4 == 0 then __put header 44 4 4 else header
     let header = __put (__put (__put header 24 4 counter) 92 4 counter) 28 4 s.count
     let pages = Stdlib.List.map (Stdlib.Dict.toList (Stdlib.Dict.remove s.dirty 1L)) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b)) @ [(1,header)]
     match s.wal with
@@ -148,11 +150,15 @@ let __refresh (s: __State) (timeout: Int) : Stdlib.Result.Result<__State,String>
   match s.wal with
   | Some wal -> Stdlib.Sqlite.__Wal.__snapshot wal.fd wal.shm s.size 20 |> Stdlib.Result.map (fun wal ->
     { s with count = wal.count, originalCount = wal.count, cache = Dict {}, dirty = Dict {}, wal = Some wal })
-  | None -> Stdlib.Sqlite.__Locks.__shared s.fd timeout |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Io.__size s.fd |> Stdlib.Result.andThen (fun length -> __load s.fd length))
+  | None -> Stdlib.Sqlite.__Locks.__shared s.fd timeout |> Stdlib.Result.andThen (fun _ ->
+    Stdlib.Sqlite.__Io.__readAt s.fd 18 1 |> Stdlib.Result.andThen (fun mode ->
+      if __get mode 0 1 != 1 then Error "SQLite: journal mode changed; reopen connection"
+      else Stdlib.Sqlite.__Io.__size s.fd |> Stdlib.Result.andThen (fun length -> __load s.fd length)))
 let __stamp (s: __State) : Stdlib.Result.Result<Int,String> =
   match s.wal with
   | Some wal -> Stdlib.Sqlite.__Wal.__readIndex wal.shm s.size |> Stdlib.Result.map (fun index -> Stdlib.Sqlite.__Wal.__le index 8 4)
-  | None -> Stdlib.Sqlite.__Io.__readAt s.fd 24 4 |> Stdlib.Result.map (fun bytes -> __get bytes 0 4)
+  | None -> Stdlib.Sqlite.__Io.__readAt s.fd 18 10 |> Stdlib.Result.andThen (fun bytes ->
+    if __get bytes 0 1 != 1 then Error "SQLite: journal mode changed; reopen connection" else Ok (__get bytes 6 4))
 let __enableWal (path: String) : Stdlib.Result.Result<Unit,String> =
   __open path |> Stdlib.Result.andThen (fun s ->
     let result = match s.wal with
