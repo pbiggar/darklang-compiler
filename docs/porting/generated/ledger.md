@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 1,942 blocked, 2 excluded, 35 replace, 1,724 run |
 | stdlib | 637 blocked, 3 excluded, 1,142 replace, 216 run |
-| tests | 46 blocked, 1,666 run, 647 xfail |
+| tests | 46 blocked, 1,684 run, 629 xfail |
 
 ## Expected test failures
 
@@ -21,8 +21,8 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
-| `aot-rejection` | 213 | 0 | 213 |
-| `missing-support` | 420 | 14 | 434 |
+| `aot-rejection` | 218 | 0 | 218 |
+| `missing-support` | 397 | 14 | 411 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -30,11 +30,11 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-invalid-field` | 17 |
 | `aot-rejection` | `aot-invalid-key` | 8 |
 | `aot-rejection` | `aot-match-error` | 26 |
-| `aot-rejection` | `aot-name-error` | 11 |
-| `aot-rejection` | `aot-type-error` | 139 |
-| `missing-support` | `compiler-gap` | 45 |
+| `aot-rejection` | `aot-name-error` | 12 |
+| `aot-rejection` | `aot-type-error` | 143 |
+| `missing-support` | `compiler-gap` | 39 |
 | `missing-support` | `test-counter` | 7 |
-| `missing-support` | `upstream-dependency` | 382 |
+| `missing-support` | `upstream-dependency` | 365 |
 
 ### Remaining support by source
 
@@ -61,14 +61,12 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/language/equality.dark](../../../upstream/packages/darklang/tests/language/equality.dark) | 2 |
 | [packages/darklang/tests/language/errorTypeNames.dark](../../../upstream/packages/darklang/tests/language/errorTypeNames.dark) | 5 |
 | [packages/darklang/tests/language/eself.dark](../../../upstream/packages/darklang/tests/language/eself.dark) | 2 |
-| [packages/darklang/tests/language/fastOps.dark](../../../upstream/packages/darklang/tests/language/fastOps.dark) | 4 |
 | [packages/darklang/tests/language/lambdas.dark](../../../upstream/packages/darklang/tests/language/lambdas.dark) | 1 |
 | [packages/darklang/tests/language/letBindings.dark](../../../upstream/packages/darklang/tests/language/letBindings.dark) | 1 |
 | [packages/darklang/tests/language/matchExpressions.dark](../../../upstream/packages/darklang/tests/language/matchExpressions.dark) | 1 |
 | [packages/darklang/tests/language/operators.dark](../../../upstream/packages/darklang/tests/language/operators.dark) | 1 |
 | [packages/darklang/tests/language/records.dark](../../../upstream/packages/darklang/tests/language/records.dark) | 2 |
 | [packages/darklang/tests/language/runtimeToProgramTypes.dark](../../../upstream/packages/darklang/tests/language/runtimeToProgramTypes.dark) | 5 |
-| [packages/darklang/tests/language/traits.dark](../../../upstream/packages/darklang/tests/language/traits.dark) | 17 |
 | [packages/darklang/tests/language/tupleLiterals.dark](../../../upstream/packages/darklang/tests/language/tupleLiterals.dark) | 1 |
 | [packages/darklang/tests/language/unwrap.dark](../../../upstream/packages/darklang/tests/language/unwrap.dark) | 6 |
 | [packages/darklang/tests/languageTools/atRestTypeChecker.dark](../../../upstream/packages/darklang/tests/languageTools/atRestTypeChecker.dark) | 172 |
@@ -82,7 +80,7 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/scm/conflicts.dark](../../../upstream/packages/darklang/tests/scm/conflicts.dark) | 20 |
 | [packages/darklang/tests/stdlib/altJson.dark](../../../upstream/packages/darklang/tests/stdlib/altJson.dark) | 7 |
 | [packages/darklang/tests/stdlib/cli/sgr.dark](../../../upstream/packages/darklang/tests/stdlib/cli/sgr.dark) | 3 |
-| [packages/darklang/tests/stdlib/dict.dark](../../../upstream/packages/darklang/tests/stdlib/dict.dark) | 8 |
+| [packages/darklang/tests/stdlib/dict.dark](../../../upstream/packages/darklang/tests/stdlib/dict.dark) | 6 |
 | [packages/darklang/tests/stdlib/discovery.dark](../../../upstream/packages/darklang/tests/stdlib/discovery.dark) | 1 |
 | [packages/darklang/tests/stdlib/httpclient.dark](../../../upstream/packages/darklang/tests/stdlib/httpclient.dark) | 3 |
 | [packages/darklang/tests/stdlib/json.dark](../../../upstream/packages/darklang/tests/stdlib/json.dark) | 5 |
@@ -138,13 +136,13 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `aot-invalid-field` | 17 |
 | tests | `aot-invalid-key` | 8 |
 | tests | `aot-match-error` | 26 |
-| tests | `aot-name-error` | 11 |
-| tests | `aot-type-error` | 139 |
-| tests | `compiler-gap` | 45 |
+| tests | `aot-name-error` | 12 |
+| tests | `aot-type-error` | 143 |
+| tests | `compiler-gap` | 39 |
 | tests | `compiler-leak` | 1 |
 | tests | `interpreter-fixture` | 45 |
 | tests | `test-counter` | 7 |
-| tests | `upstream-dependency` | 382 |
+| tests | `upstream-dependency` | 365 |
 
 ## Separate capability assessments
 
