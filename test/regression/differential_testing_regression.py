@@ -15,9 +15,10 @@ def main():
         artifacts = root / "artifacts"
 
         def run(*arguments):
+            # Each invocation compiles the complete imported library before the case.
             return subprocess.run([str(tester), "--interpreter", str(oracle),
                                    "--artifacts", str(artifacts), *arguments],
-                                  capture_output=True, text=True, timeout=120, check=False)
+                                  capture_output=True, text=True, timeout=300, check=False)
 
         def oracle_output(value):
             oracle.write_text(f"#!/bin/sh\nprintf '%s\\n' '{value}'\n")

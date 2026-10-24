@@ -304,7 +304,7 @@ test oneLineRendersPrefix =
 // which quietly brought the page's depth limit with it: every nested value an
 // agent read would have been hollowed out two levels down. A long list cut short
 // is a visible loss; that is not.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Tracing.Format.compactDval'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.RuntimeTypes.reflect'" class=missing-support reason=upstream-dependency
 test compactDvalKeepsDepth =
   Stdlib.Test.all
     [ // Four levels, which the page elides and this must not.

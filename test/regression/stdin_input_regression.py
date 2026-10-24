@@ -122,7 +122,7 @@ let _ = Stdlib.Cli.Posix.fdWrite 1 (Stdlib.String.toBlob (a + "|" + b + "|" + c)
         # Also exercise ordinary binaries without leak instrumentation.
         source = root / 'plain.dark'
         source.write_text(programs['all'])
-        subprocess.run([compiler, '-q', str(source), '-o', str(root / 'plain')], check=True, timeout=120)
+        subprocess.run([compiler, '-q', str(source), '-o', str(root / 'plain')], check=True, timeout=300)
         result = subprocess.run([root / 'plain'], input=b'plain', capture_output=True, timeout=15)
         assert (result.returncode, result.stdout, result.stderr) == (0, b'plain', b''), result
     print('Stdin stream, UTF-16 boundaries, terminal keys, resize and secret regressions passed')

@@ -277,7 +277,6 @@ type ValuesJson =
 
 /// A trace, for `--json`. The ONE converter: `list`, `find`, `calls`, `follow` and `inspect` all come
 /// through here, so no two of them can hand back a trace with different fields in it.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let traceJson (branchId: Uuid) (trace: Darklang.Tracing.Trace) : TraceJson =
   TraceJson
     { id = trace.id
@@ -303,7 +302,6 @@ let traceJson (branchId: Uuid) (trace: Darklang.Tracing.Trace) : TraceJson =
 
 
 /// One logged call, for `--json`.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.callJson: Unknown function or value 'Darklang.Tracing.Format.compactDval'"
 let callJson (branchId: Uuid) (call: Darklang.Tracing.FnCall) : CallJson =
   CallJson
     { pos = call.seq
@@ -317,7 +315,6 @@ let callJson (branchId: Uuid) (call: Darklang.Tracing.FnCall) : CallJson =
 
 
 /// A list of traces, as JSON. Every listing verb prints through this.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.printTracesJson: Unknown function or value 'traceJson'"
 let printTracesJson (branchId: Uuid) (traces: List<Darklang.Tracing.Trace>) : Unit =
   Stdlib.printLine
     (Stdlib.Json.serialize<List<TraceJson>>
@@ -696,7 +693,6 @@ type Loop =
 ///
 /// <param fuel> bounds the walk: the frames come from a store and a cycle would hang the view,
 /// where a real chain is a handful deep.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let insideFn
   (frames: List<Darklang.Tracing.Store.ViewFrame>)
   (frameId: String)
@@ -722,7 +718,6 @@ let insideFn
 
 
 /// The loops of a trace, in the order they first ran.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let loopsOf
   (frames: List<Darklang.Tracing.Store.ViewFrame>)
   (fnNames: List<String * String>)
@@ -910,7 +905,6 @@ let loopsOf
 /// `map` is the first, `map:3` is the third. By POSITION in the site's own list, not by any
 /// counter on the frame: three calls to one function from three iterations of a loop all sit at
 /// position zero of their own sites, and numbering by that would make `receipt:2` unreachable.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let chosenIteration
   (requested: List<String>)
   (loop: Loop)
@@ -932,7 +926,6 @@ let chosenIteration
 /// A view keeps values for the first and last few iterations of each site, so a frame in between
 /// is counted but not collected. Everything that shows an iteration has to ask this, because the
 /// answer is the difference between showing its numbers and borrowing another one's.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let frameHasValues
   (frameValues: List<(String * Int64 * LanguageTools.RuntimeTypes.Dval)>)
   (frameId: String)
@@ -953,7 +946,6 @@ let frameHasValues
 ///
 /// The page and the `--json` both ask this, or an agent could see the first five and the last
 /// five of a two-thousand-iteration loop and have no way to reach the rest.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let iterationsToFetch
   (loops: List<Loop>)
   (frameValues: List<(String * Int64 * LanguageTools.RuntimeTypes.Dval)>)

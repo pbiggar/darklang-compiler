@@ -31,7 +31,8 @@ let fallbackMatches = match cached with | Some path -> path == first | None -> B
 if ready == 1L && fallbackMatches && first == second && first == small && first == Builtin.runtimeExecutablePath () then first
 else Builtin.crash "Executable path results differ"
 ''', encoding="utf-8")
-        subprocess.run([compile_all, str(source), str(root)], check=True, timeout=300)
+        # Build the complete imported library separately for all three targets.
+        subprocess.run([compile_all, str(source), str(root)], check=True, timeout=900)
         target = arguments.target or ("macos-arm64" if platform.system() == "Darwin" else (
             "linux-arm64" if platform.machine() in {"aarch64", "arm64"} else "linux-x86_64"))
         binary = root / target
@@ -105,7 +106,8 @@ else Builtin.crash "Executable path results differ"
         source.write_text("\n".join(f"let checked{index} = ({expression}) in" for index, expression in enumerate(checks))
                           + "\nif " + " && ".join(f"checked{index}" for index in range(len(checks)))
                           + ' then true else Builtin.crash "Executable fallback selection failed"\n', encoding="utf-8")
-        subprocess.run([compile_all, str(source), str(root)], check=True, timeout=300)
+        # Build the complete imported library separately for all three targets.
+        subprocess.run([compile_all, str(source), str(root)], check=True, timeout=900)
         command = [arguments.runner, str(binary)] if arguments.runner else [str(binary)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stdout + result.stderr

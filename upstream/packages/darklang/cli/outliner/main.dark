@@ -388,7 +388,7 @@ let bodyFor
   | Editing editor -> Editor.view editor region
 
 /// Build the whole view. Pure: no terminal, no reads.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Outliner.Main.viewAtSize: Unknown function or value 'Stdlib.Cli.UI.Chrome.view'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Outliner.Main.viewAtSize: Unknown function or value 'Stdlib.Cli.UI.Confirm.view'"
 let viewAtSize (state: State) (size: Stdlib.Cli.Tui.Size) : Stdlib.Cli.Tui.View =
   let base_ = chromeFor state
 

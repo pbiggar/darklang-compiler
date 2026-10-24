@@ -664,7 +664,6 @@ module Dval =
   /// from it comes out in an order nobody wrote: `PackageLocation` declared as owner/modules/name
   /// printed as modules/name/owner, and so didn't match its own `view`.
   /// Subject first, because `|>` supplies the first parameter.
-  // @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
   let inDeclaredOrder
     (pairs: List<(String * LanguageTools.RuntimeTypes.Dval)>)
     (order: List<String>)
@@ -901,7 +900,6 @@ let dvalWith
 ///
 /// Only lists. A dict with thousands of keys has the same problem and is not handled here,
 /// because "the first n" of a dict needs an ordering this type does not promise.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let capForDisplay
     (maxChars: Int)
     (dv: LanguageTools.RuntimeTypes.Dval)

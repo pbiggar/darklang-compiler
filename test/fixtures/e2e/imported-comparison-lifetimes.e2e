@@ -1,0 +1,10 @@
+// Distinguish row rendering, dictionary payloads, and result-list lifetimes.
+Darklang.Stdlib.Cli.UI.Canvas.composeRow 2 [Darklang.Stdlib.Cli.UI.Layout.Span { row = 0, col = 0, text = "a" }, Darklang.Stdlib.Cli.UI.Layout.Span { row = 0, col = 1, text = "b" }] = "ab\u001b[0m"
+let key = Stdlib.Int.fromInt64 0L in let dict = Dict { key: ["a"] } in match Stdlib.Dict.get dict key with | Some xs -> Stdlib.String.join xs "" | None -> "" = "a"
+Stdlib.List.map ["a", "b"] Stdlib.String.toUppercase = ["A", "B"]
+Stdlib.List.length (Darklang.Stdlib.Cli.UI.Canvas.compose 1 2 [Darklang.Stdlib.Cli.UI.Layout.Span { row = 0, col = 0, text = "a" }, Darklang.Stdlib.Cli.UI.Layout.Span { row = 1, col = 0, text = "b" }]) = 2
+
+module GroupingLifetimeChecks =
+  type Row = { key: Int, text: String }
+let rows = [GroupingLifetimeChecks.Row { key = 0, text = "a" }, GroupingLifetimeChecks.Row { key = 1, text = "b" }] in let grouped = Stdlib.List.fold rows Stdlib.Dict.empty (fun acc row -> Stdlib.Dict.setOverridingDuplicates acc row.key [row]) in Stdlib.Dict.size grouped = 2
+let rows = [GroupingLifetimeChecks.Row { key = 0, text = "a" }, GroupingLifetimeChecks.Row { key = 1, text = "b" }] in let grouped = Stdlib.List.fold rows Stdlib.Dict.empty (fun acc row -> let existing = match Stdlib.Dict.get acc row.key with | Some xs -> xs | None -> [] in Stdlib.Dict.setOverridingDuplicates acc row.key (Stdlib.List.append existing [row])) in Stdlib.Dict.size grouped = 2

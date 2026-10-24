@@ -21,7 +21,6 @@ module Darklang.Stdlib.Live.Tests
 // dangerous one, because a touched name collapsed away is a host that quietly does
 // not reload.
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Live.dedupeTouched'" class=missing-support reason=upstream-dependency
 test dedupeTouched =
   Stdlib.Test.all
     [ // Same location, same kind, twice: one thing to reload.

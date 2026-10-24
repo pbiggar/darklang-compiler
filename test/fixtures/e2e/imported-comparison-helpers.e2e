@@ -1,0 +1,5 @@
+// Imported native library functions retain dictionary helpers created by specialization.
+Darklang.Stdlib.Cli.UI.Canvas.compose 3 0 [] = []
+Darklang.Stdlib.Cli.UI.Canvas.compose 3 2 [] = ["", ""]
+Darklang.Stdlib.Cli.UI.Canvas.compose 2 2 [Darklang.Stdlib.Cli.UI.Layout.Span { row = 0, col = 0, text = "a" }, Darklang.Stdlib.Cli.UI.Layout.Span { row = 0, col = 1, text = "b" }, Darklang.Stdlib.Cli.UI.Layout.Span { row = 9, col = 0, text = "ignored" }] = ["ab\u001b[0m", ""]
+Darklang.Stdlib.Cli.UI.Canvas.compose 1 2 [Darklang.Stdlib.Cli.UI.Layout.Span { row = 0, col = 0, text = "a" }, Darklang.Stdlib.Cli.UI.Layout.Span { row = 1, col = 0, text = "b" }] = ["a\u001b[0m", "b\u001b[0m"]
