@@ -1632,7 +1632,8 @@ let parseCanonicalE2ETestFile path raw (inventory : SourceInventory.source) =
                    ^ " =\n"
                    ^ String.concat "\n" (List.map (( ^ ) "  ") lines))
           | ( ( CompilerAnnotations.Blocked _ | CompilerAnnotations.Excluded _
-              | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ ),
+              | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _
+              | CompilerAnnotations.ErrorMessage _ ),
               _ )
           | CompilerAnnotations.Run, None ->
               None)
@@ -1814,6 +1815,12 @@ let parseE2ETestFile path =
       in
       let compilerDisposition = CompilerAnnotations.at annotations position in
       match compilerDisposition with
+      | CompilerAnnotations.ErrorMessage _ ->
+          if test.errorExpectation <> Some AnyError then
+            Error
+              "An error-message annotation requires an upstream error \
+               expectation"
+          else Ok { test with compilerDisposition }
       | CompilerAnnotations.Run | CompilerAnnotations.Xfail _ ->
           Ok { test with compilerDisposition }
       | CompilerAnnotations.Blocked reason ->

@@ -1235,7 +1235,7 @@ module Uuid =
           "Can't parse JSON `\"00000000-0000-0000-0000-00000000000\"` as type `Uuid` at path: `root`")
 
 module BadTypes =
-  // @compiler xfail runtime: "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization" class=missing-support reason=compiler-gap
+  // @compiler error-message compile: "Cannot parse JSON into function type (Int64) -> Int64: JSON cannot represent executable functions" reason=diagnostic-difference
   test rejects1 =
     (Stdlib.Json.parse<Int64 -> Int64> "{}")
     => raises "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization, and cannot be used as arguments to Builtin.jsonParse or Builtin.jsonSerialize"
@@ -1526,7 +1526,7 @@ module Dict =
         Stdlib.Json.parse<Dict<String, String>> """{"a":"b","c":"d"}"""
         |> Stdlib.Test.equal (Result.Ok(Dict { "a": "b", "c": "d" })) ]
 
-  // @compiler xfail runtime: "Unsupported type in JSON: Dict<Int64, String>. Some types are not supported in Json serialization" class=missing-support reason=compiler-gap
+  // @compiler error-message runtime: "Cannot serialize dictionary into JSON: keys must be String, but this dictionary has Int64 keys" reason=diagnostic-difference
   test rejects1 =
     (Stdlib.Json.serialize<Dict<Int64, String>> (Dict { 1L: "a" }))
     => raises "Cannot serialize { 1: \"a\" } into JSON"

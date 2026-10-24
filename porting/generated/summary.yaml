@@ -38,8 +38,8 @@ dispositions:
     replace: 1142
     run: 5
   tests:
-    run: 1517
-    xfail: 842
+    run: 1519
+    xfail: 840
 reasons:
   packages:
     compiler-contract: 12
@@ -69,8 +69,10 @@ reasons:
     aot-match-error: 26
     aot-name-error: 11
     aot-type-error: 142
-    compiler-gap: 32
+    compiler-gap: 29
+    diagnostic-difference: 2
     test-counter: 7
+    upstream-bug: 1
     upstream-dependency: 587
 expected_failures:
   aot-rejection:
@@ -114,9 +116,9 @@ expected_failures:
   missing-support:
     phases:
       compile: 617
-      runtime: 9
+      runtime: 6
     reasons:
-      compiler-gap: 32
+      compiler-gap: 29
       test-counter: 7
       upstream-dependency: 587
     sources:
@@ -151,7 +153,6 @@ expected_failures:
       upstream/packages/darklang/tests/language/fastOps.dark: 4
       upstream/packages/darklang/tests/language/lambdas.dark: 1
       upstream/packages/darklang/tests/language/letBindings.dark: 1
-      upstream/packages/darklang/tests/language/matchExpressions.dark: 1
       upstream/packages/darklang/tests/language/operators.dark: 1
       upstream/packages/darklang/tests/language/records.dark: 2
       upstream/packages/darklang/tests/language/runtimeToProgramTypes.dark: 5
@@ -178,9 +179,16 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/discovery.dark: 2
       upstream/packages/darklang/tests/stdlib/httpclient.dark: 3
       upstream/packages/darklang/tests/stdlib/ints/int8.dark: 1
-      upstream/packages/darklang/tests/stdlib/json.dark: 5
+      upstream/packages/darklang/tests/stdlib/json.dark: 3
       upstream/packages/darklang/tests/stdlib/list.dark: 9
       upstream/packages/darklang/tests/stdlib/live.dark: 2
       upstream/packages/darklang/tests/stdlib/pretty.dark: 1
       upstream/packages/darklang/tests/stdlib/sqlite.dark: 7
       upstream/packages/darklang/tests/stdlib/string.dark: 2
+  upstream-bug:
+    phases:
+      runtime: 1
+    reasons:
+      upstream-bug: 1
+    sources:
+      upstream/packages/darklang/tests/language/matchExpressions.dark: 1
