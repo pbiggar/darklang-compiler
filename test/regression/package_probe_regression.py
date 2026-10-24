@@ -36,9 +36,11 @@ let isLeaf (value: Left) : Bool =
 let supportedDespiteOldReason (value: Bool) : Bool = value
 // @compiler blocked: compiler-gap
 trait ProbeMarker<'a> =
+  // @compiler blocked: compiler-gap
   let mark (value: 'a) : Bool
 // @compiler blocked: compiler-gap
 impl ProbeMarker for Bool =
+  // @compiler blocked: compiler-gap
   let mark (value: Bool) : Bool = value
 """)
         manifest, report = root / "manifest.json", root / "report.json"

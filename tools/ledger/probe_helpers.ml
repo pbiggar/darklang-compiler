@@ -217,7 +217,25 @@ let main includePackages allBlocked root manifest output =
                     List.exists
                       (fun (node : S.node) ->
                         node.S.file = file && node.S.name = entry.I.name
-                        && S.kind node.S.declaration = I.kindName entry.I.kind)
+                        && S.kind node.S.declaration = I.kindName entry.I.kind
+                        || (allBlocked && node.S.file = file
+                           && (match entry.I.disposition with
+                              | CompilerAnnotations.Blocked _ -> true
+                              | _ -> false)
+                           && List.mem entry.I.position
+                                (match node.S.declaration with
+                                 | W.DTrait trait_ ->
+                                     List.map
+                                       (fun (method_ : W.traitMethodDecl) ->
+                                         method_.W.keywordLet.Tokenizer.start)
+                                       trait_.W.methods
+                                 | W.DImpl impl ->
+                                     List.map
+                                       (function
+                                         | W.IMethod fn -> fn.W.keywordLet.Tokenizer.start
+                                         | W.IAlias value -> value.W.keywordVal.Tokenizer.start)
+                                       impl.W.members
+                                 | _ -> [])))
                       accepted
                   then { entry with I.disposition = CompilerAnnotations.Run }
                   else entry)
