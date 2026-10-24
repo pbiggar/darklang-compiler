@@ -252,7 +252,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
       | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread | LIR.PosixPwrite
       | LIR.PosixFclonefileat | LIR.PosixGetentropy | LIR.PosixUname
-      | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
+      | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntl
       | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep
       | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
       | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
@@ -431,9 +431,9 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   | Platform.Linux -> Some 123
                   | Platform.MacOS -> None),
                   3 )
-            | LIR.PosixFcntlGetPath ->
+            | LIR.PosixFcntl ->
                 ( (match ARM64.targetOS ctx.target with
-                  | Platform.Linux -> None
+                  | Platform.Linux -> Some 25
                   | Platform.MacOS -> Some 92),
                   3 )
             | LIR.PosixClockGettime ->

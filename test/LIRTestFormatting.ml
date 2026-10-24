@@ -192,7 +192,7 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixUname -> union "CliOperation" "PosixUname" []
   | LIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | LIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
-  | LIR.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | LIR.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | LIR.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
   | LIR.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
   | LIR.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []

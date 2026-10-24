@@ -83,7 +83,7 @@ let convertCliOperation operation =
   | MIR.PosixUname -> LIR.PosixUname
   | MIR.PosixSysctl -> LIR.PosixSysctl
   | MIR.PosixSchedGetaffinity -> LIR.PosixSchedGetaffinity
-  | MIR.PosixFcntlGetPath -> LIR.PosixFcntlGetPath
+  | MIR.PosixFcntl -> LIR.PosixFcntl
   | MIR.PosixClockGettime -> LIR.PosixClockGettime
   | MIR.PosixGettimeofday -> LIR.PosixGettimeofday
   | MIR.PosixNanosleep -> LIR.PosixNanosleep

@@ -200,6 +200,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/dict.dark` | `Darklang.Stdlib.Dict`  | `packages/darklang/stdlib/dict.dark` |
 | `packages/darklang/stdlib/sqlite.dark` | `Darklang.Stdlib.Sqlite` | Shared cell values and six accessors; the other public wrappers come from the porting pin |
 | `packages/darklang/stdlib/sqlite/__codec.dark` | `Darklang.Stdlib.Sqlite.__Codec` | Compiler SQLite record, integer and IEEE codecs |
+| `packages/darklang/stdlib/sqlite/__io.dark` | `Darklang.Stdlib.Sqlite.__Io` | Compiler positional database/WAL descriptor I/O |
+| `packages/darklang/stdlib/sqlite/__locks.dark` | `Darklang.Stdlib.Sqlite.__Locks` | Compiler SQLite byte-range and shared-memory lock protocol |
 | `packages/darklang/stdlib/sqlite/__pager.dark` | `Darklang.Stdlib.Sqlite.__Pager` | Compiler page I/O, dirty-page transactions and freelist allocation |
 | `packages/darklang/stdlib/sqlite/__btree.dark` | `Darklang.Stdlib.Sqlite.__Btree` | Compiler rowid B-trees, splits and overflow chains |
 | `packages/darklang/stdlib/sqlite/__sql.dark` | `Darklang.Stdlib.Sqlite.__Sql` | Compiler restricted SQL tokenizer and parser |

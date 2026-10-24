@@ -153,7 +153,7 @@ let cliOperation = function
   | ANF.PosixUname -> "PosixUname"
   | ANF.PosixSysctl -> "PosixSysctl"
   | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
-  | ANF.PosixFcntlGetPath -> "PosixFcntlGetPath"
+  | ANF.PosixFcntl -> "PosixFcntl"
   | ANF.PosixClockGettime -> "PosixClockGettime"
   | ANF.PosixGettimeofday -> "PosixGettimeofday"
   | ANF.PosixNanosleep -> "PosixNanosleep"

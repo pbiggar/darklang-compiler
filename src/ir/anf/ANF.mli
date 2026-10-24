@@ -121,7 +121,7 @@ type cliOperation =
   | PosixUname
   | PosixSysctl
   | PosixSchedGetaffinity
-  | PosixFcntlGetPath
+  | PosixFcntl
   | PosixClockGettime
   | PosixGettimeofday
   | PosixNanosleep

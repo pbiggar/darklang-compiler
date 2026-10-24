@@ -1,0 +1,35 @@
+// Positional descriptor I/O shared by database and WAL pages. No file replacement
+// or process invocation is involved in ordinary transactions.
+module Darklang.Stdlib.Sqlite.__Io
+
+let __error (errno: Int) : String = "SQLite I/O: errno " + Stdlib.Int.toString errno
+let __posix (result: Stdlib.Result.Result<'a,Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a,String> = result |> Stdlib.Result.mapError (fun error -> "SQLite I/O: " + error.message)
+let __open (path: String) (create: Bool) : Stdlib.Result.Result<Int,String> =
+  let cloexec = if Stdlib.Cli.__Posix.__mac () then 16777216 else 524288
+  __posix (Stdlib.Cli.Posix.openFile path (2 + cloexec + (if create then Stdlib.Cli.Posix.OpenFlags.creat () else 0)) 384)
+let __size (fd: Int) : Stdlib.Result.Result<Int,String> =
+  Builtin.syscallFstat fd |> Stdlib.Result.andThen Stdlib.Cli.Posix.__kernelMetadata |> Stdlib.Result.map (fun metadata -> metadata.size) |> Stdlib.Result.mapError __error
+let __close (fd: Int) : Stdlib.Result.Result<Unit,String> = __posix (Stdlib.Cli.Posix.fdClose fd)
+let __truncate (fd: Int) (length: Int) : Stdlib.Result.Result<Unit,String> = Builtin.syscallFtruncate fd length |> Stdlib.Result.mapError __error
+let __readSome (fd: Int) (offset: Int) (count: Int) : Stdlib.Result.Result<Blob,String> =
+  match Builtin.syscallPread fd count offset with
+  | Error 4 -> __readSome fd offset count
+  | Error errno -> Error (__error errno)
+  | Ok bytes -> Ok bytes
+let __readChunks (fd: Int) (offset: Int) (remaining: Int) (chunks: List<Blob>) : Stdlib.Result.Result<Blob,String> =
+  if remaining == 0 then Ok (Stdlib.Blob.concat (Stdlib.List.reverse chunks))
+  else __readSome fd offset remaining |> Stdlib.Result.andThen (fun bytes ->
+    let count = Stdlib.Blob.length bytes
+    if count == 0 then Error "SQLite: truncated database or WAL page"
+    else __readChunks fd (offset + count) (remaining - count) ([bytes] @ chunks))
+let __readAt (fd: Int) (offset: Int) (count: Int) : Stdlib.Result.Result<Blob,String> =
+  if offset < 0 || count < 0 then Error "SQLite: invalid descriptor read" else __readChunks fd offset count []
+let __writeAt (fd: Int) (offset: Int) (bytes: Blob) : Stdlib.Result.Result<Unit,String> =
+  if offset < 0 then Error "SQLite: invalid descriptor write"
+  else if Stdlib.Blob.length bytes == 0 then Ok ()
+  else match Builtin.syscallPwrite fd bytes offset with
+    | Error 4 -> __writeAt fd offset bytes
+    | Error errno -> Error (__error errno)
+    | Ok count ->
+      if count <= 0 then Error "SQLite: descriptor write made no progress"
+      else __writeAt fd (offset + count) (Stdlib.Blob.slice bytes count (Stdlib.Blob.length bytes - count))

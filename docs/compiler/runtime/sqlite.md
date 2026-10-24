@@ -30,10 +30,12 @@ rollback also fails, the returned error reports both failures. Newly appended
 pages may remain beyond the restored logical database size.
 
 There is no fsync protocol, persistent rollback journal, WAL or recovery after
-process termination or power loss. Exclusively own the database while using this
-engine. Calls cooperate through an exclusive filesystem lock; SQLite's native
-byte-range locking protocol is not implemented, so that lock does not coordinate
-with another SQLite implementation.
+process termination or power loss. Rollback-mode transactions use SQLite's native
+SHARED, RESERVED and PENDING byte ranges. OFD locks coordinate independent Dark
+connections and native SQLite connections, including connections in one process.
+Readers may coexist; writers wait for readers before committing. Native locking
+regressions cover writer exclusion, committed read visibility and writer handoff.
+Linux is exercised here; the Darwin OFD ABI is implemented but not host-tested.
 
 ## Supported subset
 

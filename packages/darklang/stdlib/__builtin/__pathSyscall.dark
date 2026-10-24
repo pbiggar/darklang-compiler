@@ -52,13 +52,15 @@ let syscallGetcwd (count: Int) : Stdlib.Result.Result<Blob, Int> =
         result
 
 let syscallFcntlGetPath (fd: Int) : Stdlib.Result.Result<Blob, Int> =
-    let fd = Builtin.__posixInt32 fd in
-    let buffer = __mapped_alloc 1024L in
-    let rc = Stdlib.Cli.__Posix.__fcntlGetPath fd 50L buffer in
-    let result = if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
-                 else Ok (Stdlib.Cli.__Posix.__bufferBytes buffer 0L 1024L []) in
-    let _ = __mapped_free buffer in
-    result
+    if Stdlib.Bool.not (Stdlib.Cli.__Posix.__mac ()) then Error 38
+    else
+        let fd = Builtin.__posixInt32 fd in
+        let buffer = __mapped_alloc 1024L in
+        let rc = Stdlib.Cli.__Posix.__fcntl fd 50L buffer in
+        let result = if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+                     else Ok (Stdlib.Cli.__Posix.__bufferBytes buffer 0L 1024L []) in
+        let _ = __mapped_free buffer in
+        result
 
 let syscallReadlinkAt (path: String) (count: Int) : Stdlib.Result.Result<Blob, Int> =
     let count = Builtin.__posixInt32 count in

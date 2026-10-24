@@ -1,0 +1,46 @@
+// SQLite-compatible byte-range locks through the compiler's existing OS syscall
+// boundary. OFD locks keep independent descriptors isolated within one process.
+module Darklang.Stdlib.Sqlite.__Locks
+
+type __Kind = Shared | Exclusive | Unlocked
+
+let __try (fd: Int) (start: Int) (length: Int) (kind: __Kind) : Stdlib.Result.Result<Bool,String> =
+  if start < 0 || length <= 0 || start > 9223372036854775807 || length > 9223372036854775807 then Error "SQLite: invalid lock range"
+  else
+    let mac = Stdlib.Cli.__Posix.__mac ()
+    let type_ = match kind with | Shared -> if mac then 1L else 0L | Exclusive -> if mac then 3L else 1L | Unlocked -> 2L
+    let pointer = __mapped_alloc 32L
+    let _ = __raw_write_word pointer 0L (if mac then Stdlib.Sqlite.__Codec.__i64 start else type_)
+    let _ = __raw_write_word pointer 8L (Stdlib.Sqlite.__Codec.__i64 (if mac then length else start))
+    let _ = __raw_write_word pointer 16L (if mac then Stdlib.Int64.shiftLeft type_ 32L else Stdlib.Sqlite.__Codec.__i64 length)
+    let _ = __raw_write_word pointer 24L 0L
+    let rc = Stdlib.Cli.__Posix.__fcntl (Stdlib.Sqlite.__Codec.__i64 fd) (if mac then 90L else 37L) pointer
+    let _ = __mapped_free pointer
+    if rc >= 0L then Ok true
+    else if rc == -4L then __try fd start length kind
+    else if rc == -13L || rc == (if mac then -35L else -11L) then Ok false
+    else Error ("SQLite lock: errno " + Stdlib.Int64.toString (0L - rc))
+
+let __until (fd: Int) (start: Int) (length: Int) (kind: __Kind) (deadline: Int) : Stdlib.Result.Result<Unit,String> =
+  __try fd start length kind |> Stdlib.Result.andThen (fun acquired ->
+    if acquired then Ok ()
+    else if Stdlib.DateTime.__monotonicMilliseconds () >= deadline then Error "SQLite: database is locked"
+    else
+      let _ = Stdlib.Cli.Posix.sleep 5.0
+      __until fd start length kind deadline)
+let __wait (fd: Int) (start: Int) (length: Int) (kind: __Kind) (timeout: Int) : Stdlib.Result.Result<Unit,String> =
+  __until fd start length kind (Stdlib.DateTime.__monotonicMilliseconds () + Stdlib.Int.max 0 timeout)
+let __unlock (fd: Int) (start: Int) (length: Int) : Stdlib.Result.Result<Unit,String> =
+  __try fd start length Unlocked |> Stdlib.Result.map (fun _ -> ())
+
+let __shared (fd: Int) (timeout: Int) : Stdlib.Result.Result<Unit,String> =
+  __wait fd 1073741824 1 Shared timeout |> Stdlib.Result.andThen (fun _ ->
+    let acquired = __wait fd 1073741826 510 Shared timeout
+    let released = __unlock fd 1073741824 1
+    match (acquired,released) with | (Error e,_) -> Error e | (_,Error e) -> Error e | (Ok _,Ok _) -> Ok ())
+let __exclusive (fd: Int) (timeout: Int) : Stdlib.Result.Result<Unit,String> =
+  // Never wait for RESERVED while retaining SHARED: another writer needs readers
+  // to finish before it can commit. Returning BUSY breaks that upgrade deadlock.
+  __try fd 1073741825 1 Exclusive |> Stdlib.Result.andThen (fun reserved ->
+    if Stdlib.Bool.not reserved then Error "SQLite: database is locked"
+    else __wait fd 1073741824 1 Exclusive timeout |> Stdlib.Result.andThen (fun _ -> __wait fd 1073741826 510 Exclusive timeout))

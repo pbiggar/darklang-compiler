@@ -36,7 +36,7 @@ let __procInfo (call: Int64) (pid: Int64) (flavor: Int64) (arg: Int64) (buffer: 
 let __seek (a0: Int64) (a1: Int64) (a2: Int64) : Int64 = -38L
 let __statAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: Int64) : Int64 = -38L
 let __getCwd (a0: RawPtr) (a1: Int64) : Int64 = -38L
-let __fcntlGetPath (fd: Int64) (command: Int64) (buffer: RawPtr) : Int64 = -38L
+let __fcntl (fd: Int64) (command: Int64) (buffer: RawPtr) : Int64 = -38L
 let __chdir (a0: Int64) : Int64 = -38L
 let __mkdirAt (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
 let __unlinkAt (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
@@ -350,7 +350,7 @@ let __getCurrentDirectory () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Err
                 let fd = Stdlib.Cli.__Posix.__openAt (Stdlib.Cli.__Posix.__cwdFd ()) name (Stdlib.Cli.__Posix.__directory () + Stdlib.Cli.__Posix.__nofollow ()) 0L in
                 if fd < 0L then fd
                 else
-                    let result = Stdlib.Cli.__Posix.__fcntlGetPath fd 50L ptr in
+                    let result = Stdlib.Cli.__Posix.__fcntl fd 50L ptr in
                     let closed = Stdlib.Cli.__Posix.__close fd in
                     if result < 0L then result else if closed < 0L then closed else 1024L)
         else Stdlib.Cli.__Posix.__getCwd ptr 4096L in

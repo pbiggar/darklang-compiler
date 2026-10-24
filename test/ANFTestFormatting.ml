@@ -392,7 +392,7 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixUname -> union "CliOperation" "PosixUname" []
   | ANF.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | ANF.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
-  | ANF.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | ANF.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | ANF.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
   | ANF.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
   | ANF.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []

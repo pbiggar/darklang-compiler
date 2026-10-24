@@ -147,7 +147,7 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixUname -> union "CliOperation" "PosixUname" []
   | MIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | MIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
-  | MIR.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | MIR.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | MIR.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
   | MIR.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
   | MIR.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []

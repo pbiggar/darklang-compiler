@@ -117,7 +117,7 @@ let posixIntrinsicModule : AST.moduleDef =
           ]
           TInt64;
         fn "__schedGetaffinity" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
-        fn "__fcntlGetPath" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
+        fn "__fcntl" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
         fn "__clockGettime" [] [ TInt64; TInternalRawPtr ] TInt64;
         fn "__gettimeofday" []
           [ TInternalRawPtr; TInternalRawPtr; TInternalRawPtr ]

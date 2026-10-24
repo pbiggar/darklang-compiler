@@ -151,7 +151,7 @@ let cliOperation = function
   | MIR.PosixUname -> "PosixUname"
   | MIR.PosixSysctl -> "PosixSysctl"
   | MIR.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
-  | MIR.PosixFcntlGetPath -> "PosixFcntlGetPath"
+  | MIR.PosixFcntl -> "PosixFcntl"
   | MIR.PosixClockGettime -> "PosixClockGettime"
   | MIR.PosixGettimeofday -> "PosixGettimeofday"
   | MIR.PosixNanosleep -> "PosixNanosleep"

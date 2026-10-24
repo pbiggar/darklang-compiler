@@ -311,7 +311,7 @@ let inferCExprType ctx expr =
       | A.PosixProcInfo | A.PosixCopyFileRange | A.PosixFtruncate
       | A.PosixFchmod | A.PosixFstat | A.PosixPread | A.PosixPwrite
       | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname | A.PosixSysctl
-      | A.PosixSchedGetaffinity | A.PosixFcntlGetPath | A.PosixClockGettime
+      | A.PosixSchedGetaffinity | A.PosixFcntl | A.PosixClockGettime
       | A.PosixGettimeofday | A.PosixNanosleep | A.PosixMachTimebaseInfo
       | A.PosixInotifyInit1 | A.PosixInotifyAddWatch | A.PosixPpoll
       | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch | A.PosixWait4

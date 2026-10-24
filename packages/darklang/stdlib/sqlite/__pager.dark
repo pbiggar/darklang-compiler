@@ -8,25 +8,6 @@ type __State = { fd: Int, size: Int, count: Int, originalCount: Int,
 let __get (b: Blob) (o: Int) (w: Int) : Int = Stdlib.Sqlite.__Codec.__beRead b o w
 let __put (b: Blob) (o: Int) (w: Int) (v: Int) : Blob = Stdlib.Sqlite.__Codec.__put b o w v
 
-let __io (r: Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, String> =
-  r |> Stdlib.Result.mapError (fun e -> "SQLite I/O: " + e.message)
-
-let __readExact (fd: Int) (remaining: Int) (reversed: List<Blob>) : Stdlib.Result.Result<Blob, String> =
-  if remaining == 0 then Ok (Stdlib.Blob.concat (Stdlib.List.reverse reversed))
-  else __io (Stdlib.Cli.Posix.fdRead fd remaining) |> Stdlib.Result.andThen (fun chunk ->
-    let n = Stdlib.Blob.length chunk
-    if n == 0 then Error "SQLite: truncated database page"
-    else __readExact fd (remaining - n) ([chunk] @ reversed))
-
-let __readAt (fd: Int) (offset: Int) (n: Int) : Stdlib.Result.Result<Blob, String> =
-  __io (Stdlib.Cli.Posix.fdSeekFromStart fd offset)
-  |> Stdlib.Result.andThen (fun _ -> __readExact fd n [])
-
-let __writeAt (fd: Int) (offset: Int) (b: Blob) : Stdlib.Result.Result<Unit, String> =
-  __io (Stdlib.Cli.Posix.fdSeekFromStart fd offset)
-  |> Stdlib.Result.andThen (fun _ -> __io (Stdlib.Cli.Posix.fdWrite fd b))
-  |> Stdlib.Result.map (fun _ -> ())
-
 let __read (s: __State) (page: Int) : Stdlib.Result.Result<(__State * Blob), String> =
   if page < 1 || page > s.count then Error "SQLite: page number outside database"
   else match Stdlib.Dict.get s.dirty (Stdlib.Sqlite.__Codec.__i64 page) with
@@ -34,7 +15,7 @@ let __read (s: __State) (page: Int) : Stdlib.Result.Result<(__State * Blob), Str
   | None ->
     match Stdlib.Dict.get s.cache (Stdlib.Sqlite.__Codec.__i64 page) with
     | Some b -> Ok ((s, b))
-    | None -> __readAt s.fd ((page - 1) * s.size) s.size |> Stdlib.Result.map (fun b ->
+    | None -> Stdlib.Sqlite.__Io.__readAt s.fd ((page - 1) * s.size) s.size |> Stdlib.Result.map (fun b ->
       ({ s with cache = Stdlib.Dict.set s.cache (Stdlib.Sqlite.__Codec.__i64 page) b }, b))
 
 let __write (s: __State) (page: Int) (b: Blob) : Stdlib.Result.Result<__State, String> =
@@ -88,7 +69,7 @@ let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
     Ok (__State { fd = fd, size = 4096, count = 1, originalCount = 0,
       cache = Dict {}, dirty = Stdlib.Dict.singleton 1L (__empty 4096) })
   else if length < 100 then Error "SQLite: invalid database header"
-  else __readAt fd 0 100 |> Stdlib.Result.andThen (fun header ->
+  else Stdlib.Sqlite.__Io.__readAt fd 0 100 |> Stdlib.Result.andThen (fun header ->
     let rawSize = __get header 16 2
     let size = if rawSize == 1 then 65536 else rawSize
     let count = if size < 512 then 0 else length / size
@@ -107,23 +88,24 @@ let __load (fd: Int) (length: Int) : Stdlib.Result.Result<__State, String> =
 
 let __open (path: String) : Stdlib.Result.Result<__State, String> =
   if path == ":memory:" || path == "" then Error "SQLite: a filesystem database path is required"
-  else __io (Stdlib.Cli.Posix.openFile path (2 + Stdlib.Cli.Posix.OpenFlags.creat ()) 384)
+  else Stdlib.Sqlite.__Io.__open path true
   |> Stdlib.Result.andThen (fun fd ->
-    let loaded = __io (Stdlib.Cli.Posix.flock fd true) |> Stdlib.Result.andThen (fun _ ->
-      __io (Stdlib.Cli.Posix.stat path) |> Stdlib.Result.andThen (fun stat -> __load fd stat.size))
+    let loaded = Stdlib.Sqlite.__Locks.__shared fd 5000 |> Stdlib.Result.andThen (fun _ ->
+      Stdlib.Sqlite.__Io.__size fd |> Stdlib.Result.andThen (fun size -> __load fd size))
     match loaded with
     | Ok s -> Ok s
-    | Error e -> let _ = Stdlib.Cli.Posix.fdClose fd in Error e)
+    | Error e -> let _ = Stdlib.Sqlite.__Io.__close fd in Error e)
 
 let __flush (s: __State) (pages: List<(Int * Blob)>) : Stdlib.Result.Result<Unit, String> =
   match pages with
   | [] -> Ok ()
-  | (page, b) :: rest -> __writeAt s.fd ((page - 1) * s.size) b
+  | (page, b) :: rest -> Stdlib.Sqlite.__Io.__writeAt s.fd ((page - 1) * s.size) b
     |> Stdlib.Result.andThen (fun _ -> __flush s rest)
 
 let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
   if Stdlib.Dict.isEmpty s.dirty then Ok ()
-  else __read s 1 |> Stdlib.Result.andThen (fun (s, header) ->
+  else Stdlib.Sqlite.__Locks.__exclusive s.fd 5000 |> Stdlib.Result.andThen (fun _ -> __read s 1)
+  |> Stdlib.Result.andThen (fun (s, header) ->
     let counter = (__get header 24 4 + 1) % 4294967296
     let header = __put (__put (__put header 24 4 counter) 92 4 counter) 28 4 s.count
     let pages = Stdlib.List.map (Stdlib.Dict.toList (Stdlib.Dict.remove s.dirty 1L)) (fun (p,b) -> (Stdlib.Int.fromInt64 p,b)) @ [(1,header)]
@@ -136,4 +118,4 @@ let __commit (s: __State) : Stdlib.Result.Result<Unit, String> =
       | Ok () -> Error e
       | Error rollback -> Error (e + "; rollback also failed: " + rollback))
 
-let __close (s: __State) : Stdlib.Result.Result<Unit, String> = __io (Stdlib.Cli.Posix.fdClose s.fd)
+let __close (s: __State) : Stdlib.Result.Result<Unit, String> = Stdlib.Sqlite.__Io.__close s.fd

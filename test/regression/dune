@@ -123,3 +123,8 @@
  (alias runtest)
  (deps sqlite_index_interop.py)
  (action (run python3 %{dep:sqlite_index_interop.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps sqlite_locking.py)
+ (action (run python3 %{dep:sqlite_locking.py} %{exe:../../bin/dark.exe})))

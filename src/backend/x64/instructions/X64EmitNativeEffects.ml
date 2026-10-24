@@ -185,7 +185,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
       | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread | LIR.PosixPwrite
       | LIR.PosixFclonefileat | LIR.PosixGetentropy | LIR.PosixUname
-      | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
+      | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntl
       | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep
       | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
       | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
@@ -225,7 +225,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             | LIR.PosixUname -> (Some 63, 1)
             | LIR.PosixSysctl -> (None, 6)
             | LIR.PosixSchedGetaffinity -> (Some 204, 3)
-            | LIR.PosixFcntlGetPath -> (None, 3)
+            | LIR.PosixFcntl -> (Some 72, 3)
             | LIR.PosixClockGettime -> (Some 228, 2)
             | LIR.PosixGettimeofday -> (Some 96, 3)
             | LIR.PosixNanosleep -> (Some 35, 2)

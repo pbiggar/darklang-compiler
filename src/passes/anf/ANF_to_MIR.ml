@@ -303,7 +303,7 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixUname -> MIR.PosixUname
   | ANF.PosixSysctl -> MIR.PosixSysctl
   | ANF.PosixSchedGetaffinity -> MIR.PosixSchedGetaffinity
-  | ANF.PosixFcntlGetPath -> MIR.PosixFcntlGetPath
+  | ANF.PosixFcntl -> MIR.PosixFcntl
   | ANF.PosixClockGettime -> MIR.PosixClockGettime
   | ANF.PosixGettimeofday -> MIR.PosixGettimeofday
   | ANF.PosixNanosleep -> MIR.PosixNanosleep
@@ -903,7 +903,7 @@ let cliOperationName = function
   | ANF.PosixUname -> "PosixUname"
   | ANF.PosixSysctl -> "PosixSysctl"
   | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
-  | ANF.PosixFcntlGetPath -> "PosixFcntlGetPath"
+  | ANF.PosixFcntl -> "PosixFcntl"
   | ANF.PosixClockGettime -> "PosixClockGettime"
   | ANF.PosixGettimeofday -> "PosixGettimeofday"
   | ANF.PosixNanosleep -> "PosixNanosleep"

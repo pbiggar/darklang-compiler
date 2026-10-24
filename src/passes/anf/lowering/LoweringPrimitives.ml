@@ -477,8 +477,7 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__sysctl" -> Some ANF.PosixSysctl
         | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" ->
             Some ANF.PosixSchedGetaffinity
-        | "Darklang.Stdlib.Cli.__Posix.__fcntlGetPath" ->
-            Some ANF.PosixFcntlGetPath
+        | "Darklang.Stdlib.Cli.__Posix.__fcntl" -> Some ANF.PosixFcntl
         | "Darklang.Stdlib.Cli.__Posix.__clockGettime" ->
             Some ANF.PosixClockGettime
         | "Darklang.Stdlib.Cli.__Posix.__inotifyInit1" ->
