@@ -28,15 +28,15 @@ builtins:
   unassessed: 533
 dispositions:
   packages:
-    blocked: 1942
+    blocked: 1922
     excluded: 2
     replace: 35
-    run: 1724
+    run: 1744
   stdlib:
-    blocked: 637
+    blocked: 630
     excluded: 3
     replace: 1142
-    run: 216
+    run: 223
   tests:
     blocked: 46
     run: 1684
@@ -45,7 +45,6 @@ reasons:
   packages:
     aot-type-error: 8
     compiler-contract: 15
-    compiler-crash: 14
     compiler-gap: 17
     compiler-implementation: 34
     constructor-identity: 18
@@ -53,10 +52,9 @@ reasons:
     script-entrypoint: 1
     test-counter: 1
     test-diagnostics: 1
-    upstream-dependency: 1868
+    upstream-dependency: 1862
   stdlib:
     compiler-contract: 6
-    compiler-crash: 5
     compiler-gap: 1
     compiler-implementation: 1139
     compiler-timeout: 1
@@ -66,7 +64,7 @@ reasons:
     runtime-reflection: 3
     test-counter: 2
     test-diagnostics: 2
-    upstream-dependency: 130
+    upstream-dependency: 128
   tests:
     aot-arity-error: 12
     aot-invalid-field: 17

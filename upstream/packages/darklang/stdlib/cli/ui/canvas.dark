@@ -186,7 +186,6 @@ let compose (width: Int) (height: Int) (spans: List<Layout.Span>) : List<String>
 
 
 /// Compose spans into a full-screen `Tui.View`.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.UI.Canvas.toView: Unknown function or value 'compose'"
 let toView (size: Tui.Size) (spans: List<Layout.Span>) : Tui.View =
   Tui.View
     { rows = compose size.width size.height spans

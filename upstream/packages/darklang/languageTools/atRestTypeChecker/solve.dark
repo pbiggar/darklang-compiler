@@ -1469,7 +1469,6 @@ let wouldContainItself
 
 /// Follow the containment graph from frontier, returning true if it reaches target.
 /// Keep visited variables in seen so an unrelated cycle cannot repeat forever.
-// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_AtRestTypeChecker_Model_V_2140903c397d173e' is absent from symbols"
 let reaches
   (edges: Dict<Model.Var, List<Model.Var>>)
   (target: Model.Var)
