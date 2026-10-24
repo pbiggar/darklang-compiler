@@ -416,16 +416,16 @@ let materializeProgramValues program =
   in
   C.programFromCheckedParts (symbols, List.rev materialized @ helpers)
 
-let specializeProgram mode inheritedValues recorder program =
+let specializeProgram ?prepare mode inheritedValues recorder program =
   let program =
     measure recorder "AST -> ANF Preparation: Value Import" (fun () ->
         importInheritedValues recorder inheritedValues program)
   in
   measure recorder "AST -> ANF Preparation: Monomorphization" (fun () ->
       match mode with
-      | Monomorphize None -> PrepareFunctions.monomorphize program
+      | Monomorphize None -> PrepareFunctions.monomorphize ?prepare program
       | Monomorphize (Some defs) ->
-          PrepareFunctions.monomorphizeWithExternalDefs defs program
+          PrepareFunctions.monomorphizeWithExternalDefs ?prepare defs program
       | ReplaceTypeApps registry ->
           Monomorphization.replaceTypeAppsInProgramWithRegistry registry program
       | SpecializeLocalAndReplace registry ->
@@ -710,8 +710,17 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram
     | Some context -> M.fold M.add local context.X.genericFuncDefs
     | None -> local
   in
+  let prepare program =
+    let symbols, tops = CheckedAST.viewProgram program in
+    let symbols, tops =
+      CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+        symbols env.Types.aliasReg env.Types.indexedTypeReg
+        env.Types.variantLookup env.Types.indexedSumTypeReg tops
+    in
+    CheckedAST.programFromCheckedParts (symbols, tops)
+  in
   let* specialized =
-    specializeProgram mode inheritedValues recorder typedProgram
+    specializeProgram ~prepare mode inheritedValues recorder typedProgram
   in
   let* specialized =
     prepareDiagnosticRenderers env definitions baseFuncNames
