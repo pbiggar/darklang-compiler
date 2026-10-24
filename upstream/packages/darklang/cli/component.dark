@@ -19,7 +19,6 @@
 module Darklang.Cli.Component
 
 /// What one keystroke does to a component.
-// @compiler blocked: missing-implementation
 type Step<'s> =
   /// Keep going with this state.
   | Stay of 's
@@ -32,7 +31,7 @@ type Step<'s> =
   /// Drop to the classic prompt, pushing this page so `quit` there comes back here.
   | ToPrompt of 's
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Component.Component: Unknown type 'Stdlib.Live.Change'"
 type Component<'s> =
   { /// The complete view at a given terminal size. Must be pure: the renderer may call it to diff frames,
     /// so read the world during `onKey` and stash the result on the state.
@@ -56,22 +55,20 @@ type Component<'s> =
 
 
 /// The `save` for a component with nothing to persist. Named so it survives in retained state.
-// @compiler blocked: missing-implementation
 let noSave (state: 's) : 's =
   state
 
 /// The `refresh` for a component with no derived state. Named for the same reason.
-// @compiler blocked: missing-implementation
 let noRefresh (_previous: 's) (next: 's) : 's =
   next
 
 /// The `onStoreChanged` for a component that shows nothing from the store. Named for the same reason.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Stdlib.Live.Change'"
 let ignoreStore (state: 's) (_change: Stdlib.Live.Change) : 's =
   state
 
 /// A component with something to persist but nothing derived.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Component'"
 let simple
   (view: 's -> Stdlib.Cli.Tui.Size -> Stdlib.Cli.Tui.View)
   (onKey: 's -> Stdlib.Cli.Stdin.Key.Key -> Stdlib.Cli.Stdin.Modifiers.Modifiers -> Stdlib.Option.Option<String> -> Step<'s>)
@@ -86,12 +83,11 @@ let simple
 
 
 /// One retained session: where the component is, and what the terminal currently shows.
-// @compiler blocked: missing-implementation
 type Session<'s> =
   { state: 's
     terminal: Stdlib.Cli.Tui.TerminalSession.State }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Component'"
 let present (c: Component<'s>) (session: Session<'s>) (state: 's) : Session<'s> =
   // Every transition funnels through here, which makes it the one place derived reads belong.
   let state = c.refresh session.state state
@@ -103,11 +99,10 @@ let present (c: Component<'s>) (session: Session<'s>) (state: 's) : Session<'s> 
   Session { state = state, terminal = terminal }
 
 /// Carry the state forward without repainting - for steps that hand the terminal to someone else.
-// @compiler blocked: missing-implementation
 let handOff (session: Session<'s>) (state: 's) : Session<'s> =
   Session { state = state, terminal = session.terminal }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Component'"
 let toSubApp (c: Component<'s>) (session: Session<'s>) : Cli.SubApp =
   Cli.SubApp
     { onKey =
@@ -148,7 +143,7 @@ let toSubApp (c: Component<'s>) (session: Session<'s>) : Cli.SubApp =
 
 
 /// Launch `c` (starting at `init`) as the CLI's current full-screen page.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let launch (cliState: Cli.AppState) (c: Component<'s>) (init: 's) : Cli.AppState =
   let size = Stdlib.Cli.Tui.TerminalSession.currentSize ()
 
@@ -165,7 +160,7 @@ let launch (cliState: Cli.AppState) (c: Component<'s>) (init: 's) : Cli.AppState
 ///
 /// For a component that has no meaningful fallback: dropping to the prompt after failing to start would
 /// leave you somewhere you didn't ask to be.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let launchOrExit (cliState: Cli.AppState) (c: Component<'s>) (init: 's) : Cli.AppState =
   let size = Stdlib.Cli.Tui.TerminalSession.currentSize ()
 

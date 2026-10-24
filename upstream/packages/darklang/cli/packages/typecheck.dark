@@ -1,7 +1,6 @@
 /// Read-only audit of serialized package declarations on the current branch.
 module Darklang.Cli.Packages.Typecheck
 
-// @compiler blocked: missing-implementation
 type Counts =
   { checkedCount: Int
     failedCount: Int
@@ -9,13 +8,11 @@ type Counts =
     /// Of the failed, how many name something that resolves to nothing.
     unresolvedCount: Int }
 
-// @compiler blocked: missing-implementation
 type OutputFilter =
   { showChecked: Bool
     showFailed: Bool
     showIncomplete: Bool }
 
-// @compiler blocked: missing-implementation
 type ParsedArgs =
   { outputFilter: OutputFilter
     parseErrors: List<FlagParser.ParseError>
@@ -23,17 +20,14 @@ type ParsedArgs =
     asJson: Bool
     conflictingFilters: Bool }
 
-// @compiler blocked: missing-implementation
 val usage =
   "Usage: typecheck [<module>] [--failed] [--incomplete] [--all] [--json]"
 
-// @compiler blocked: missing-implementation
 val argSpec =
   FlagParser.Spec
     { flags = [ ("--failed", []), ("--incomplete", []), ("--all", []), ("--json", []) ]
       valueFlags = [] }
 
-// @compiler blocked: missing-implementation
 let parseArgs (args: List<String>) : ParsedArgs =
   let parsed = FlagParser.parse argSpec args
   let failedOnly = FlagParser.hasFlag parsed "--failed"
@@ -52,13 +46,12 @@ let parseArgs (args: List<String>) : ParsedArgs =
       asJson = FlagParser.hasFlag parsed "--json"
       conflictingFilters = showAll && hasSpecificFilter }
 
-// @compiler blocked: missing-implementation
 let fullPath (location: LanguageTools.ProgramTypes.PackageLocation) : String =
   [ [ location.owner ], location.modules, [ location.name ] ]
   |> Stdlib.List.flatten
   |> Stdlib.String.join "."
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Typecheck.locationsFor: Unknown function or value 'LanguageTools.PackageManager.Type.locations'"
 let locationsFor
   (branchId: Uuid)
   (reference: LanguageTools.ProgramTypes.Reference)
@@ -71,7 +64,6 @@ let locationsFor
   | PackageTraitImpl hash -> LanguageTools.PackageManager.TraitImpl.locations branchId hash
   | PackageTest hash -> LanguageTools.PackageManager.Test.locations branchId hash
 
-// @compiler blocked: missing-implementation
 let fallbackLabel (reference: LanguageTools.ProgramTypes.Reference) : String =
   let kind =
     match reference with
@@ -86,7 +78,7 @@ let fallbackLabel (reference: LanguageTools.ProgramTypes.Reference) : String =
       LanguageTools.ProgramTypes.Reference.hash reference)
   $"{kind} {hash}"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Typecheck.itemLabel: Unknown function or value 'locationsFor'"
 let itemLabel
   (branchId: Uuid)
   (reference: LanguageTools.ProgramTypes.Reference)
@@ -104,7 +96,7 @@ let itemLabel
 /// Whether the item names something that resolves to nothing. At save that means "not decided
 /// yet", since a caller may be written before its callee; in an audit of what is stored it means
 /// the item calls something that is not there.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.ItemReport'"
 let namesNothing (item: LanguageTools.AtRestTypeChecker.ItemReport) : Bool =
   item.warnings
   |> Stdlib.List.findFirst (fun w ->
@@ -118,7 +110,7 @@ let namesNothing (item: LanguageTools.AtRestTypeChecker.ItemReport) : Bool =
 
 /// The checker's verdict, except that an item it could not prove because it names something
 /// that does not exist is failed here.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.ItemReport'"
 let auditVerdict
   (item: LanguageTools.AtRestTypeChecker.ItemReport)
   : LanguageTools.AtRestTypeChecker.Verdict =
@@ -126,7 +118,7 @@ let auditVerdict
   | Incomplete when namesNothing item -> LanguageTools.AtRestTypeChecker.Verdict.Failed
   | v -> v
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.ItemReport'"
 let counts
   (items: List<LanguageTools.AtRestTypeChecker.ItemReport>)
   : Counts =
@@ -144,7 +136,7 @@ let counts
          | (Incomplete, _) -> { acc with incompleteCount = acc.incompleteCount + 1 })
 
 /// Whether <param outputFilter> lists <param item>.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.ItemReport'"
 let shows
   (outputFilter: OutputFilter)
   (item: LanguageTools.AtRestTypeChecker.ItemReport)
@@ -158,7 +150,7 @@ let shows
 ///
 /// A label is a store query, so only the listed items are labelled, and each once. The sort
 /// breaks ties on the item itself, so sorting only the listed items keeps their order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.ItemReport'"
 let listed
   (branchId: Uuid)
   (outputFilter: OutputFilter)
@@ -169,7 +161,7 @@ let listed
   |> Stdlib.List.map (fun item -> (itemLabel branchId item.item, item))
   |> Stdlib.List.sortBy (fun (label, _) -> label)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.ItemReport'"
 let printItem
   (branchId: Uuid)
   (outputFilter: OutputFilter)
@@ -198,7 +190,7 @@ let printItem
 // The --json rendering. The same data the human view renders, typed: `docs for-ai` promises every
 // question-answering command takes --json, and an agent auditing a branch after a batch of
 // edits is this command's main consumer. Items are filtered the same way the human view is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let jsonReport
   (branchId: Uuid)
   (outputFilter: OutputFilter)
@@ -238,7 +230,7 @@ let jsonReport
         ("items", Stdlib.AltJson.Json.Array items) ]
   )
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let parsed = parseArgs args
   if Stdlib.Bool.not (Stdlib.List.isEmpty parsed.parseErrors) then
@@ -321,7 +313,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
 
     finished
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Audit every visible package type, value, function, trait, implementation and test"
     "on the current branch. The command is read-only and reports definite errors"
@@ -341,7 +333,7 @@ let help (_state: Cli.AppState) : String =
     "--failed and --incomplete may be combined; --all is mutually exclusive." ]
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (_state: Cli.AppState)
   (_args: List<String>)

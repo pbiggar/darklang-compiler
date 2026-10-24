@@ -1823,7 +1823,7 @@ let parseE2ETestFile path =
           else Ok { test with compilerDisposition }
       | CompilerAnnotations.Run | CompilerAnnotations.Xfail _ ->
           Ok { test with compilerDisposition }
-      | CompilerAnnotations.Blocked reason ->
+      | CompilerAnnotations.Blocked { reason; _ } ->
           Ok
             {
               test with

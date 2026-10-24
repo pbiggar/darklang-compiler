@@ -95,9 +95,45 @@ let importInheritedValues recorder inheritedValues program =
       topLevels
     |> S.of_list
   in
+  let inheritedById =
+    M.to_seq inheritedValues
+    |> Seq.filter (fun (name, _) -> not (S.mem name currentNames))
+    |> Seq.map (fun (name, artifact) ->
+        (AST.topLevelValueId name, (name, artifact)))
+    |> B.of_seq
+  in
+  let direct =
+    List.fold_left
+      (fun used -> function
+        | C.FunctionDef func ->
+            let parameters =
+              NonEmptyList.toList func.C.params |> List.map fst |> BS.of_list
+            in
+            BS.union used (ClosureAnalysis.freeVars func.C.body parameters)
+        | C.ValueDef value ->
+            BS.union used (ClosureAnalysis.freeVars value.C.body BS.empty)
+        | C.Expression expression ->
+            BS.union used (ClosureAnalysis.freeVars expression BS.empty)
+        | C.TypeDef _ -> used)
+      BS.empty topLevels
+  in
+  let rec reachable pending needed =
+    match BS.min_elt_opt pending with
+    | None -> needed
+    | Some id -> (
+        let pending = BS.remove id pending in
+        match B.find_opt id inheritedById with
+        | Some (name, artifact) when not (S.mem name needed) ->
+            reachable
+              (BS.union pending
+                 (ClosureAnalysis.freeVars artifact.X.body BS.empty))
+              (S.add name needed)
+        | Some _ | None -> reachable pending needed)
+  in
+  let needed = reachable direct S.empty in
   let inheritedEntries =
     M.bindings inheritedValues
-    |> List.filter (fun (name, _) -> not (S.mem name currentNames))
+    |> List.filter (fun (name, _) -> S.mem name needed)
   in
   let inherited, symbols, compositionTicks, definitionTicks =
     List.fold_left
@@ -802,6 +838,12 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
       topLevels
   in
   let typedProgram = C.programFromCheckedParts (symbols, topLevels) in
+  (* Required value bodies participate in dependency planning, including generic
+     calls inside their initializers. Importing them after this step leaves
+     those calls outside the specialization registry. *)
+  let typedProgram =
+    importInheritedValues recorder baseContext.X.checkedValues typedProgram
+  in
   let typedProgram =
     let local = SpecializationIdentity.extractGenericFuncDefs typedProgram in
     let definitions = M.fold M.add local baseContext.X.genericFuncDefs in

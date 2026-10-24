@@ -6,11 +6,8 @@
 module Darklang.Cli.Tracing
 
 
-// @compiler blocked: missing-implementation
 type TraceSummary = Darklang.Tracing.Trace
-// @compiler blocked: missing-implementation
 type FnCall = Darklang.Tracing.FnCall
-// @compiler blocked: missing-implementation
 type TraceData = Darklang.Tracing.TraceData
 
 
@@ -18,7 +15,7 @@ type TraceData = Darklang.Tracing.TraceData
 ///
 /// "no traces found" reads as "nothing ran", and with recording off that is the wrong
 /// conclusion: every query comes back empty no matter what ran. So ask, rather than guess.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.emptyStateHint: Unknown function or value 'Darklang.Tracing.Store.enabled'"
 let emptyStateHint () : String =
   if Darklang.Tracing.Store.enabled () then
     "nothing has run yet -- every `dark eval`, `dark run` and served request is kept here"
@@ -27,14 +24,14 @@ let emptyStateHint () : String =
 
 
 /// Print the empty-result explanation, dimmed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.printEmptyStateHint: Unknown function or value 'emptyStateHint'"
 let printEmptyStateHint () : Unit =
   Stdlib.printLine (Stdlib.Cli.UI.Colors.dimText (emptyStateHint ()))
 
 
 /// Print, after a FILTERED search came back empty, the one thing that would explain it
 /// whatever you searched for. Silent when recording is on: then the empty result is the answer.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.printRecordingOffHint: Unknown function or value 'Darklang.Tracing.Store.enabled'"
 let printRecordingOffHint () : Unit =
   if Darklang.Tracing.Store.enabled () then
     ()
@@ -46,7 +43,6 @@ let printRecordingOffHint () : Unit =
 
 /// What to leave out when printing a trace's log. The log is a SEQUENCE of impure calls, in the
 /// order they completed, so a filter narrows the list and never changes its shape.
-// @compiler blocked: missing-implementation
 type ViewOptions =
   { filter: Stdlib.Option.Option<String>
     /// Inverse of `filter` — hide calls whose name contains this pattern.
@@ -59,7 +55,6 @@ type ViewOptions =
     all: Bool }
 
 
-// @compiler blocked: missing-implementation
 val defaultViewOptions =
   ViewOptions
     { filter = Stdlib.Option.Option.None
@@ -70,7 +65,6 @@ val defaultViewOptions =
 
 /// English ordinal suffix for a non-negative integer. "1st", "2nd",
 /// "3rd", "4th"… honoring the 11/12/13 exception (always "th").
-// @compiler blocked: missing-implementation
 let ordinalSuffix (n: Int) : String =
   let mod100 = n % 100
   if mod100 >= 11 && mod100 <= 13 then "th"
@@ -87,7 +81,6 @@ let ordinalSuffix (n: Int) : String =
 /// non-numeric" — `traces list --fake-arg` should say "unknown flag",
 /// not "Invalid limit", since the user clearly didn't intend to
 /// type a number there.
-// @compiler blocked: missing-implementation
 let parsePositionalErr (input: String) (label: String) : String =
   if Stdlib.String.startsWith input "-" then
     $"unknown flag: {input}"
@@ -103,7 +96,7 @@ let parsePositionalErr (input: String) (label: String) : String =
 /// trace IDs are UUIDs, so no real ID ever starts with `-`. This catches
 /// misplaced-flag typos that would otherwise yield the misleading
 /// "Trace not found: --fake-arg".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.resolveTraceID: Unknown function or value 'Cli.printErr'"
 let resolveTraceID (input: String) : Stdlib.Option.Option<String> =
   if Stdlib.String.startsWith input "-" then
     Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"unknown flag: {input}")
@@ -122,7 +115,6 @@ let resolveTraceID (input: String) : Stdlib.Option.Option<String> =
         Stdlib.Option.Option.None
 
 
-// @compiler blocked: missing-implementation
 let parseViewOptions
   (opts: ViewOptions)
   (args: List<String>)
@@ -195,7 +187,7 @@ let parseViewOptions
 /// script the deletion happened: with no terminal to answer the prompt, `traces delete <id>`
 /// cancelled, printed one line nobody was reading, and reported success. An agent cleaning up
 /// after itself would have believed it every time.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.confirmDestructive: Unknown function or value 'Cli.Prompt.confirmExplicit'"
 let confirmDestructive (autoConfirm: Bool) (action: String) : Bool =
   Cli.Prompt.confirmExplicit autoConfirm $"{action} [y/N]: "
 
@@ -208,7 +200,6 @@ let confirmDestructive (autoConfirm: Bool) (action: String) : Bool =
 /// trace went through 077f48c0" about a trace that is sitting in the table.
 ///
 /// A function name has dots. A trace id is hex and hyphens and nothing else.
-// @compiler blocked: missing-implementation
 let looksLikeATraceId (arg: String) : Bool =
   if Stdlib.String.contains arg "." then
     false
@@ -229,7 +220,7 @@ let looksLikeATraceId (arg: String) : Bool =
 /// than one, and it lists them as commands you can run, because picking for you would be picking
 /// wrong half the time. None, and the trace touched no package function at all, which is its own
 /// answer.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let showFromTrace
   (state: Cli.AppState)
   (arg: String)
@@ -314,7 +305,7 @@ let showFromTrace
       Cli.exitWith state false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   // Kept before the flags are stripped below, for the `view` and `details` aliases: they
   // re-enter with the verb swapped, and re-entering with the STRIPPED list loses `--json`
@@ -850,11 +841,10 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
 /// twelve of them. One string, so a reworded message cannot land in one verb and not the other
 /// eleven. `tail` has its own wording, because it takes which trace back to open rather than
 /// how many to list.
-// @compiler blocked: missing-implementation
 val limitTooSmall = "a limit is a number of traces, so it has to be 1 or more"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeList (state: Cli.AppState) (limit: Int) : Cli.AppState =
   if limit < 1 then
     Cli.printErr limitTooSmall
@@ -867,7 +857,7 @@ let executeList (state: Cli.AppState) (limit: Int) : Cli.AppState =
 /// `traces list --json [N]` — same data as `traces list` but emitted as a
 /// JSON array of `{traceId, handler, timestamp}` objects, no headers or
 /// footers. Designed for piping into jq / scripts. Empty store prints `[]`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeListJson (state: Cli.AppState) (limit: Int) : Cli.AppState =
   if limit < 1 then
     Cli.printErr limitTooSmall
@@ -879,7 +869,7 @@ let executeListJson (state: Cli.AppState) (limit: Int) : Cli.AppState =
     state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeListByFn
   (state: Cli.AppState)
   (typed: String)
@@ -937,7 +927,7 @@ let executeListByFn
 ///
 /// The bundled library is hidden by default. `Stdlib.List.map` is in almost every run, and
 /// saying so buries the handful of names that are actually yours.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFnCounts
   (state: Cli.AppState)
   (traceLimit: Int)
@@ -1037,14 +1027,13 @@ let executeFnCounts
 ///
 /// `gone` is what the page renders as `(gone) 8e573a4b`: the store no longer has that function,
 /// so the index kept its hash where a name would be.
-// @compiler blocked: missing-implementation
 type FnRunsJson =
   { fn: String
     runs: Int64
     gone: Bool }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFnCountsJson
   (state: Cli.AppState)
   (traceLimit: Int)
@@ -1080,7 +1069,7 @@ let executeFnCountsJson
 /// `traces hotspots [limit]`: across the last <limit> traces (default 100), the time spent
 /// in each logged call: count, total ms, max ms, sorted by total. Only impure calls are
 /// logged, so every name it prints is a builtin.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeHotspots
   (state: Cli.AppState)
   (traceLimit: Int)
@@ -1115,7 +1104,7 @@ let executeHotspots
 /// `traces hotspots --json [limit]` — same data as a JSON array of
 /// `{name, count, totalMs, maxMs}` objects, no headers/footers, for
 /// piping. Empty store prints `[]`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeHotspotsJson
   (state: Cli.AppState)
   (traceLimit: Int)
@@ -1139,11 +1128,9 @@ let executeHotspotsJson
 
 
 /// Right-align a number in a field of `width` chars.
-// @compiler blocked: missing-implementation
 let padNum (n: Int) (width: Int) : String =
   Darklang.Tracing.Format.padNum n width
 
-// @compiler blocked: missing-implementation
 let jsonEscape (s: String) : String = Darklang.Tracing.Format.jsonEscape s
 
 
@@ -1151,7 +1138,7 @@ let jsonEscape (s: String) : String = Darklang.Tracing.Format.jsonEscape s
 /// fn-call args/result contain the substring (case-sensitive, matches the
 /// stored JSON form). Useful for "show me everywhere user 42 was touched"
 /// or "show me traces where errCode 503 came back."
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFind
   (state: Cli.AppState)
   (pattern: String)
@@ -1173,7 +1160,7 @@ let executeFind
 /// `traces find <pattern> --json [limit]` — same data as `traces find`
 /// but as a JSON array of `{traceId, handler, timestamp}` objects, no
 /// banner. Designed for piping into jq / scripts.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFindJson
   (state: Cli.AppState)
   (pattern: String)
@@ -1194,7 +1181,7 @@ let executeFindJson
 /// `traces find <pattern> --inspect` -- search-then-drill in one step: the newest matching run,
 /// rendered as `traces inspect` would. If several match, the others are noted and you get the
 /// freshest.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFindInspect (state: Cli.AppState) (pattern: String) : Cli.AppState =
   if pattern == "" then
     Cli.printErr "find takes something to look for: part of an id, or of what was run"
@@ -1216,7 +1203,7 @@ let executeFindInspect (state: Cli.AppState) (pattern: String) : Cli.AppState =
 /// very latest). Skips the list-then-copy-id round trip you would otherwise do with
 /// `traces list` then `traces inspect <id>`; `tail 2` peeks back one without copying ids. An
 /// optional route filter narrows to traces matching the substring before counting.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeTail
   (state: Cli.AppState)
   (routeFilter: Stdlib.Option.Option<String>)
@@ -1273,7 +1260,7 @@ let executeTail
 /// trace count, total ms (sum of every fn-call duration in each trace),
 /// max single-call ms. Pairs with `traces hotspots` (per-fn aggregate)
 /// for "which routes are heavy?" vs "which fns are heavy?".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeStats (state: Cli.AppState) (limit: Int) : Cli.AppState =
   if limit < 1 then
     Cli.printErr limitTooSmall
@@ -1318,7 +1305,7 @@ let executeStats (state: Cli.AppState) (limit: Int) : Cli.AppState =
 /// `traces stats --json [limit]` — same data as a JSON array of
 /// `{handler, count, totalMs, maxMs}` objects, no headers/footers,
 /// for piping. Empty store prints `[]`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeStatsJson (state: Cli.AppState) (limit: Int) : Cli.AppState =
   if limit < 1 then
     Cli.printErr limitTooSmall
@@ -1343,7 +1330,7 @@ let executeStatsJson (state: Cli.AppState) (limit: Int) : Cli.AppState =
 /// Returns the new `lastSeen` (the newest id pulled this tick). When
 /// `jsonMode`, each new trace prints as one NDJSON line; otherwise the
 /// human-readable two-space-indent form.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.followLoop: Unknown function or value 'Darklang.Tracing.Store.list'"
 let followLoop
   (branchId: Uuid)
   (routeFilter: Stdlib.Option.Option<String>)
@@ -1390,7 +1377,7 @@ let followLoop
 /// the "Following…" banner is suppressed so consumers see only data.
 ///
 /// Hold Ctrl+C to exit (the loop never returns on its own).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFollow
   (state: Cli.AppState)
   (routeFilter: Stdlib.Option.Option<String>)
@@ -1426,7 +1413,7 @@ let executeFollow
 /// Filter recent traces by a substring of the trace's `handler` field
 /// (which for HTTP traces is `"<METHOD> <path>"` like `"GET /hello"`).
 /// Substring match makes both `"/hello"` and `"GET"` work.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeListByRoute
   (state: Cli.AppState)
   (route: String)
@@ -1465,7 +1452,7 @@ let executeListByRoute
 
 /// A listing of traces: the one table, and the one line saying what to type next. <param nothing>
 /// is what to say when the list is empty; "" when the empty-state hint says it already.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.printMatches: Unknown function or value 'printEmptyStateHint'"
 let printMatches (nothing: String) (rows: List<TraceSummary>) : Unit =
   match rows with
   | [] ->
@@ -1484,14 +1471,13 @@ let printMatches (nothing: String) (rows: List<TraceSummary>) : Unit =
 
 /// Single-line render of a dval for the trace viewer; strategy lives in
 /// `Tracing.Format.compactDval`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.compactDval: Unknown function or value 'Darklang.Tracing.Format.compactDval'"
 let compactDval (branchId: Uuid) (dv: LanguageTools.RuntimeTypes.Dval) : String =
   Darklang.Tracing.Format.compactDval branchId dv
 
 
 /// Whether one logged call survives the filters. `--filter` and `--exclude` match
 /// case-insensitively, the way `list --fn` and `find` do.
-// @compiler blocked: missing-implementation
 let isVisible (opts: ViewOptions) (call: FnCall) : Bool =
   let belowSlowThreshold =
     match opts.slowThresholdMs with
@@ -1513,7 +1499,7 @@ let isVisible (opts: ViewOptions) (call: FnCall) : Bool =
 
 /// A trace's log, one line per impure call, in the order they completed. There is no tree: only
 /// impure calls are recorded, so this is the sequence of things the trace did to the world.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Tracing.formatFnCalls: Field access requires a record value"
 let formatFnCalls
   (opts: ViewOptions)
   (branchId: Uuid)
@@ -1585,7 +1571,7 @@ let formatFnCalls
 /// the sequence of impure calls it made. The ONE renderer for a single run, which is why `tail`
 /// and `find --inspect` come through here rather than printing their own: two renderers for one
 /// thing drift.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeInspect
   (state: Cli.AppState)
   (prefix: String)
@@ -1715,7 +1701,7 @@ let executeInspect
 /// HTTP traces (input is a Request record, not a string) aren't supported;
 /// the row's input is fetched via `tracesGetInput` which returns None for
 /// non-string inputs. Each rerun is recorded as a trace of its own.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeReplay (state: Cli.AppState) (traceID: String) : Cli.AppState =
   match Darklang.Tracing.Store.getInput traceID with
   | None ->
@@ -1747,7 +1733,7 @@ let executeReplay (state: Cli.AppState) (traceID: String) : Cli.AppState =
       { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeClear (state: Cli.AppState) : Cli.AppState =
   let count = Darklang.Tracing.Store.clear ()
   match count with
@@ -1762,7 +1748,6 @@ let executeClear (state: Cli.AppState) : Cli.AppState =
 /// Parse a CLI duration arg. `-`-prefixed inputs are reported as
 /// "unknown flag" rather than "Invalid duration" — same logic as
 /// `parsePositionalErr`. Otherwise delegates to `Stdlib.Duration.parse`.
-// @compiler blocked: missing-implementation
 let parseDuration (s: String) : Stdlib.Result.Result<Int, String> =
   if Stdlib.String.startsWith s "-" then
     Stdlib.Result.Result.Error $"unknown flag: {s}"
@@ -1772,7 +1757,7 @@ let parseDuration (s: String) : Stdlib.Result.Result<Int, String> =
 
 /// `traces delete --before <duration>` — drop traces older than the
 /// given duration; complement to `--keep N` (count-based).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeClearBefore
   (state: Cli.AppState)
   (durationStr: String)
@@ -1800,7 +1785,7 @@ let executeClearBefore
 
 /// `traces delete <id>` — remove one trace and its fn_calls. ID accepts
 /// the same prefix-resolution as view/rerun.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeDelete (state: Cli.AppState) (traceID: String) : Cli.AppState =
   let deleted = Darklang.Tracing.Store.delete traceID
   match deleted with
@@ -1815,7 +1800,7 @@ let executeDelete (state: Cli.AppState) (traceID: String) : Cli.AppState =
 /// `traces delete --keep <N>` — keep the N most-recent traces, drop the
 /// rest (with their fn_calls). For bounded retention as the trace store
 /// grows; pair with `traces delete --all` for a full wipe.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executePruneKeep (state: Cli.AppState) (keepN: Int) : Cli.AppState =
   if keepN < 0 then
     Cli.printErr "--keep takes a number of traces to keep, so it cannot be negative"
@@ -1836,7 +1821,7 @@ let executePruneKeep (state: Cli.AppState) (keepN: Int) : Cli.AppState =
       state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (args: List<String>) : List<Completion.CompletionItem> =
   match args with
   | [] ->
@@ -1904,7 +1889,7 @@ let complete (_state: Cli.AppState) (args: List<String>) : List<Completion.Compl
   | _ -> []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Every `dark eval`, `dark run` and served request can be kept here as a TRACE: what it was"
     "given, where it stands, and every impure call it made, in order. A trace can be looked"

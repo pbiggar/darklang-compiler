@@ -14,7 +14,7 @@ module Darklang.SCM.StoreHealth
 
 
 /// A count from one diagnostic query, 0 when it can't be answered.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.StoreHealth.scalar: Unknown function or value 'Stdlib.Sqlite.scalarInt'"
 let scalar (sql: String) : Int64 =
   Stdlib.Sqlite.scalarInt (localDb ()) sql "n" |> Stdlib.Option.withDefault 0L
 
@@ -23,13 +23,11 @@ let scalar (sql: String) : Int64 =
 /// The two kinds have opposite remedies: a PROJECTION can be thrown away and rebuilt from the log, so
 /// "reload" genuinely fixes it, while a CANONICAL row can't -- the log is what's wrong, and re-folding
 /// reproduces it faithfully.
-// @compiler blocked: missing-implementation
 type Problem =
   { text: String
     /// true when the damage is in a projection, so a reload rebuilds past it
     refoldable: Bool }
 
-// @compiler blocked: missing-implementation
 let countedProblem (n: Int64) (refoldable: Bool) (what: String) : List<Problem> =
   if n > 0L then
     [ Problem
@@ -41,7 +39,7 @@ let countedProblem (n: Int64) (refoldable: Bool) (what: String) : List<Problem> 
 /// Everything wrong with the store right now. Empty when it's healthy.
 ///
 /// main-scoped, on purpose: health is a property of the store's log and main's projections of it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.StoreHealth.problems: Unknown function or value 'scalar'"
 let problems () : List<Problem> =
   let orphanTags =
     scalar

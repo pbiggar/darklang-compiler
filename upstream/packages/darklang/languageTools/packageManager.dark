@@ -9,7 +9,7 @@ module Darklang.LanguageTools.PackageManager
 /// Context for choosing among multiple locations that share the same hash.
 /// When a hash maps to multiple named locations (e.g. Person and Person2 are
 /// structurally identical), we use context to pick the best display name.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Compiler substitute PickContext contains only currentModule; the imported record also requires preferredLocation."
 type PickContext =
   { currentModule: List<String>
 
@@ -26,7 +26,7 @@ type PickContext =
     preferredLocation: Stdlib.Option.Option<ProgramTypes.PackageLocation> }
 
 module PickContext =
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Imported initializer sets preferredLocation, absent from the compiler PickContext substitute."
   val empty =
     PickContext { currentModule = [], preferredLocation = Stdlib.Option.Option.None }
 
@@ -90,14 +90,14 @@ let pickLocation
 
 
 module Type =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Type.find: Unknown function or value 'Builtin.pmFindType'"
   let find
     (branchId: Uuid)
     (location: ProgramTypes.PackageLocation)
     : Stdlib.Option.Option<ProgramTypes.FQTypeName.Package> =
     Builtin.pmFindType branchId location
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageType.PackageType'"
   let get
     (hash: ProgramTypes.FQTypeName.Package)
     : Stdlib.Option.Option<ProgramTypes.PackageType.PackageType> =
@@ -105,14 +105,14 @@ module Type =
 
   /// Every name this type is bound to on <param branchId>. More than one
   /// when structurally identical types share a hash.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Type.locations: Unknown function or value 'Builtin.pmGetLocationsByType'"
   let locations
     (branchId: Uuid)
     (hash: ProgramTypes.FQTypeName.Package)
     : List<ProgramTypes.PackageLocation> =
     Builtin.pmGetLocationsByType branchId hash
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageType.PackageType'"
   let getWithLocation
     (branchId: Uuid)
     (hash: ProgramTypes.FQTypeName.Package)
@@ -130,21 +130,21 @@ module Type =
 
 
 module Trait =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Trait.find: Unknown function or value 'Builtin.pmFindTrait'"
   let find
     (branchId: Uuid)
     (location: ProgramTypes.PackageLocation)
     : Stdlib.Option.Option<ProgramTypes.FQTraitName.Package> =
     Builtin.pmFindTrait branchId location
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.Trait.Trait'"
   let get
     (hash: ProgramTypes.FQTraitName.Package)
     : Stdlib.Option.Option<ProgramTypes.Trait.Trait> =
     Builtin.pmGetTrait hash
 
   /// Every name this trait is bound to on <param branchId>.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Trait.locations: Unknown function or value 'Builtin.pmGetLocationsByTrait'"
   let locations
     (branchId: Uuid)
     (hash: ProgramTypes.FQTraitName.Package)
@@ -153,7 +153,7 @@ module Trait =
 
   /// The impls of a trait bound on <param branchId>: what `Trait.method x` can
   /// dispatch to.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Trait.impls: Unknown function or value 'Builtin.pmImplCandidates'"
   let impls
     (branchId: Uuid)
     (traitHash: ProgramTypes.FQTraitName.Package)
@@ -168,7 +168,7 @@ module Trait =
   /// The operator-to-trait table is not duplicated here on purpose. It lives once in F#
   /// (`NumericTraits.ofInfix`), which is also what the lowering uses, so the checker and the
   /// runtime cannot come to disagree about what `+` means.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Trait.forInfix: Unknown function or value 'Builtin.pmInfixImplCandidates'"
   let forInfix
     (branchId: Uuid)
     (operation: ProgramTypes.InfixFnName)
@@ -176,14 +176,14 @@ module Trait =
     Builtin.pmInfixImplCandidates branchId operation
 
   /// The same for unary minus, which `InfixFnName` has no case for because it is not infix.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Trait.forNegate: Unknown function or value 'Builtin.pmNegateImplCandidates'"
   let forNegate
     (branchId: Uuid)
     : Stdlib.Option.Option<(ProgramTypes.FQTraitName.Package * String * List<RuntimeTypes.ImplCandidate>)> =
     Builtin.pmNegateImplCandidates branchId
 
   /// And for `~x`.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Trait.forBitwiseNot: Unknown function or value 'Builtin.pmBitwiseNotImplCandidates'"
   let forBitwiseNot
     (branchId: Uuid)
     : Stdlib.Option.Option<(ProgramTypes.FQTraitName.Package * String * List<RuntimeTypes.ImplCandidate>)> =
@@ -191,19 +191,19 @@ module Trait =
 
 
 module TraitImpl =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.TraitImpl.find: Unknown function or value 'Builtin.pmFindTraitImpl'"
   let find
     (branchId: Uuid)
     (location: ProgramTypes.PackageLocation)
     : Stdlib.Option.Option<ProgramTypes.Hash> =
     Builtin.pmFindTraitImpl branchId location
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.TraitImpl.TraitImpl'"
   let get (hash: ProgramTypes.Hash) : Stdlib.Option.Option<ProgramTypes.TraitImpl.TraitImpl> =
     Builtin.pmGetTraitImpl hash
 
   /// Every name this impl is bound to on <param branchId>.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.TraitImpl.locations: Unknown function or value 'Builtin.pmGetLocationsByTraitImpl'"
   let locations
     (branchId: Uuid)
     (hash: ProgramTypes.Hash)
@@ -213,34 +213,33 @@ module TraitImpl =
 
 module Value =
   /// Find stored values whose runtime value type matches exactly.
-  // @compiler blocked: missing-implementation
   let findByValueType
     (valueType: RuntimeTypes.ValueType)
     : List<ProgramTypes.Hash> =
     Builtin.pmFindValuesByValueType valueType
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Value.find: Unknown function or value 'Builtin.pmFindValue'"
   let find
     (branchId: Uuid)
     (location: ProgramTypes.PackageLocation)
     : Stdlib.Option.Option<ProgramTypes.FQValueName.Package> =
     Builtin.pmFindValue branchId location
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageValue.PackageValue'"
   let get
     (hash: ProgramTypes.FQValueName.Package)
     : Stdlib.Option.Option<ProgramTypes.PackageValue.PackageValue> =
     Builtin.pmGetValue hash
 
   /// Every name this value is bound to on <param branchId>.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: compiler-gap diagnostic="Darklang.LanguageTools.PackageManager.Value.locations: Expected TString, got TSum (\"Uuid\", [])"
   let locations
     (branchId: Uuid)
     (hash: ProgramTypes.FQValueName.Package)
     : List<ProgramTypes.PackageLocation> =
     Builtin.pmGetLocationsByValue branchId hash
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageValue.PackageValue'"
   let getWithLocation
     (branchId: Uuid)
     (hash: ProgramTypes.FQValueName.Package)
@@ -258,14 +257,14 @@ module Value =
 
 
 module Function =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Function.find: Unknown function or value 'Builtin.pmFindFn'"
   let find
     (branchId: Uuid)
     (location: ProgramTypes.PackageLocation)
     : Stdlib.Option.Option<ProgramTypes.FQFnName.Package> =
     Builtin.pmFindFn branchId location
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageFn.PackageFn'"
   let get
     (hash: ProgramTypes.FQFnName.Package)
     : Stdlib.Option.Option<ProgramTypes.PackageFn.PackageFn> =
@@ -273,21 +272,21 @@ module Function =
 
   /// The fn at <param hash> with its body replaced by `()`, for a caller that only reads the
   /// signature. Cheaper than `get`: the body is never converted into Dark values.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageFn.PackageFn'"
   let getSignature
     (hash: ProgramTypes.FQFnName.Package)
     : Stdlib.Option.Option<ProgramTypes.PackageFn.PackageFn> =
     Builtin.pmGetFnSignature hash
 
   /// Every name this fn is bound to on <param branchId>.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Function.locations: Unknown function or value 'Builtin.pmGetLocationsByFn'"
   let locations
     (branchId: Uuid)
     (hash: ProgramTypes.FQFnName.Package)
     : List<ProgramTypes.PackageLocation> =
     Builtin.pmGetLocationsByFn branchId hash
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageFn.PackageFn'"
   let getWithLocation
     (branchId: Uuid)
     (hash: ProgramTypes.FQFnName.Package)
@@ -306,25 +305,24 @@ module Function =
 
 module Test =
   /// Valid only inside the withStoreSnapshot callback that created it.
-  // @compiler blocked: missing-implementation
   type Run = { id: Uuid }
 
   /// Share a starting store across the tests executed by <param run>. Every
   /// test still gets a private writable copy and a fresh process. Cached-only
   /// runs create no snapshot; cleanup also runs if the callback fails.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.withStoreSnapshot: Unknown function or value 'Builtin.pmTestWithStoreSnapshot'"
   let withStoreSnapshot (run: Run -> 'a) : 'a =
     Builtin.pmTestWithStoreSnapshot (fun id -> run (Run { id = id }))
 
   /// Conservative proof that a passing result is reusable. Dynamic calls and
   /// branch-dependent rendering are not treated as cache-safe.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.isCacheSafe: Unknown function or value 'Builtin.pmTestIsCacheSafe'"
   let isCacheSafe (hash: ProgramTypes.Hash) : Bool =
     Builtin.pmTestIsCacheSafe hash
 
   /// The result type as this branch currently binds it. Judging an ordinary
   /// test depends on this binding, even when the test's own hash is unchanged.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.resultTypeHash: Unknown function or value 'Type.find'"
   let resultTypeHash (branchId: Uuid) : Stdlib.Option.Option<ProgramTypes.Hash> =
     Type.find
       branchId
@@ -333,20 +331,20 @@ module Test =
           modules = [ "Stdlib", "Test" ]
           name = "Result" })
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.find: Unknown function or value 'Builtin.pmFindTest'"
   let find
     (branchId: Uuid)
     (location: ProgramTypes.PackageLocation)
     : Stdlib.Option.Option<ProgramTypes.Hash> =
     Builtin.pmFindTest branchId location
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageTest.PackageTest'"
   let get
     (hash: ProgramTypes.Hash)
     : Stdlib.Option.Option<ProgramTypes.PackageTest.PackageTest> =
     Builtin.pmGetTest hash
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.locations: Unknown function or value 'Builtin.pmGetLocationsByTest'"
   let locations
     (branchId: Uuid)
     (hash: ProgramTypes.Hash)
@@ -356,7 +354,7 @@ module Test =
   /// Run this test's body with an allow-all test instance policy and ordinary
   /// called-function approvals and ceilings: what it evaluated to,
   /// reflected, or the error it raised. Nothing is judged here; see `execute`.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.executeBody: Unknown function or value 'Builtin.pmExecuteTest'"
   let executeBody
     (run: Run)
     (branchId: Uuid)
@@ -368,7 +366,7 @@ module Test =
   /// <param value> as a `Stdlib.Test.Result`, or None if it is anything else. The
   /// enum's type is checked by hash, as <param branchId> sees `Stdlib.Test.Result`,
   /// so a look-alike `Pass`/`Fail` enum from elsewhere is not taken for one.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.asTestResult: Unknown function or value 'resultTypeHash'"
   let asTestResult
     (branchId: Uuid)
     (value: LanguageTools.RuntimeTypes.Dval)
@@ -409,7 +407,7 @@ module Test =
   /// refused an effect, raised unexpectedly, returned a non-test value), not
   /// a failing assertion. <param branchId> is the branch names in error
   /// messages are resolved against.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.executeInRun: Unknown function or value 'get'"
   let executeInRun
     (run: Run)
     (branchId: Uuid)
@@ -450,7 +448,7 @@ module Test =
     | None, Error error -> Stdlib.Result.Result.Error error
 
   /// Run one test without keeping a starting snapshot for subsequent tests.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Test.execute: Unknown function or value 'withStoreSnapshot'"
   let execute
     (branchId: Uuid)
     (hash: ProgramTypes.Hash)
@@ -460,7 +458,7 @@ module Test =
 
 /// Replace provisional hashes with SCC-aware content hashes, including references
 /// between items in the batch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let stabilizeHashes
   (ops: List<ProgramTypes.PackageOp>)
   : List<ProgramTypes.PackageOp> =
@@ -473,7 +471,7 @@ let stabilizeHashes
 ///
 /// Before `stabilizeHashes`, so a pin at a placeholder hash moves with everything else. A call
 /// whose self type is only known at run time (inside a bounded generic) comes back unchanged.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let resolveTraitCalls
   (ops: List<ProgramTypes.PackageOp>)
   : List<ProgramTypes.PackageOp> =
@@ -482,7 +480,7 @@ let resolveTraitCalls
 
 /// Duplicate declaration names in <param ops>, formatted as
 /// `"fn Owner.Module.name"`. Reject before `stabilizeHashes`, which keys by name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let duplicateDeclarations
   (ops: List<ProgramTypes.PackageOp>)
   : List<String> =
@@ -491,7 +489,7 @@ let duplicateDeclarations
 
 /// Find any item (type, fn, value, trait or impl) at a location.
 /// Returns the hash and what kind of item it is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.findAny: Unknown function or value 'Type.find'"
 let findAny
   (branchId: Uuid)
   (location: ProgramTypes.PackageLocation)
@@ -526,7 +524,7 @@ let findAny
 ///
 /// `searchNames` would answer the same question, but it scans `locations` in full whatever it finds;
 /// this is an equality seek on the owner index.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.ownerHasItems: Unknown function or value 'Builtin.pmOwnerHasItems'"
 let ownerHasItems (branchId: Uuid) (owner: String) : Bool =
   Builtin.pmOwnerHasItems branchId owner
 
@@ -540,7 +538,7 @@ let ownerHasItems (branchId: Uuid) (owner: String) : Bool =
 ///
 /// Deprecation keys on CONTENT, so this answers about the hash rather than
 /// about a name: every name bound to that content shares the answer.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.currentDeprecation: Unknown function or value 'Builtin.pmGetCurrentDeprecation'"
 let currentDeprecation
   (branchId: Uuid)
   (hash: ProgramTypes.Hash)
@@ -550,7 +548,7 @@ let currentDeprecation
 
 
 module Search =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.Search.SearchResults'"
   let search
     (branchId: Uuid)
     (query: ProgramTypes.Search.SearchQuery)
@@ -575,7 +573,6 @@ module Search =
   /// -- `dark ls`, `dark tree`, `dark view`, the workbench and the editor's tree view -- so what
   /// counts as a submodule is decided once rather than five times. It lives beside `search`
   /// because it is a fact about search results, and because the editor cannot reach into the CLI.
-  // @compiler blocked: missing-implementation
   let readerSubmodules (submodules: List<String>) (implNames: List<String>) : List<String> =
     submodules
     |> Stdlib.List.filter (fun name ->
@@ -590,7 +587,7 @@ module Search =
   /// per item. Submodules come back already reduced to the direct children of the query's module, because
   /// doing that reduction in Dark means walking every module path under the store root.
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Search.searchNames: Unknown function or value 'Builtin.pmSearchNames'"
   let searchNames
     (branchId: Uuid)
     (query: ProgramTypes.Search.SearchQuery)
@@ -600,7 +597,7 @@ module Search =
 
   /// Like `searchNames`, but keeps each item's hash. Listings need it for the deprecation mark; completion
   /// doesn't, and pays nothing for it.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.PackageManager.Search.searchNamesAndHashes: Unknown function or value 'Builtin.pmSearchNamesAndHashes'"
   let searchNamesAndHashes
     (branchId: Uuid)
     (query: ProgramTypes.Search.SearchQuery)
@@ -614,7 +611,7 @@ module Search =
     Builtin.pmSearchNamesAndHashes branchId query
 
 /// Create a PackageManager
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageManager.PackageManager'"
 let pm () : ProgramTypes.PackageManager.PackageManager =
   ProgramTypes.PackageManager.PackageManager
     { findType =

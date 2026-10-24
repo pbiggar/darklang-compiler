@@ -6,12 +6,11 @@ module Darklang.Cli.Tests.TestSuite
 
 // ── Workbench canvas (spans -> rows) ──
 
-// @compiler blocked: upstream-dependency
 let canvasRegion () : Darklang.Stdlib.Cli.UI.Layout.Region =
   Darklang.Stdlib.Cli.UI.Layout.Region { top = 1, left = 1, rows = 4, cols = 10 }
 
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.canvasRow: Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.stripSgr'"
 let canvasRow (spans: List<Darklang.Stdlib.Cli.UI.Layout.Span>) : String =
   Darklang.Stdlib.Cli.UI.Canvas.compose 10 2 spans
   |> Stdlib.List.head
@@ -19,7 +18,7 @@ let canvasRow (spans: List<Darklang.Stdlib.Cli.UI.Layout.Span>) : String =
   |> Darklang.Stdlib.Cli.Tui.Text.stripSgr
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasPlacesSpans =
   let region = canvasRegion ()
   let spans = Darklang.Stdlib.Cli.UI.Layout.at region 0 2 "hi"
@@ -33,7 +32,7 @@ test canvasPlacesSpans =
     Stdlib.Test.fail $"Expected span at column 2, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasLayersLaterSpans =
   let region = canvasRegion ()
   let spans =
@@ -52,7 +51,7 @@ test canvasLayersLaterSpans =
     Stdlib.Test.fail $"Expected later span to layer over earlier, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasWideGlyphOccupiesTwoColumns =
   let region = canvasRegion ()
   let spans =
@@ -68,7 +67,7 @@ test canvasWideGlyphOccupiesTwoColumns =
     Stdlib.Test.fail $"Expected wide glyph to occupy two columns, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasStylingIsZeroWidth =
   let region = canvasRegion ()
   let spans =
@@ -84,7 +83,7 @@ test canvasStylingIsZeroWidth =
     Stdlib.Test.fail $"Expected SGR to consume no columns, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Canvas.compose'" class=missing-support reason=upstream-dependency
 test canvasUntouchedRowsAreEmpty =
   let region = canvasRegion ()
   let spans = Darklang.Stdlib.Cli.UI.Layout.at region 0 0 "x"
@@ -124,7 +123,6 @@ test textNeverSplitsAWideGlyph =
       $"Expected a wide glyph to be dropped whole, got width {Stdlib.toString (Stdlib.String.displayWidth clipped)}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.normalizeToWidth'" class=missing-support reason=upstream-dependency
 test textDropsNonSgrEscapes =
   // A cursor-forward escape in dynamic content must not survive into a row: rows are text, not commands.
   let normalized = Stdlib.Cli.Tui.Text.normalizeToWidth "a\u001b[5Cb" 10
@@ -165,7 +163,6 @@ test textCursorAfterFullRowWraps =
       $"Expected (1, 0), got ({Stdlib.toString row}, {Stdlib.toString column})"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.fitToWidth'" class=missing-support reason=upstream-dependency
 test textFitPadsByColumnsNotCharacters =
   // A wide glyph is one character in two columns, so padding by character count comes out short.
   let fitted = Stdlib.Cli.Tui.Text.fitToWidth "界a" 6
@@ -177,7 +174,7 @@ test textFitPadsByColumnsNotCharacters =
       $"Expected 6 columns, got {Stdlib.toString (Stdlib.String.displayWidth fitted)}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.fitToWidth'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.stripSgr'" class=missing-support reason=upstream-dependency
 test textFitIgnoresStylingWhenPadding =
   // Styling costs no columns, so a styled row pads to what its plain text would.
   let fitted = Stdlib.Cli.Tui.Text.fitToWidth "\u001b[31mab\u001b[0m" 5
@@ -188,7 +185,6 @@ test textFitIgnoresStylingWhenPadding =
     Stdlib.Test.fail $"Expected 'ab' padded to 5 columns, got '{Stdlib.Cli.Tui.Text.stripSgr fitted}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.wrapAtWords'" class=missing-support reason=upstream-dependency
 test textWrapAtWordsBreaksAtSpaces =
   // The word wrapper stays in Dark, measuring whole words.
   let rows = Stdlib.Cli.Tui.Text.wrapAtWords "alpha beta gamma" 11
@@ -201,12 +197,10 @@ test textWrapAtWordsBreaksAtSpaces =
 
 // -- InlineFrame: relative addressing, the part that can wreck scrollback --
 
-// @compiler blocked: upstream-dependency
 let inlineView (rows: List<String>) : Stdlib.Cli.Tui.View =
   Stdlib.Cli.Tui.View { rows = rows, cursor = Stdlib.Cli.Tui.Cursor.Hidden, mode = Stdlib.Cli.Tui.ViewMode.Inline }
 
 
-// @compiler xfail compile: "Unknown function or value 'inlineView'" class=missing-support reason=upstream-dependency
 test inlineFrameEmitsNothingWhenUnchanged =
   let view = inlineView [ "a", "b" ]
   let output =
@@ -219,7 +213,6 @@ test inlineFrameEmitsNothingWhenUnchanged =
     Stdlib.Test.fail "Expected an unchanged inline frame to emit no output"
 
 
-// @compiler xfail compile: "Unknown function or value 'inlineView'" class=missing-support reason=upstream-dependency
 test inlineFrameMovesRelativeToPreviousCursor =
   let previous = inlineView [ "a", "b" ]
   let next = inlineView [ "a", "B" ]
@@ -238,12 +231,10 @@ test inlineFrameMovesRelativeToPreviousCursor =
 
 // -- TerminalSession lifecycle, through the `Prepared` seam that exists so this needs no real terminal --
 
-// @compiler blocked: upstream-dependency
 let fullscreenView (rows: List<String>) : Stdlib.Cli.Tui.View =
   Stdlib.Cli.Tui.View { rows = rows, cursor = Stdlib.Cli.Tui.Cursor.Hidden, mode = Stdlib.Cli.Tui.ViewMode.Fullscreen }
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.TerminalSession.preparePresentAtSize'" class=missing-support reason=upstream-dependency
 test sessionTakesAlternateScreenOnFirstPresent =
   let prepared =
     Stdlib.Cli.Tui.TerminalSession.preparePresentAtSize
@@ -257,7 +248,6 @@ test sessionTakesAlternateScreenOnFirstPresent =
     Stdlib.Test.fail "Expected the first fullscreen present to enter the alternate screen"
 
 
-// @compiler xfail compile: "Unknown type 'Stdlib.Cli.Tui.Size'" class=missing-support reason=upstream-dependency
 test sessionSecondIdenticalPresentIsSilent =
   let size = Stdlib.Cli.Tui.Size { width = 20, height = 5 }
   let view = fullscreenView [ "hello" ]
@@ -273,7 +263,6 @@ test sessionSecondIdenticalPresentIsSilent =
     Stdlib.Test.fail $"Expected a repeat present to emit nothing, got '{second.output}'"
 
 
-// @compiler xfail compile: "Unknown type 'Stdlib.Cli.Tui.Size'" class=missing-support reason=upstream-dependency
 test sessionStopRestoresOnlyWhenRunning =
   let size = Stdlib.Cli.Tui.Size { width = 20, height = 5 }
   let started =
@@ -294,7 +283,7 @@ test sessionStopRestoresOnlyWhenRunning =
 // ── Workbench: every view renders ──
 
 /// A workbench state good enough to render, without touching the terminal.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let workbenchState () : Darklang.Cli.Workbench.State =
   Darklang.Cli.Workbench.initialState
     Darklang.SCM.Branch.mainBranchId
@@ -304,7 +293,7 @@ let workbenchState () : Darklang.Cli.Workbench.State =
 
 
 /// Render one view and report whether it produced a plausible frame.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersView: Unknown function or value 'workbenchState'"
 let rendersView (viewIndex: Int) : Bool =
   let state = { (workbenchState ()) with activeView = viewIndex }
   let size = Stdlib.Cli.Tui.Size { width = 120, height = 40 }
@@ -316,7 +305,7 @@ let rendersView (viewIndex: Int) : Bool =
 
 /// The same for Matter's lenses. `Changed` is the interesting one: it reads the draft rather than the
 /// package tree, so it is a different code path from the other two rather than a filter over the same one.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersMatterLens: Unknown function or value 'workbenchState'"
 let rendersMatterLens (lens: Darklang.Cli.Workbench.Lens) : Bool =
   let base = workbenchState ()
 
@@ -339,7 +328,7 @@ let rendersMatterLens (lens: Darklang.Cli.Workbench.Lens) : Bool =
 /// assertions stop being reliable past two, because the frame is painted as a diff. From state it is a
 /// one-liner: put the location inside a real module so `loadItems` returns leaves rather than submodules,
 /// and render.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersMatterItemPage: Unknown function or value 'workbenchState'"
 let rendersMatterItemPage (path: List<String>) : Bool =
   let base = workbenchState ()
   let loc = Packages.PackageLocation.Module path
@@ -388,7 +377,7 @@ test workbenchItemPageRenders =
 /// deliberately broken, every assertion in `scripts/testing/gates workbench-views` still passed, because
 /// none of them draw a preview. Focusing it through the terminal needs a third interaction, and the
 /// frame diff stops being reliable past two -- so it belongs here, where rendering takes no terminal.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersPreview: Unknown function or value 'workbenchState'"
 let rendersPreview (viewIndex: Int) : Bool =
   let base = workbenchState ()
   let state = { base with activeView = viewIndex }
@@ -416,7 +405,7 @@ test workbenchPreviewsRender =
 
 /// Every Matter lens draws a frame. No view has sections any more; the lenses are the one
 /// remaining "same view, different list" switch, and `rendersView` only ever draws the default.
-// @compiler xfail compile: "Unknown type 'Darklang.Cli.Workbench.Lens'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'rendersMatterLens'" class=missing-support reason=upstream-dependency
 test workbenchSectionsRender =
   let brokenLenses =
     [ Darklang.Cli.Workbench.Lens.WholeTree
@@ -632,7 +621,7 @@ type WbAction =
   | Launched of command: String
   | Prompted
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.WbResult: Unknown type 'Darklang.Cli.Workbench.State'"
 type WbResult =
   { state: Darklang.Cli.Workbench.State
     action: WbAction }
@@ -640,7 +629,7 @@ type WbResult =
 /// One keypress through the workbench's dispatcher in a plain-view context.
 /// Keep the action beside the state: encoding Exit/Prompt as a fake status
 /// message hid an unexpected Launch or ToPrompt.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbPress
   (state: Darklang.Cli.Workbench.State)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -654,11 +643,11 @@ let wbPress
   | ToPrompt s -> WbResult { state = s, action = WbAction.Prompted }
 
 /// A printable key.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbChar (state: Darklang.Cli.Workbench.State) (c: String) : WbResult =
   wbPress state Stdlib.Cli.Stdin.Key.Key.NoName (Stdlib.Option.Option.Some c)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbKey
   (state: Darklang.Cli.Workbench.State)
   (k: Stdlib.Cli.Stdin.Key.Key)
@@ -669,7 +658,7 @@ let wbKey
 /// Tests care that REPL is reachable, not how many rows follow Code today.
 /// The walking arrows depend on the nav's shape at the terminal size the
 /// test runs under: along the strip, down the overlay.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbMoveNavbarTo
   (state: Darklang.Cli.Workbench.State)
   (matches: Darklang.Cli.Workbench.NavbarRow -> Bool)
@@ -694,7 +683,7 @@ let wbMoveNavbarTo
       Stdlib.List.range 1 steps
       |> Stdlib.List.fold state (fun s _ -> (wbKey s key).state)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbMoveNavbarToDest
   (state: Darklang.Cli.Workbench.State)
   (dest: Darklang.Cli.Workbench.Dest)
@@ -702,7 +691,7 @@ let wbMoveNavbarToDest
   wbMoveNavbarTo state (fun row -> row.dest == dest)
 
 /// Is the nav cursor on the destination we expected?
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbNavbarSelectionIsDest
   (state: Darklang.Cli.Workbench.State)
   (dest: Darklang.Cli.Workbench.Dest)
@@ -824,12 +813,10 @@ test workbenchNavbarNavigation =
 // ── REPL session bindings ──
 
 /// Shorthand for a captured binding (one holding a value rather than an expression).
-// @compiler blocked: upstream-dependency
 let bound (name: String) (source: String) : Darklang.Cli.Repl.Binding =
   Darklang.Cli.Repl.Binding { name = name, source = source, value = source, captured = true }
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test replParsesLetBinding =
   // What binds, and - more important - what doesn't. A pattern binding, a comparison typo, and a bare
   // expression all have to fall through to being evaluated rather than silently binding something wrong.
@@ -861,7 +848,6 @@ test replParsesLetBinding =
     Stdlib.Test.fail $"parseLetBinding wrong for: {Stdlib.String.join wrong " | "}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.withBindings'" class=missing-support reason=upstream-dependency
 test replInjectsBindingChain =
   // The chain is what makes a binding survive to the next expression; order matters, because a later
   // binding is allowed to refer to an earlier one.
@@ -877,7 +863,6 @@ test replInjectsBindingChain =
     Stdlib.Test.fail $"Unexpected binding chain: '{one}' / '{two}'"
 
 
-// @compiler xfail compile: "Unknown type 'Darklang.Cli.Repl.Binding'" class=missing-support reason=upstream-dependency
 test replUncapturedRebindMovesLast =
   // An uncaptured binding holds an EXPRESSION, so it must sit after anything it references. Rebinding it in
   // place produced `let a = d` above `let d = ...`, which left `d` undefined and wedged the session.
@@ -893,7 +878,6 @@ test replUncapturedRebindMovesLast =
     Stdlib.Test.fail $"Expected the uncaptured rebind to move last (d,a), got {order}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.upsert'" class=missing-support reason=upstream-dependency
 test replRebindKeepsPosition =
   // Rebinding `x` must not move it after `y`, or `y`'s chain entry would reference an undefined name.
   let after =
@@ -908,7 +892,6 @@ test replRebindKeepsPosition =
     Stdlib.Test.fail $"Expected x rebound in place, got {names} = {sources}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.readCaptured'" class=missing-support reason=upstream-dependency
 test replReadsCapturedValue =
   // `captureValue` reports through a tagged string; anything that isn't an `ok:` means "hold the expression
   // instead", including an empty result.
@@ -920,7 +903,7 @@ test replReadsCapturedValue =
     Stdlib.Test.fail "readCaptured did not round-trip the ok:/err: tagging"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.splitStatements'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.toRepr'" class=missing-support reason=upstream-dependency
 test replSplitsPastedStatements =
   // A paste has to behave exactly like typing the lines one at a time, which means knowing where one
   // statement ends. Indentation is the signal: an indented line continues the one above, so a wrapped
@@ -987,7 +970,7 @@ test workbenchCapturesStrayOutput =
 
 
 /// Does rendering view `viewIndex` put `marker` on the screen?
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.viewShows: Unknown function or value 'Darklang.Cli.Workbench.focusNavbar'"
 let viewShows (viewIndex: Int) (marker: String) : Bool =
   let state =
     Darklang.Cli.Workbench.focusNavbar
@@ -999,7 +982,7 @@ let viewShows (viewIndex: Int) (marker: String) : Bool =
 
 /// `viewShows`, with the CONTENT holding the keyboard: the footer then carries the
 /// view's own hints rather than the nav's.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.contentShows: Unknown function or value 'Darklang.Cli.Workbench.focusContent'"
 let contentShows (viewIndex: Int) (marker: String) : Bool =
   let state =
     Darklang.Cli.Workbench.focusContent
@@ -1009,7 +992,7 @@ let contentShows (viewIndex: Int) (marker: String) : Bool =
   |> Stdlib.List.any (fun r -> Stdlib.String.contains (Stdlib.Cli.Tui.Text.stripSgr r) marker)
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Workbench.vSCM'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'viewShows'" class=missing-support reason=upstream-dependency
 test workbenchViewsShowTheirChrome =
   // `workbenchEveryViewRenders` only asks whether a view drew *anything*,
   // which is why it once stayed green while two header bands rendered blank

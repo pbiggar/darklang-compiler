@@ -34,25 +34,21 @@ type Msg =
 val empty =
   State { text = "", cursor = 0 }
 
-// @compiler blocked: missing-implementation
 let fromText (text: String) : State =
   State { text = text, cursor = Stdlib.String.length text }
 
 /// Start with the cursor at the beginning rather than the end - for "edit this from the top" cases.
-// @compiler blocked: missing-implementation
 let fromTextAtStart (text: String) : State =
   State { text = text, cursor = 0 }
 
 
 // --- Edits ---
 
-// @compiler blocked: missing-implementation
 let clampCursor (state: State) : State =
   let len = Stdlib.String.length state.text
   { state with cursor = Stdlib.max 0 (Stdlib.min len state.cursor) }
 
 /// Insert a string of any length at the cursor, and move past all of it.
-// @compiler blocked: missing-implementation
 let insert (state: State) (s: String) : State =
   let before = Stdlib.String.slice state.text 0 state.cursor
   let after = Stdlib.String.dropFirst state.text state.cursor
@@ -61,7 +57,6 @@ let insert (state: State) (s: String) : State =
     { text = before + s + after
       cursor = state.cursor + (Stdlib.String.length s) }
 
-// @compiler blocked: missing-implementation
 let backspace (state: State) : State =
   if state.cursor == 0 then
     state
@@ -71,7 +66,6 @@ let backspace (state: State) : State =
     State { text = before + after, cursor = state.cursor - 1 }
 
 /// Delete the character to the right of the cursor.
-// @compiler blocked: missing-implementation
 let deleteForward (state: State) : State =
   if state.cursor >= (Stdlib.String.length state.text) then
     state
@@ -81,24 +75,19 @@ let deleteForward (state: State) : State =
     { state with text = before + after }
 
 /// Drop everything from the cursor to the end (readline's ^k), so replacing a line is two keys.
-// @compiler blocked: missing-implementation
 let killToEnd (state: State) : State =
   { state with text = Stdlib.String.slice state.text 0 state.cursor }
 
-// @compiler blocked: missing-implementation
 let moveLeft (state: State) : State =
   { state with cursor = Stdlib.max 0 (state.cursor - 1) }
 
-// @compiler blocked: missing-implementation
 let moveRight (state: State) : State =
   { state with
       cursor = Stdlib.min (Stdlib.String.length state.text) (state.cursor + 1) }
 
-// @compiler blocked: missing-implementation
 let moveToStart (state: State) : State =
   { state with cursor = 0 }
 
-// @compiler blocked: missing-implementation
 let moveToEnd (state: State) : State =
   { state with cursor = Stdlib.String.length state.text }
 
@@ -109,7 +98,6 @@ let moveToEnd (state: State) : State =
 ///
 /// Control characters reach here as text (Tab as "\t", Enter as "\r"), and inserting them puts an
 /// invisible byte in the middle of a line that nothing can see and everything has to carry.
-// @compiler blocked: missing-implementation
 let isTypeable (c: String) : Bool =
   c != ""
   && (Stdlib.Bool.not (Stdlib.String.contains c "\t"))
@@ -118,7 +106,6 @@ let isTypeable (c: String) : Bool =
   && (Stdlib.Bool.not (Stdlib.String.contains c "\u001b"))
 
 
-// @compiler blocked: missing-implementation
 let onKey (state: State) (kp: Widget.KeyPress) : Widget.Outcome<State, Msg> =
   match kp.key with
   | Enter -> Widget.Outcome.Emitted(state, Msg.Submitted state.text)
@@ -148,7 +135,6 @@ let onKey (state: State) (kp: Widget.KeyPress) : Widget.Outcome<State, Msg> =
 // --- Rendering ---
 
 /// The first grapheme to show, so that the cursor is inside a window `width` wide.
-// @compiler blocked: missing-implementation
 let windowFor (state: State) (width: Int) : Int =
   let w = Stdlib.max 1 width
   let len = Stdlib.String.length state.text
@@ -164,7 +150,6 @@ let windowFor (state: State) (width: Int) : Int =
 ///
 /// Returns a styled string for embedding in a row the caller is already building (an outline item, say).
 /// The cursor is drawn on the character it sits before, or on a trailing space at the end of the line.
-// @compiler blocked: missing-implementation
 let renderInline (state: State) (width: Int) : String =
   let w = Stdlib.max 1 width
   let start = windowFor state w
@@ -192,7 +177,6 @@ let renderInline (state: State) (width: Int) : String =
 /// Render a field that may not have focus, with a placeholder for when it's empty and unfocused.
 ///
 /// For forms, where several fields are on screen and one has the cursor.
-// @compiler blocked: missing-implementation
 let renderMaybeFocused
   (state: State)
   (focused: Bool)
@@ -207,7 +191,6 @@ let renderMaybeFocused
 ///
 /// A narrower door than `onKey` for callers that own Enter and Escape themselves (a form deciding what
 /// "done" means for the whole form, not for one field).
-// @compiler blocked: missing-implementation
 let handleTextKey (state: State) (kp: Widget.KeyPress) : Stdlib.Option.Option<State> =
   match kp.key with
   | Backspace -> Stdlib.Option.Option.Some(backspace state)
@@ -226,7 +209,6 @@ let handleTextKey (state: State) (kp: Widget.KeyPress) : Stdlib.Option.Option<St
     | None -> Stdlib.Option.Option.None
 
 
-// @compiler blocked: missing-implementation
 let view (state: State) (region: Layout.Region) : List<Layout.Span> =
   Layout.at region 0 0 (renderInline state region.cols)
 

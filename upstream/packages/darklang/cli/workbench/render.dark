@@ -9,7 +9,7 @@ module Darklang.Cli.Workbench
 ///
 /// Continuation rows are indented two columns, so a wrapped line reads as one thing rather than as two
 /// unrelated rows; the wrap width is reduced to match, which keeps every row inside the pane.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.wrapRow: Unknown function or value 'Stdlib.Cli.Tui.Text.wrapAtColumn'"
 let wrapRow (maxFit: Int) (line: String) : List<String> =
   let room = Stdlib.max 1 (maxFit - 2)
 
@@ -27,7 +27,7 @@ let wrapRow (maxFit: Int) (line: String) : List<String> =
 /// Wrap, never clip: clipping loses everything past the pane's edge with no mark (a
 /// record literal printed on one line lost most of its fields). Wrapping is a floor
 /// under that, not a substitute for the printer laying out to the width.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.renderScrollableLines: Unknown function or value 'wrapRow'"
 let renderScrollableLines
   (region: Stdlib.Cli.UI.Layout.Region)
   (colOffset: Int)
@@ -68,7 +68,7 @@ let renderScrollableLines
 /// Sized to the longest name plus its cursor, glyph, badges and inset, then held between a floor and
 /// a ceiling. The tree is a column of short names; the Inspect pane is where the text that needs room
 /// actually goes, so any column the tree doesn't need belongs to it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let matterSplitFor (state: State) : Int =
   let (w, _h) = Terminal.getSize ()
   let w = if w < 24 then 80 else w
@@ -100,7 +100,7 @@ let matterSplitFor (state: State) : Int =
 /// sizes the pretty-printer and the diff wash, so an estimate won't do: an
 /// older one used Matter's ceiling split for every view, which over-padded
 /// diff lines until each wrapped in two. Home has no preview.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let previewInnerWidth (state: State) : Int =
   let (w, _h) = Terminal.getSize ()
   let w = if w < 24 then 80 else w
@@ -115,7 +115,7 @@ let previewInnerWidth (state: State) : Int =
   Stdlib.max 1 (detail.cols - 1)
 
 /// How many screen rows `previewLines` occupies once wrapped: what scrolling is bounded by.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let previewRowCount (state: State) : Int =
   let maxFit = previewInnerWidth state
 
@@ -123,7 +123,7 @@ let previewRowCount (state: State) : Int =
   |> Stdlib.List.map (fun l -> Stdlib.List.length (wrapRow maxFit l))
   |> Stdlib.List.fold 0 (fun acc n -> acc + n)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderPreview (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let plain = previewLines state
   // Syntax-highlight Matter's source preview. Nothing else here is code: Docs, the History summary and the
@@ -146,11 +146,9 @@ let renderPreview (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<St
   renderScrollableLines region 0 plain highlighted state.detailScroll
 
 /// "1 commit" / "2 commits" - count + correctly-pluralized noun.
-// @compiler blocked: missing-implementation
 let plural (n: Int) (noun: String) : String = Cli.Text.plural n noun
 
 /// A reverse-video selection used by modal pickers. `plain` must be unstyled.
-// @compiler blocked: missing-implementation
 let selectionRow (width: Int) (plain: String) : String =
   let padded = Stdlib.Cli.Tui.Text.fitToWidth plain width
   Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.reverse padded
@@ -161,13 +159,12 @@ let selectionRow (width: Int) (plain: String) : String =
 /// all. For rows that carry a description - the tree, changes, traces, the
 /// navbar - this reads better than a block, which would swallow the
 /// description's dimness. Pickers keep the block.
-// @compiler blocked: missing-implementation
 let selectionBar (name: String) (rest: String) (focused: Bool) : String =
   let color = if focused then Stdlib.Cli.UI.Colors.purple else Stdlib.Cli.UI.Colors.brightBlack
   (Stdlib.Cli.UI.Colors.colorize color ("┃ " + name)) + rest
 
 /// A full-body scrollable reader (Docs topic content, etc.).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.renderReading: Unknown function or value 'SyntaxHighlighting.highlightCode'"
 let renderReading (content: String) (isCode: Bool) (scroll: Int) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let plain = Stdlib.String.split content "\n"
   // Highlight code readers (Tree-leaf / Changes source); ANSI-aware truncate keeps color even when a line
@@ -195,16 +192,13 @@ let renderReading (content: String) (isCode: Bool) (scroll: Int) (region: Stdlib
 
 /// The columns a column's content is inset from the frame's left edge: the
 /// edge itself, then a space. The list's cursor gutter starts there.
-// @compiler blocked: missing-implementation
 val paneInset = 2
 
 /// Below this many columns the split collapses to the focused column alone.
-// @compiler blocked: missing-implementation
 val paneMinSplitCols = 46
 
 /// The frame's interior: one row in from the top and bottom edges,
 /// `paneInset` in from the left, one from the right.
-// @compiler blocked: missing-implementation
 let paneContent (region: Stdlib.Cli.UI.Layout.Region) : Stdlib.Cli.UI.Layout.Region =
   Stdlib.Cli.UI.Layout.Region
     { top = region.top + 1
@@ -219,7 +213,6 @@ let paneContent (region: Stdlib.Cli.UI.Layout.Region) : Stdlib.Cli.UI.Layout.Reg
 /// split: both regions are the whole interior and the rule column is -1. One function so the render
 /// pass and `previewInnerWidth` cannot drift apart: the detail's wrap width is read off the region
 /// this returns.
-// @compiler blocked: missing-implementation
 let paneGeometry
   (region: Stdlib.Cli.UI.Layout.Region)
   (firstPct: Int)
@@ -246,7 +239,6 @@ let paneGeometry
     (list, detail, ruleCol, false)
 
 /// A column's name, styled: the accent colour while it has the keyboard, bold otherwise.
-// @compiler blocked: missing-implementation
 let paneName (name: String) (focused: Bool) : String =
   if focused then
     Stdlib.Cli.UI.Colors.colorize (Stdlib.Cli.UI.Colors.bold + Stdlib.Cli.UI.Colors.purple) name
@@ -257,26 +249,22 @@ let paneName (name: String) (focused: Bool) : String =
 /// are dropped, so a caller can pass what it has and let this decide.
 /// `lead` is what comes before the first part: " · " after a name, nothing
 /// when the parts are the whole title.
-// @compiler blocked: missing-implementation
 let paneTrailerWith (lead: String) (parts: List<String>) : String =
   let shown = parts |> Stdlib.List.filter (fun p -> p != "")
   if Stdlib.List.isEmpty shown then ""
   else Stdlib.Cli.UI.Colors.dimText (lead + (Stdlib.String.join shown " · "))
 
-// @compiler blocked: missing-implementation
 let paneTrailer (parts: List<String>) : String = paneTrailerWith " · " parts
 
 /// A column's title: its name, then its trailer. An empty name is allowed -
 /// the nav already says which view this is, so most first columns have
 /// only a trailer - and then the parts stand alone.
-// @compiler blocked: missing-implementation
 let paneTitle (name: String) (parts: List<String>) (focused: Bool) : String =
   if name == "" then paneTrailerWith "" parts
   else (paneName name focused) + (paneTrailer parts)
 
 /// One run of the top edge, `width` columns: `─ title ───`, or all dashes for
 /// an empty title. The dashes are dim; the title keeps its own styling.
-// @compiler blocked: missing-implementation
 let edgeSegment (width: Int) (title: String) : String =
   let paint (t: String) : String = Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.brightBlack t
   if (title == "") || (width < 5) then
@@ -289,7 +277,6 @@ let edgeSegment (width: Int) (title: String) : String =
 /// The frame's four edges, with `titleFirst` set into the top one, and - when
 /// `ruleCol` is not negative - a rule down that column meeting the edges at ┬
 /// and ┴, with `titleSecond` on the edge above it.
-// @compiler blocked: missing-implementation
 let frameWithTitles
   (region: Stdlib.Cli.UI.Layout.Region)
   (titleFirst: String)
@@ -326,7 +313,6 @@ let frameWithTitles
 
 /// A single-column body: the frame with `title` on its edge, and `lines`
 /// (pre-styled allowed) down its interior.
-// @compiler blocked: missing-implementation
 let titledLines
   (region: Stdlib.Cli.UI.Layout.Region)
   (title: String)
@@ -343,7 +329,6 @@ let titledLines
 /// Two columns in one frame, a rule between. Titles arrive styled (see
 /// `paneTitle`); each child draws into its content region. Too narrow for
 /// two, and only the focused column is drawn, with a ‹1/2› on its title.
-// @compiler blocked: missing-implementation
 let paneSplit
   (region: Stdlib.Cli.UI.Layout.Region)
   (firstPct: Int)
@@ -369,7 +354,7 @@ let paneSplit
 
 /// A list and its scrollable preview, titles already styled. With nothing
 /// listed, the list column alone with `emptyMsg` where its rows would be.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let splitListPreviewTitled
   (state: State)
   (region: Stdlib.Cli.UI.Layout.Region)
@@ -394,14 +379,14 @@ let splitListPreviewTitled
 
 /// The list's trailer: its count with its noun (`7 apps`), and the filter
 /// narrowing it, so a narrowed list never looks like the whole set.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let listTrailer (state: State) (noun: String) : List<String> =
   [ plural (Stdlib.List.length state.items) noun
     (if state.filter == "" then "" else "filter: " + state.filter) ]
 
 /// A list and its scrollable preview, from plain names. `leftTitle` may be
 /// "" when the nav already names the view; `noun` is what the rows are.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let splitListPreview
   (state: State)
   (region: Stdlib.Cli.UI.Layout.Region)

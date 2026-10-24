@@ -2,14 +2,12 @@ module Darklang.Stdlib.Cli.Zsh
 
 
 /// Read the content of .zshrc file
-// @compiler blocked: missing-implementation
 let readZshrc () : Result.Result<String, String> =
   (Stdlib.Cli.FileSystem.readFile "$HOME/.zshrc")
   |> Result.map Stdlib.String.fromBlobWithReplacement
   |> Result.mapError Stdlib.Cli.FileSystem.FileError.toString
 
 /// Overwrite what's in the .zshrc file
-// @compiler blocked: missing-implementation
 let overwriteZshrc (content: String) : Result.Result<Unit, String> =
   (FileSystem.overwriteFile "$HOME/.zshrc" (Stdlib.String.toBlob content))
   |> Result.mapError FileSystem.FileError.toString
@@ -17,13 +15,11 @@ let overwriteZshrc (content: String) : Result.Result<Unit, String> =
 
 /// Apply changes to .zshrc
 /// , via `source`
-// @compiler blocked: missing-implementation
 let applyZshConfigChanges () : Result.Result<Unit, String> =
   Cli.executeWithUnitOrStdErr "source $HOME/.zshrc"
 
 
 /// Delete an alias from .zshrc
-// @compiler blocked: missing-implementation
 let deleteAlias (alias: String) : Result.Result<Unit, String> =
   (readZshrc ())
   |> Result.andThen (fun content ->
@@ -38,7 +34,6 @@ let deleteAlias (alias: String) : Result.Result<Unit, String> =
 
 
 /// Add an alias to .zshrc
-// @compiler blocked: missing-implementation
 let addAlias
   (alias: String)
   (command: String)
@@ -55,7 +50,6 @@ let addAlias
 
 
 /// Add a directory to PATH in .zshrc
-// @compiler blocked: missing-implementation
 let addToPath (dir: String) : Result.Result<Unit, String> =
   let exportLine = $"export PATH=\"{dir}:$PATH\""
 

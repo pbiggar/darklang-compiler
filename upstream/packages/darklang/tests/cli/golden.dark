@@ -3,7 +3,7 @@
 /// by the test.
 module Darklang.Cli.Tests.Golden
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Golden.compare: Unknown function or value 'Stdlib.Test.Process.run'"
 let compare (render: Unit -> Unit) (expectedRows: List<String>) : Stdlib.Test.Result =
   // Key handlers read the worker's fixed 80x24 terminal size; viewAtSize
   // renders the original explicit sizes. Stdout contains frames only.
@@ -26,7 +26,7 @@ let compare (render: Unit -> Unit) (expectedRows: List<String>) : Stdlib.Test.Re
 // fixedHome supplies stable Home rows, independent of branches and commit ages.
 // The child runs with COLUMNS=80, LINES=24 and detached stdin.
 // Expected rows come from goldenview.expected.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Tests.Golden.goldenviewRender: Field access requires a record value"
 let goldenviewRender () : Unit =
   // Fixed view inputs: these screenshots test layout and key handling, not the
   // developer's branches or how long ago the store was reloaded.
@@ -175,7 +175,7 @@ test goldenview =
 // fixedHome supplies stable Home rows after each key press, independent of branches
 // and commit ages. The child runs with COLUMNS=80, LINES=24 and detached stdin.
 // Expected rows come from goldenkeys.expected.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Tests.Golden.goldenkeysRender: Field access requires a record value"
 let goldenkeysRender () : Unit =
   // Fixed view inputs: these screenshots test layout and key handling, not the
   // developer's branches or how long ago the store was reloaded.

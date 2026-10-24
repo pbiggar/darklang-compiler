@@ -8,10 +8,10 @@ let parse (s: String) : Stdlib.Result.Result<DateTime, String> =
   Builtin.dateTimeParse s
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl ToString for DateTime requires an explicit replacement contract"
 impl ToString for DateTime =
   /// Stringify <param date> to the ISO 8601 format {{YYYY-MM-DD'T'hh:mm:ss'Z'}}
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.DateTime.impl ToString for DateTime: Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl ToString for DateTime requires an explicit replacement contract"
   let toString (date: DateTime) : String = Builtin.dateTimeToString date
 
 
@@ -73,15 +73,15 @@ let lessThanOrEqualTo (d1: DateTime) (d2: DateTime) : Bool =
   Builtin.dateTimeLessThanOrEqualTo d1 d2
 
 /// `d1 < d2` on DateTimes, by the four comparisons above.
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl Compare for DateTime requires an explicit replacement contract"
 impl Compare for DateTime =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.DateTime.impl Compare for DateTime: Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl Compare for DateTime requires an explicit replacement contract"
   let lessThan = Stdlib.DateTime.lessThan
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.DateTime.impl Compare for DateTime: Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl Compare for DateTime requires an explicit replacement contract"
   let lessThanOrEqualTo = Stdlib.DateTime.lessThanOrEqualTo
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.DateTime.impl Compare for DateTime: Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl Compare for DateTime requires an explicit replacement contract"
   let greaterThan = Stdlib.DateTime.greaterThan
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.DateTime.impl Compare for DateTime: Already selected from packages/darklang/stdlib/dateTime.dark; importing another declaration of Darklang.Stdlib.DateTime.impl Compare for DateTime requires an explicit replacement contract"
   let greaterThanOrEqualTo = Stdlib.DateTime.greaterThanOrEqualTo
 
 

@@ -8,7 +8,7 @@
 module Darklang.Stdlib.Cli.UI.Text
 
 /// The lines of <param node>, as wide as the node measures.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Node'"
 let lines (node: Node.Node<'msg>) : List<String> =
   match node with
   | Empty -> []
@@ -63,5 +63,5 @@ let lines (node: Node.Node<'msg>) : List<String> =
 
 
 /// <param node> as one string, a line per row.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Node'"
 let render (node: Node.Node<'msg>) : String = Stdlib.String.join (lines node) "\n"

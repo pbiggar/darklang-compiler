@@ -5,7 +5,7 @@ module Darklang.Cli.Packages.Listing
 /// Every version this name has been bound to, oldest first: main's history, continuing into the
 /// branch's own edits. Only interesting when there is more than one, which is why the caller only
 /// prints it then.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Listing.versionsOf: Unknown function or value 'SCM.Propagation.authoringOrder'"
 let versionsOf
   (modulePath: List<String>)
   (name: String)
@@ -21,7 +21,7 @@ let versionsOf
 /// Print the `--versions` rows under one name: each version's short hash, oldest first, the
 /// live one tagged. Nothing is printed for a single-version name. What `--versions` is for is
 /// explained once, in `help`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Listing.printVersionLines: Unknown function or value 'versionsOf'"
 let printVersionLines
   (modulePath: List<String>)
   (name: String)
@@ -42,7 +42,7 @@ let printVersionLines
           $"      {Stdlib.String.slice v 0 8}{tag}"))
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let listModule
   (branchId: Uuid)
   (location: PackageLocation)
@@ -182,7 +182,7 @@ let listModule
     | _ -> ())
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let branchId = state.currentBranchId
   let includeDeprecated = Stdlib.List.contains args "--include-deprecated"
@@ -237,7 +237,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
 
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (state: AppState) (args: List<String>) : List<Completion.CompletionItem> =
   let branchId = state.currentBranchId
   match args with
@@ -248,7 +248,7 @@ let complete (state: AppState) (args: List<String>) : List<Completion.Completion
   | _ -> []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: ls [path] [--include-deprecated] [--versions]"

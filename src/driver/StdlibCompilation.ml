@@ -39,7 +39,7 @@ let loadStdlib includeTests =
 
 (* Build stdlib in isolation, returning reusable result.
    This can be called once and the result reused for multiple user program compilations. *)
-let buildSelectedStdlibWithTrace includeTests target recorder =
+let buildSourceStdlibWithTrace loadSources target recorder =
   let measure name operation =
     let start = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
     let result = operation () in
@@ -49,7 +49,7 @@ let buildSelectedStdlibWithTrace includeTests target recorder =
   in
   let* sources =
     measure "Stdlib detail: Source loading and parsing" (fun () ->
-        loadStdlib includeTests)
+        loadSources ())
   in
   let* _, checked, written =
     measure "Stdlib detail: Type checking" (fun () ->
@@ -141,11 +141,14 @@ let buildSelectedStdlibWithTrace includeTests target recorder =
       stdlibTypeMap = typeMap;
     }
 
+let buildStdlibFromSources ?recorder target sources =
+  buildSourceStdlibWithTrace (fun () -> Ok sources) target recorder
+
 let buildStdlibWithTrace target recorder =
-  buildSelectedStdlibWithTrace false target recorder
+  buildSourceStdlibWithTrace (fun () -> loadStdlib false) target recorder
 
 let buildImportedTestStdlibWithTrace target recorder =
-  buildSelectedStdlibWithTrace true target recorder
+  buildSourceStdlibWithTrace (fun () -> loadStdlib true) target recorder
 
 let buildStdlib target = buildStdlibWithTrace target None
 

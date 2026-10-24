@@ -17,12 +17,11 @@
 module Darklang.Cli.LiveView.Runner
 
 /// An interval as the timer spec wants it.
-// @compiler blocked: missing-implementation
 let timerMs (intervalMs: Int) : Int64 =
   Stdlib.Int.toInt64 intervalMs |> Stdlib.Option.withDefault 5000L
 
 /// One tick, then wait for the next, or for the store to move under the step.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Stdlib.Live.LastGood'"
 let loop
   (name: String)
   (branchId: Uuid)
@@ -65,7 +64,7 @@ let loop
 
 /// Run <param stepName> over <param init> every <param intervalMs>, forever. What a daemon
 /// entrypoint calls after claiming its pidfile. <param live> follows edits to the step.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Runner.run: Unknown function or value 'Stdlib.Host.begin'"
 let run
   (name: String)
   (stepName: String)

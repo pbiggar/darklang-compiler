@@ -3,7 +3,7 @@ module Darklang.Cli.Packages.Location
 
 /// Parse a location string relative to current position
 /// Handles absolute paths (/Darklang.Foo.bar) and relative paths (bar, Foo.bar)
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let parseRelativeTo
   (currentLocation: Packages.PackageLocation)
   (location: String)

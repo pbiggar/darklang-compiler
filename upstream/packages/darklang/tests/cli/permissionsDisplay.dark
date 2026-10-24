@@ -4,7 +4,7 @@ module Darklang.Cli.Tests.PermissionsDisplay
 // not grants; exact resources are checked at runtime.
 
 module PermissionsDisplay =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.Permissions.Policy'"
   let packagePolicy (unit: Unit) : Darklang.LanguageTools.Permissions.Policy =
     Darklang.LanguageTools.Permissions.Policy
       { allow =
@@ -12,7 +12,7 @@ module PermissionsDisplay =
             Darklang.LanguageTools.Permissions.Rule.Effect Darklang.LanguageTools.Permissions.Effect.Clock ]
         deny = [] }
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.Permissions.Policy'"
   let instancePolicy (unit: Unit) : Darklang.LanguageTools.Permissions.Policy =
     Darklang.LanguageTools.Permissions.Policy
       { allow =
@@ -32,7 +32,7 @@ module PermissionsDisplay =
                   query = Darklang.LanguageTools.Permissions.Scope.All }) ]
         deny = [] }
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Permissions.Command.AccessReportFacts'"
   let approved
     (unit: Unit)
     : Darklang.Cli.Permissions.Command.AccessReportFacts =
@@ -66,7 +66,7 @@ module PermissionsDisplay =
           "  effective: checked per operation: instance ∩ run ∩ package approval ∩ function ceiling"
           "  exact resources: paths, URLs, ports, names, and arguments are checked at call time" ]
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Permissions.Command.AccessReportFacts'"
   let unapproved
     (unit: Unit)
     : Darklang.Cli.Permissions.Command.AccessReportFacts =

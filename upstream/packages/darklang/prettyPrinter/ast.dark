@@ -10,19 +10,16 @@ module Darklang.PrettyPrinter.ProgramTypes.Ast
 
 /// <field label> is the node kind (`ELet`, `EApply`); <field detail> is the scalar payload it carries
 /// (a variable name, a literal, an operator), which is what makes a tree readable without expanding it.
-// @compiler blocked: missing-implementation
 type Line =
   { depth: Int
     label: String
     detail: String }
 
 
-// @compiler blocked: missing-implementation
 let line (depth: Int) (label: String) (detail: String) : Line =
   Line { depth = depth, label = label, detail = detail }
 
 
-// @compiler blocked: missing-implementation
 let clip (s: String) : String =
   let s = Stdlib.String.replaceAll s "\n" "\\n"
 
@@ -32,7 +29,6 @@ let clip (s: String) : String =
     (Stdlib.String.slice s 0 45) + "..."
 
 
-// @compiler blocked: missing-implementation
 let letPattern (pat: LanguageTools.ProgramTypes.LetPattern) : String =
   match pat with
   | LPVariable(_, name) -> name
@@ -46,7 +42,7 @@ let letPattern (pat: LanguageTools.ProgramTypes.LetPattern) : String =
     $"({parts})"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.MatchPattern'"
 let matchPattern (pat: LanguageTools.ProgramTypes.MatchPattern) : String =
   match pat with
   | MPVariable(_, name) -> name
@@ -90,7 +86,7 @@ let matchPattern (pat: LanguageTools.ProgramTypes.MatchPattern) : String =
     (Stdlib.List.map pats (fun p -> matchPattern p)) |> Stdlib.String.join " | "
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeArgsSuffix (ctx: PrettyPrinter.ProgramTypes.Context) (typeArgs: List<LanguageTools.ProgramTypes.TypeReference>) : String =
   if Stdlib.List.isEmpty typeArgs then
     ""
@@ -102,7 +98,7 @@ let typeArgsSuffix (ctx: PrettyPrinter.ProgramTypes.Context) (typeArgs: List<Lan
     $"<{parts}>"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let expr (ctx: PrettyPrinter.ProgramTypes.Context) (depth: Int) (e: LanguageTools.ProgramTypes.Expr) : List<Line> =
   let here (label: String) (detail: String) : List<Line> = [ line depth label detail ]
   let child (e: LanguageTools.ProgramTypes.Expr) : List<Line> = expr ctx (depth + 1) e
@@ -282,7 +278,7 @@ let expr (ctx: PrettyPrinter.ProgramTypes.Context) (depth: Int) (e: LanguageTool
     Stdlib.List.flatten [ here "Pipe" $"{n} stages", child lhs, partLines ]
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PipeExpr'"
 let pipeExpr (ctx: PrettyPrinter.ProgramTypes.Context) (depth: Int) (p: LanguageTools.ProgramTypes.PipeExpr) : List<Line> =
   match p with
   | EPipeLambda(_, pats, body) ->
@@ -324,7 +320,7 @@ let pipeExpr (ctx: PrettyPrinter.ProgramTypes.Context) (depth: Int) (p: Language
 /// A whole function: signature first, then the body tree.
 /// The signature as one line, in the shape it's written in source, rather than a `parameters` /
 /// `typeParams` / `returnType` block. Four lines of scaffolding to say what one line says.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let signature
   (ctx: PrettyPrinter.ProgramTypes.Context)
   (name: String)
@@ -348,7 +344,7 @@ let signature
 
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let packageFn
   (ctx: PrettyPrinter.ProgramTypes.Context)
   (name: String)

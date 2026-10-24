@@ -14,14 +14,12 @@ module Darklang.Stdlib.Exec
 /// the scheduler thread, never references into a running VM.
 
 /// What a process was started on.
-// @compiler blocked: missing-implementation
 type Entry =
   | Function of LanguageTools.RuntimeTypes.FQFnName.FQFnName
   | Expr
 
 
 /// What a parked process is waiting for.
-// @compiler blocked: missing-implementation
 type ParkedOn =
   /// A host operation being performed for a builtin: a file read, an HTTP request, a process
   /// run. The text names the operation and its resource (`file-read /some/path`).
@@ -40,7 +38,6 @@ type ParkedOn =
   | Process of Uuid
 
 
-// @compiler blocked: missing-implementation
 type Status =
   | Runnable
   | Parked of ParkedOn
@@ -48,7 +45,6 @@ type Status =
   | Failed of LanguageTools.RuntimeTypes.RuntimeError.Error
 
 
-// @compiler blocked: missing-implementation
 type Summary =
   { id: Uuid
     entry: Entry
@@ -65,14 +61,12 @@ type Summary =
 
 
 /// One activation on a process's stack.
-// @compiler blocked: missing-implementation
 type ExecutionPoint =
   | Source
   | Function of LanguageTools.RuntimeTypes.FQFnName.FQFnName
   | Lambda of parent: ExecutionPoint * exprId: Int64
 
 
-// @compiler blocked: missing-implementation
 type Detail =
   { summary: Summary
     /// The call stack at the moment of the snapshot, outermost first.
@@ -80,14 +74,13 @@ type Detail =
 
 
 /// Every process this instance's scheduler knows, finished ones included.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.list: Unknown function or value 'Builtin.execList'"
 let list () : List<Summary> =
   Builtin.execList ()
 
 
 /// One Dark process on this machine, from the registry every CLI writes at startup: what `dark ps`
 /// shows across processes, as against `list`, which is this process's own table.
-// @compiler blocked: missing-implementation
 type MachineProcess =
   { pid: Int64
     /// What a system monitor shows: `dark serve :9090`, `dark eval`.
@@ -98,25 +91,24 @@ type MachineProcess =
 
 
 /// Every Dark process on this machine still running, oldest first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.machineList: Unknown function or value 'Builtin.execMachineList'"
 let machineList () : List<MachineProcess> =
   Builtin.execMachineList ()
 
 
 /// One process in detail, or `None` for an id nobody has.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.inspect: Unknown function or value 'Builtin.execInspect'"
 let inspect (id: Uuid) : Stdlib.Option.Option<Detail> =
   Builtin.execInspect id
 
 
 /// A process started with `spawn`. `'a` is what `await` gives back for it.
-// @compiler blocked: missing-implementation
 type Handle<'a> = { id: Uuid }
 
 
 /// How many processes run at once: one per core this process may use. More than this many
 /// spawned at once take turns rather than running faster.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.workers: Unknown function or value 'Builtin.execWorkerCount'"
 let workers () : Int =
   Builtin.execWorkerCount ()
 
@@ -125,7 +117,7 @@ let workers () : Int =
 /// It runs under the access the caller has here, like a closure. `await` collects it. It
 /// stops when this process finishes, if it has not finished first; `spawnDetached` for one
 /// that should outlive its parent.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.spawn: Unknown function or value 'Builtin.execSpawn'"
 let spawn (f: Unit -> 'a) : Handle<'a> =
   Builtin.execSpawn f
 
@@ -133,27 +125,27 @@ let spawn (f: Unit -> 'a) : Handle<'a> =
 /// `spawn`, for a process that keeps running after the one that started it has finished (a
 /// background writer, a watcher), until the `dark` command it runs in exits. `cancel` still
 /// stops it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.spawnDetached: Unknown function or value 'Builtin.execSpawnDetached'"
 let spawnDetached (f: Unit -> 'a) : Handle<'a> =
   Builtin.execSpawnDetached f
 
 
 /// What the process behind `handle` finished with, waiting for it if it has not. An error it
 /// failed with is raised here. (For a value that is a read still in flight, `Stdlib.await`.)
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.await: Unknown function or value 'Builtin.execAwait'"
 let await (handle: Handle<'a>) : 'a =
   Builtin.execAwait handle
 
 
 /// `await`, giving up after `ms` milliseconds: `None` then, and the process keeps running
 /// (`cancel` it if that is not wanted).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.awaitWithin: Unknown function or value 'Builtin.execAwaitWithin'"
 let awaitWithin (ms: Int64) (handle: Handle<'a>) : Stdlib.Option.Option<'a> =
   Builtin.execAwaitWithin ms handle
 
 
 /// The first of `handles` to finish, with its value. Waits when none has.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.select: Unknown function or value 'Builtin.execSelect'"
 let select (handles: List<Handle<'a>>) : (Handle<'a> * 'a) =
   Builtin.execSelect handles
 
@@ -162,6 +154,6 @@ let select (handles: List<Handle<'a>>) : (Handle<'a> * 'a) =
 /// It ends at its next turn: whatever it is doing on the host right now (a write, a request)
 /// completes first, and an `await` on it raises "cancelled". False for a handle nobody has.
 /// (`dark ps kill` is the escape hatch that does not wait for the host.)
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Exec.cancel: Unknown function or value 'Builtin.execCancel'"
 let cancel (handle: Handle<'a>) : Bool =
   Builtin.execCancel handle

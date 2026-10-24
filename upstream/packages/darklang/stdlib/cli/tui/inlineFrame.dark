@@ -5,7 +5,6 @@
 module Darklang.Stdlib.Cli.Tui.InlineFrame
 
 
-// @compiler blocked: missing-implementation
 let cursorRow (view: Tui.View) : Int =
   match view.cursor with
   | Hidden ->
@@ -14,7 +13,6 @@ let cursorRow (view: Tui.View) : Int =
     Stdlib.max 0 row
 
 
-// @compiler blocked: missing-implementation
 let moveRows (fromRow: Int) (toRow: Int) : String =
   let distance = toRow - fromRow
   if distance < 0 then
@@ -29,13 +27,11 @@ let moveRows (fromRow: Int) (toRow: Int) : String =
 ///
 /// Clearing before writing preserves the final cell of full-width content.
 /// Resets prevent background colors and row styling from leaking.
-// @compiler blocked: missing-implementation
 let renderContentAtWidth (width: Int) (content: String) : String =
   let content = Text.normalizeToWidth content width
   "\r\u001b[0m\u001b[K" + content + "\u001b[0m"
 
 
-// @compiler blocked: missing-implementation
 let finishAtCursor
   (currentRow: Int)
   (view: Tui.View)
@@ -57,7 +53,6 @@ let finishAtCursor
 ///
 /// Rendering starts from the cursor position left by the previous view and
 /// clears rows that no longer exist.
-// @compiler blocked: missing-implementation
 let renderFullAtWidth
   (width: Int)
   (previous: Stdlib.Option.Option<Tui.View>)
@@ -100,7 +95,6 @@ let renderFullAtWidth
 
 /// Rewrite changed rows relative to the previous cursor, then place the next
 /// cursor.
-// @compiler blocked: missing-implementation
 let renderAtWidth
   (width: Int)
   (previous: Stdlib.Option.Option<Tui.View>)

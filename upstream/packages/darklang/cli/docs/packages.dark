@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Packages
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Packages
 

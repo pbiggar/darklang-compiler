@@ -8,7 +8,6 @@ type item =
   | Expression of string list * WrittenTypes.expr
 
 val items : Validation.validatedSourceFile -> (item list, string) result
-
 val moduleSegments : string -> (string list, string) result
 
 val validateSourceUnits :

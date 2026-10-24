@@ -13,7 +13,6 @@ module Darklang.Tracing
 
 
 /// Where a run stands.
-// @compiler blocked: missing-implementation
 type Status =
   | Running
   | Done
@@ -23,7 +22,6 @@ type Status =
 
 
 /// A run: one row of `traces`.
-// @compiler blocked: missing-implementation
 type Trace =
   { id: String
     /// `eval`, `run <file>`, or `GET /path`: what ran.
@@ -55,14 +53,12 @@ type Trace =
 /// One named input to a handler invocation. For HTTP handlers the
 /// single input is a `Request` record; for `eval`/`run` it's the
 /// expression source string.
-// @compiler blocked: missing-implementation
 type InputVar =
   { name: String
     value: LanguageTools.RuntimeTypes.Dval }
 
 
 /// One call a run made, as it was recorded.
-// @compiler blocked: missing-implementation
 type FnCall =
   { callId: String
     fnName: String
@@ -84,7 +80,6 @@ type FnCall =
 
 /// One recorded call of one function, in some trace. The inbox behind `dark traces calls`: the
 /// same idea as classic's trace dots, for any function rather than only a handler.
-// @compiler blocked: missing-implementation
 type Call =
   { callId: String
     /// The trace it was made in.
@@ -98,7 +93,6 @@ type Call =
 
 
 /// A run and everything recorded under it.
-// @compiler blocked: missing-implementation
 type TraceData =
   { trace: Trace
     inputs: List<InputVar>
@@ -111,7 +105,6 @@ type TraceData =
 /// running the code and the code raised, or it never got that far. The JUDGEMENT a reader
 /// needs on top of that -- is this my bug, or did the store move under the recording --
 /// is `ReplayStop.isDrift`, and it lives here because it is a decision rather than a fact.
-// @compiler blocked: missing-implementation
 type ReplayStop =
   /// The replay ran and the code raised. The error is the one the run raised today, not the
   /// one the original run raised; a recorded run that stopped is `Trace.status`, not this.
@@ -133,7 +126,6 @@ module ReplayStop =
   /// page then shows the error plainly, as it always did, rather than claiming drift it cannot
   /// support. A new resolution-shaped error wants adding here, and until someone does, the
   /// page is unhelpful rather than wrong.
-  // @compiler blocked: missing-implementation
   let isDrift (stop: ReplayStop) : Bool =
     match stop with
     // Nothing to replay is itself the store having moved, except for the served-request gap,

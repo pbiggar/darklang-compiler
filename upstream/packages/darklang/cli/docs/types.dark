@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Types
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Types
 

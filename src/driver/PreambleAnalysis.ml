@@ -7,6 +7,11 @@ let analyzeSources allowInternal (stdlib : CompilationContexts.stdlibResult)
     allowInternal false sources
   |> Result.map_error (fun error -> "Preamble type error: " ^ error)
   |> Result.map (fun (_, typedAST, writtenEnvironment) ->
+      let typedAST =
+        SourcePreparation.importInheritedValues None
+          stdlib.CompilationContexts.context.CompilationContexts.checkedValues
+          typedAST
+      in
       let typeCheckEnv =
         Types.mergeTypeCheckEnv
           stdlib.CompilationContexts.context.CompilationContexts.typeCheckEnv

@@ -2,14 +2,12 @@
 /// to manage the local installation of the Darklang CLI.
 module Darklang.Cli.Installation.Config
 
-// @compiler blocked: missing-implementation
 val defaultConfig =
   Dict
     { "version": "v0.0.0"
       "lastUpdateTimestamp": "0" }
 
 // TODO: typify the error messages
-// @compiler blocked: missing-implementation
 let read (configPath: String) : Stdlib.Result.Result<Dict<String, String>, String> =
   match Stdlib.Cli.FileSystem.readFile configPath with
   | Ok content ->
@@ -20,7 +18,6 @@ let read (configPath: String) : Stdlib.Result.Result<Dict<String, String>, Strin
   | Error _ -> Stdlib.Result.Result.Error "Failed to read config.json"
 
 
-// @compiler blocked: missing-implementation
 let updateVersion
   (configPath: String)
   (versionToSet: String)
@@ -51,7 +48,6 @@ let updateVersion
 
 
 /// Get the version of the locally-installed version, from config.json
-// @compiler blocked: missing-implementation
 let readLocallyInstalledDarklangVersion
   (configPath: String)
   : Stdlib.Result.Result<String, String> =
@@ -66,7 +62,6 @@ let readLocallyInstalledDarklangVersion
 ///
 /// Takes a host it no longer reads: the layout used to differ on Windows, which is gone, and
 /// every caller already has one.
-// @compiler blocked: missing-implementation
 let getDarklangHomeDir (_host: Stdlib.Cli.Host.Host) : String =
   match Stdlib.Cli.Unix.getHomeDirectory () with
   | Ok dir -> $"{dir}/.darklang"

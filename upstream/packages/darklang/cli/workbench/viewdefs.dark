@@ -5,13 +5,13 @@ module Darklang.Cli.Workbench
 
 // Named wrappers so every ViewDef field is a resolved function reference (inline lambdas leave the tuple's
 // type as `_` and block record coercion - same reason Registry.CommandHandler uses named refs throughout).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.errorItems: Unknown function or value 'loadErrorItems'"
 let errorItems () : List<BodyItem> = loadErrorItems ()
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let errorDetailLines (state: State) : List<String> = Stdlib.String.split (errorDetail state) "\n"
 
 /// Extension views in stable index order. Workspaces place them in navigation.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ViewDef'"
 let extensionViews () : List<ViewDef> =
   [ ViewDef
       { id = "errors"

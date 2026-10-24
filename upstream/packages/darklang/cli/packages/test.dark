@@ -7,24 +7,21 @@ module Darklang.Cli.Packages.Test
 /// (`Stdlib.Test.Result`), or `RuntimeFailed` when it could not be judged at
 /// all. Passing ordinary tests can be reused; test failures are stored
 /// for display, while runtime failures are never stored.
-// @compiler blocked: missing-implementation
 type Outcome =
   | Passed
   | Failed of messages: List<String>
   | RuntimeFailed of message: String
 
-// @compiler blocked: missing-implementation
 type Counts =
   { passed: Int
     failed: Int
     cached: Int
     ran: Int }
 
-// @compiler blocked: missing-implementation
 val usage =
   "Usage: test run [--force] [--jobs <count>] [name-or-module ...]\n       test add <location> <body> | <source-file> | -"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 let fullPath
   (item: LanguageTools.ProgramTypes.LocatedItem<LanguageTools.ProgramTypes.PackageTest.PackageTest>)
   : String =
@@ -33,7 +30,6 @@ let fullPath
   |> Stdlib.String.join "."
 
 /// Whether <param want> appears in <param have> as a contiguous run.
-// @compiler blocked: missing-implementation
 let segmentsIn (have: List<String>) (want: List<String>) : Bool =
   if (Stdlib.List.take have (Stdlib.List.length want)) == want then
     true
@@ -46,20 +42,19 @@ let segmentsIn (have: List<String>) (want: List<String>) : Bool =
 /// dot-separated segments appear whole and in order in the test's full name.
 /// `Stdlib.Float` selects `Darklang.Stdlib.Float.Tests.add`, `doubles` selects
 /// a test named `doubles`, and `Float.T` selects nothing.
-// @compiler blocked: missing-implementation
 let selects (filter: String) (path: String) : Bool =
   let want =
     Stdlib.String.split filter "." |> Stdlib.List.filter (fun seg -> seg != "")
   segmentsIn (Stdlib.String.split path ".") want
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.cacheDb: Unknown function or value 'Stdlib.LocalStore.path'"
 let cacheDb () : String = Stdlib.LocalStore.path ()
 
 /// The actual judging function, including its followed dependencies, and the
 /// runtime compilation. Reflect the function we call, not a possibly pinned
 /// branch binding. An unexpected callable gets a fresh key so it cannot reuse
 /// a persisted result.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.cacheRuntime: Unknown function or value 'LanguageTools.RuntimeTypes.reflect'"
 let cacheRuntime () : String =
   let judge =
     match
@@ -76,7 +71,7 @@ let cacheRuntime () : String =
 /// branch's current `Stdlib.Test.Result` binding are part of the key: neither
 /// is covered by the test's content hash. The runtime key covers the build
 /// and the judging code.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.ensureCache: Unknown function or value 'Stdlib.Sqlite.mustExec'"
 let ensureCache () : Unit =
   let _ =
     Stdlib.Sqlite.mustExec
@@ -93,13 +88,12 @@ let ensureCache () : Unit =
   ()
 
 /// Read cache metadata once; test workers cannot change the parent store.
-// @compiler blocked: missing-implementation
 type CacheContext =
   { runtime: String
     branch: String
     resultType: String }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.cacheContext: Unknown function or value 'LanguageTools.PackageManager.Test.resultTypeHash'"
 let cacheContext (branchId: Uuid) : Stdlib.Option.Option<CacheContext> =
   LanguageTools.PackageManager.Test.resultTypeHash branchId
   |> Stdlib.Option.map (fun resultType ->
@@ -108,7 +102,7 @@ let cacheContext (branchId: Uuid) : Stdlib.Option.Option<CacheContext> =
         branch = Stdlib.toString branchId
         resultType = LanguageTools.ProgramTypes.hashToString resultType })
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.storedOutcome: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let storedOutcome
   (cache: CacheContext)
   (testHash: LanguageTools.ProgramTypes.Hash)
@@ -127,7 +121,7 @@ let storedOutcome
     | None -> Stdlib.Option.Option.None
   | None -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.storeOutcome: Unknown function or value 'Stdlib.Sqlite.mustExec'"
 let storeOutcome
   (cache: CacheContext)
   (testHash: LanguageTools.ProgramTypes.Hash)
@@ -148,7 +142,7 @@ let storeOutcome
 
 /// The last result for this test on this branch, read without writing anything.
 /// A failed result is shown in views but is never reused by `dark test run`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.lastOutcome: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let lastOutcome
   (branchId: Uuid)
   (testHash: LanguageTools.ProgramTypes.Hash)
@@ -167,7 +161,7 @@ let lastOutcome
   | None -> Stdlib.Option.Option.None
 
 /// Run <param test> now, ignoring the cache, and say how it went.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 let runFresh
   (run: LanguageTools.PackageManager.Test.Run)
   (branchId: Uuid)
@@ -182,7 +176,7 @@ let runFresh
     )
 
 /// Expected-error tests always rerun.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 let mayCache
   (test: LanguageTools.ProgramTypes.PackageTest.PackageTest)
   : Bool =
@@ -191,14 +185,13 @@ let mayCache
   | None -> true
 
 /// Recheck the current cache-safety rule before reusing or storing a result.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 let isCacheable
   (test: LanguageTools.ProgramTypes.PackageTest.PackageTest)
   : Bool =
   mayCache test
   && LanguageTools.PackageManager.Test.isCacheSafe test.hash
 
-// @compiler blocked: missing-implementation
 let printOutcome (name: String) (outcome: Outcome) : Unit =
   match outcome with
   | Passed ->
@@ -212,18 +205,16 @@ let printOutcome (name: String) (outcome: Outcome) : Unit =
     Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"ERROR {name}")
     Stdlib.printLine (Stdlib.Cli.UI.Colors.dimText $"  {message}")
 
-// @compiler blocked: missing-implementation
 let isPassed (outcome: Outcome) : Bool =
   match outcome with
   | Passed -> true
   | Failed _
   | RuntimeFailed _ -> false
 
-// @compiler blocked: missing-implementation
 val addUsage = "Usage: test add <location> <body> | <source-file> | -"
 
 /// Print why `test add` saved nothing, with its usage, and fail the command.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let addFailed
   (state: Cli.AppState)
   (message: String)
@@ -236,7 +227,7 @@ let addFailed
 /// the body alone (`Foo.double 4L |> Stdlib.Test.equal 8L`) or a whole
 /// declaration, `test name = ...` with an optional doc comment, which is what
 /// a file or stdin usually holds.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let addTest
   (state: Cli.AppState)
   (locationStr: String)
@@ -297,7 +288,7 @@ let addTest
                 Stdlib.Option.Option.Some((ops, packageTest.hash, unresolvedNames)))
         | _ -> addFailed state "Expected exactly one test declaration"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [ "add" ] -> addFailed state "test add needs a location and a body"
@@ -318,17 +309,15 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
 /// `dark test run [--force] [--jobs <count>] [filters]`: run the matching tests, from the cache
 /// where it allows, print each one, and fail the command if any failed or
 /// nothing matched.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let runTests (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   LanguageTools.PackageManager.Test.withStoreSnapshot (fun run -> runTestsInRun run state args)
 
-// @compiler blocked: missing-implementation
 type RunOptions =
   { force: Bool
     jobs: Int
     filters: List<String> }
 
-// @compiler blocked: missing-implementation
 let parseRunOptions
   (options: RunOptions)
   (args: List<String>)
@@ -352,14 +341,14 @@ let parseRunOptions
 
 /// Only the coordinator checks cache safety, writes the cache and prints results.
 /// Spawned processes run tests and return their outcomes.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Test.FinishedTest: Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 type FinishedTest =
   { name: String
     test: LanguageTools.ProgramTypes.PackageTest.PackageTest
     outcome: Outcome
     wasCached: Bool }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'FinishedTest'"
 let finishTest
   (cache: Stdlib.Option.Option<CacheContext>)
   (counts: Counts)
@@ -380,7 +369,7 @@ let finishTest
 
 /// Run up to `jobs` tests at once. Start the next whenever one finishes.
 /// Wait for all tests before closing the shared snapshot.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 let runSelected
   (run: LanguageTools.PackageManager.Test.Run)
   (branchId: Uuid)
@@ -427,7 +416,7 @@ let runSelected
       let running = Stdlib.List.filter running (fun handle -> handle.id != done.id)
       runSelected run branchId options cache remaining running (finishTest cache counts finished)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let runTestsInRun
   (run: LanguageTools.PackageManager.Test.Run)
   (state: Cli.AppState)
@@ -493,7 +482,7 @@ let runTestsInRun
     else
       state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Run package tests on the current branch, or add one."
     ""
@@ -534,7 +523,7 @@ let help (_state: Cli.AppState) : String =
     "it lands in your draft like `fn` and `val`." ]
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (args: List<String>) : List<Cli.Completion.CompletionItem> =
   match args with
   | [] -> [ "run", "add" ] |> Stdlib.List.map Cli.Completion.simple

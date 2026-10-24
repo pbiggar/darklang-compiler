@@ -10,12 +10,10 @@ module Darklang.Cli.Deps
 
 /// A package item as the dependency queries name it: where it's bound, and what kind of thing is bound
 /// there. Spelled out, this pair is wider than a line, and every signature in here is made of it.
-// @compiler blocked: missing-implementation
 type Item =
   LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind
 
 /// An `Item` plus the content hash the query resolved it to.
-// @compiler blocked: missing-implementation
 type HashedItem =
   LanguageTools.ProgramTypes.Hash *
   LanguageTools.ProgramTypes.PackageLocation *
@@ -29,7 +27,7 @@ type HashedItem =
 /// while rendering. `[]` gives the fully-qualified form, which is what a standalone list wants. A caller
 /// that knows where the reader is standing should say so: reading one item's references from inside a
 /// module, the path back up to the root is the noise it looks like.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.resolveNamesIn: Unknown function or value 'SCM.Deps.resolveLocations'"
 let resolveNamesIn
   (_branchId: Uuid)
   (currentModule: List<String>)
@@ -43,7 +41,6 @@ let resolveNamesIn
     Stdlib.Dict.set acc h displayName)
 
 /// A displayable name for an item, from a dict `resolveNamesIn` built, falling back to the hash.
-// @compiler blocked: missing-implementation
 let getName
   (namesDict: Dict<String, String>)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -56,7 +53,6 @@ let getName
 
 
 /// The dotted name of a location, as the dependency listings spell it.
-// @compiler blocked: missing-implementation
 let fqnOf (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
   let mods = Stdlib.String.join loc.modules "."
   if mods == "" then $"{loc.owner}.{loc.name}" else $"{loc.owner}.{mods}.{loc.name}"
@@ -66,7 +62,7 @@ let fqnOf (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
 /// The reason to look at a dependency list at all, and what `dark constraints` will report about you
 /// later. False when the name is bound to nothing, which is not the same as being current but is also
 /// not a stale reference.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.isBehind: Unknown function or value 'SCM.Propagation.currentHash'"
 let isBehind
   (loc: LanguageTools.ProgramTypes.PackageLocation)
   (targetHash: LanguageTools.ProgramTypes.Hash)
@@ -76,7 +72,7 @@ let isBehind
   | None -> false
 
 /// Display dependents: what uses this entity.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.showDependents: Unknown function or value 'SCM.Deps.dependentsOf'"
 let showDependents
   (targetLoc: LanguageTools.ProgramTypes.PackageLocation)
   (targetKind: LanguageTools.ProgramTypes.ItemKind)
@@ -105,7 +101,7 @@ let showDependents
 
 /// Transitive traversal, collecting dependents via batched FQN-keyed queries. Each level's results carry
 /// their own location, so the next level feeds straight back in without a hash -> location round-trip.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.collectTransitiveDependents: Unknown function or value 'SCM.Deps.dependentsOf'"
 let collectTransitiveDependents
   (processed: List<String>)
   (pending: List<Item>)
@@ -146,14 +142,14 @@ let collectTransitiveDependents
 
 
 /// Get all transitive dependents of one or more targets.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.getTransitiveDependentsFor: Unknown function or value 'collectTransitiveDependents'"
 let getTransitiveDependentsFor (_branchId: Uuid) (targets: List<Item>) : List<Item> =
   collectTransitiveDependents [] targets []
   |> Stdlib.List.unique
 
 
 /// Get all transitive dependents (everything that could break if this changes).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.getTransitiveDependents: Unknown function or value 'getTransitiveDependentsFor'"
 let getTransitiveDependents
   (branchId: Uuid)
   (targetLoc: LanguageTools.ProgramTypes.PackageLocation)
@@ -163,7 +159,7 @@ let getTransitiveDependents
 
 
 /// Display all transitive dependents: everything that could break if this changes.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.showTransitiveDependents: Unknown function or value 'getTransitiveDependents'"
 let showTransitiveDependents
   (branchId: Uuid)
   (targetLoc: LanguageTools.ProgramTypes.PackageLocation)
@@ -195,7 +191,7 @@ let showTransitiveDependents
 /// Read off the EDGE, not looked up from the hash. The edge records the name the reference was resolved
 /// by; a hash lookup answers "what is called this hash", which differs whenever two names share content --
 /// and has no answer once the dependency has moved on, which is precisely when you're asking.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.showDependencies: Unknown function or value 'SCM.Deps.dependencyEdges'"
 let showDependencies
   (sourceHash: LanguageTools.ProgramTypes.Hash)
   (entityName: String)
@@ -230,7 +226,7 @@ let showDependencies
 /// Resolve a path to (hash, location, kind, displayName).
 /// Carries the location so dependents queries can stay FQN-keyed and
 /// avoid cross-namespace false positives from content-hash collisions.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let resolvePath
   (branchId: Uuid)
   (currentLocation: Packages.PackageLocation)
@@ -279,7 +275,7 @@ let resolvePath
 
 
 /// One dependency edge as the machine-readable shape, read off the EDGE (see `showDependencies`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Deps.edgeJson: Unknown function or value 'isBehind'"
 let edgeJson
   (edge: (LanguageTools.ProgramTypes.Hash * LanguageTools.ProgramTypes.ItemKind * LanguageTools.ProgramTypes.PackageLocation))
   : ScmJson.DependencyJson =
@@ -295,7 +291,7 @@ let edgeJson
 ///
 /// Both directions at once, plus which references are already behind -- what "what breaks if I change
 /// this" actually needs.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeJson
   (state: AppState)
   (sourceHash: LanguageTools.ProgramTypes.Hash)
@@ -322,7 +318,7 @@ let executeJson
 
   state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   // Flags: --deep (transitive), --all (don't cap the listing), --json
   let wantsJson = ScmJson.wantsJson args
@@ -427,7 +423,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
     Cli.exitWith state false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (state: AppState) (args: List<String>) : List<Completion.CompletionItem> =
   let branchId = state.currentBranchId
   match args with
@@ -451,7 +447,7 @@ let complete (state: AppState) (args: List<String>) : List<Completion.Completion
   | _ -> []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: deps [subcommand] <path> [--deep] [--all]"

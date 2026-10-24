@@ -1,41 +1,30 @@
 module Darklang.Cli.CompletionPicker
 
-// @compiler blocked: missing-implementation
 type State =
   { items: List<Completion.CompletionItem>
     selectedIndex: Int
     scrollOffset: Int
     commandPrefix: String }
 
-// @compiler blocked: missing-implementation
 val maxVisibleItems = 10
 
-// @compiler blocked: missing-implementation
 val fullHelpText = "↑/↓: navigate  Enter: select  Esc: cancel"
-// @compiler blocked: missing-implementation
 val compactHelpText = "↑↓ move  Enter select  Esc cancel"
-// @compiler blocked: missing-implementation
 val minimumHelpText = "↑↓ Enter Esc"
 
-// @compiler blocked: missing-implementation
 val minimumHeight = 2
-// @compiler blocked: missing-implementation
 val minimumWidth = Stdlib.String.displayWidth minimumHelpText
 
-// @compiler blocked: missing-implementation
 type Layout =
   { itemCapacity: Int
     showScrollIndicator: Bool }
 
-// @compiler blocked: missing-implementation
 let supportsSize (size: Stdlib.Cli.Tui.Size) : Bool =
   size.height >= minimumHeight && size.width >= minimumWidth
 
-// @compiler blocked: missing-implementation
 val unsupportedSizeMessage =
   $"Completion picker requires at least {Stdlib.toString minimumWidth} columns and {Stdlib.toString minimumHeight} rows."
 
-// @compiler blocked: missing-implementation
 let helpTextAtWidth (width: Int) : String =
   if Stdlib.String.displayWidth fullHelpText <= width then
     fullHelpText
@@ -45,7 +34,6 @@ let helpTextAtWidth (width: Int) : String =
     minimumHelpText
 
 /// Create picker state from completions
-// @compiler blocked: missing-implementation
 let create (promptText: String) (items: List<Completion.CompletionItem>) : State =
   let parsed = Completion.parseInput promptText
   let commandPrefix =
@@ -62,14 +50,12 @@ let create (promptText: String) (items: List<Completion.CompletionItem>) : State
       commandPrefix = commandPrefix }
 
 /// Get the currently selected item's value (what gets inserted)
-// @compiler blocked: missing-implementation
 let getSelectedValue (state: State) : Stdlib.Option.Option<String> =
   match Stdlib.List.getAt state.items state.selectedIndex with
   | Some item -> Stdlib.Option.Option.Some item.value
   | None -> Stdlib.Option.Option.None
 
 /// Reserve the help row and fit completion items and a scroll indicator above it.
-// @compiler blocked: missing-implementation
 let layoutAtSize
   (state: State)
   (size: Stdlib.Cli.Tui.Size)
@@ -96,7 +82,6 @@ let layoutAtSize
   }
 
 /// Number of item rows available at this terminal size.
-// @compiler blocked: missing-implementation
 let visibleCapacity
   (state: State)
   (size: Stdlib.Cli.Tui.Size)
@@ -104,7 +89,6 @@ let visibleCapacity
   (layoutAtSize state size).itemCapacity
 
 
-// @compiler blocked: missing-implementation
 let effectiveOffset (state: State) (capacity: Int) : Int =
   let itemCount = Stdlib.List.length state.items
   let maxOffset = Stdlib.max 0 (itemCount - capacity)
@@ -120,7 +104,6 @@ let effectiveOffset (state: State) (capacity: Int) : Int =
 
 
 /// Build the complete inline completion region without terminal I/O.
-// @compiler blocked: missing-implementation
 let viewAtSize
   (state: State)
   (size: Stdlib.Cli.Tui.Size)
@@ -175,7 +158,6 @@ let viewAtSize
 ///
 /// Takes no capacity, unlike `moveDownWithCapacity`: moving up can only ever pull the offset down, and
 /// `effectiveOffset` re-clamps against the live size at render time anyway.
-// @compiler blocked: missing-implementation
 let moveUp (state: State) : State =
   if state.selectedIndex > 0 then
     let newIndex = state.selectedIndex - 1
@@ -190,7 +172,6 @@ let moveUp (state: State) : State =
     state
 
 /// Move selection down, keeping it within a viewport of `capacity` rows.
-// @compiler blocked: missing-implementation
 let moveDownWithCapacity (capacity: Int) (state: State) : State =
   let itemCount = Stdlib.List.length state.items
 
@@ -210,7 +191,6 @@ let moveDownWithCapacity (capacity: Int) (state: State) : State =
     state
 
 /// Result of handling a key press
-// @compiler blocked: missing-implementation
 type KeyResult =
   | Continue of State
   | SelectItem of String
@@ -218,7 +198,6 @@ type KeyResult =
   | Unavailable of message: String
 
 /// Handle a key press in the picker
-// @compiler blocked: missing-implementation
 let handleKeyAtSize
   (state: State)
   (size: Stdlib.Cli.Tui.Size)
@@ -243,18 +222,16 @@ let handleKeyAtSize
     | _ -> KeyResult.Continue state
 
 /// Build the completed command text from selection
-// @compiler blocked: missing-implementation
 let buildCompletedCommand (state: State) (selection: String) : String =
   state.commandPrefix + selection
 
 
 /// An active completion picker and its terminal presentation state.
-// @compiler blocked: missing-implementation
 type Session =
   { state: State
     terminal: Stdlib.Cli.Tui.TerminalSession.State }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.CompletionPicker.startAtSize: Unknown function or value 'Stdlib.Cli.Tui.TerminalSession.startAtSize'"
 let startAtSize
   (state: State)
   (size: Stdlib.Cli.Tui.Size)
@@ -269,7 +246,7 @@ let startAtSize
     | Error message ->
       Stdlib.Result.Result.Error message
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.CompletionPicker.presentAtSize: Unknown function or value 'Stdlib.Cli.Tui.TerminalSession.presentAtSize'"
 let presentAtSize
   (session: Session)
   (state: State)
@@ -286,7 +263,7 @@ let presentAtSize
 ///
 /// Selection, cancel, and Ctrl-C all release the region this way: the picker
 /// leaves nothing behind, and the prompt re-anchors where the region began.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.CompletionPicker.stop: Unknown function or value 'Stdlib.Cli.Tui.TerminalSession.stopInlineWithView'"
 let stop (session: Session) : Session =
   let cleared =
     Stdlib.Cli.Tui.View {

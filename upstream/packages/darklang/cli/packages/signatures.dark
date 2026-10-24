@@ -17,14 +17,13 @@ module Darklang.Cli.Packages.Signatures
 // `Option.Option` regardless of which submodule the listing was scoped to. `shortenName` makes that
 // unnecessary: it drops the longest common prefix with the current module and knows Option and Result
 // resolve bare, so the same listing shortens correctly without anyone naming a namespace.
-// @compiler blocked: missing-implementation
 let rootContext (branchId: Uuid) (modulePath: List<String>) : PrettyPrinter.ProgramTypes.Context =
   PrettyPrinter.ProgramTypes.Context.forModule branchId modulePath
 
 
 // Renders the signature body only (no name) — e.g.
 // `(list: List<'a>) (fn: 'a -> 'b) -> List<'b>`. Callers prepend the name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let formatFn
   (ctx: PrettyPrinter.ProgramTypes.Context)
   (fn: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -54,7 +53,7 @@ let formatFn
   $"{paramsJoined} -> {ret}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
 let formatType
   (ctx: PrettyPrinter.ProgramTypes.Context)
   (name: String)
@@ -100,12 +99,10 @@ let formatType
   $"type {name}{typeParams} = {body}"
 
 
-// @compiler blocked: missing-implementation
 let moduleKey (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
   (Stdlib.List.append [loc.owner] loc.modules) |> Stdlib.String.join "."
 
 
-// @compiler blocked: missing-implementation
 let groupByModule
   (items: List<LanguageTools.ProgramTypes.LocatedItem<'a>>)
   : Dict<String, List<LanguageTools.ProgramTypes.LocatedItem<'a>>> =
@@ -119,7 +116,6 @@ let groupByModule
     Stdlib.Dict.setOverridingDuplicates acc key (Stdlib.List.append existing [item]))
 
 
-// @compiler blocked: missing-implementation
 let trimRoot (root: String) (key: String) : String =
   let prefix = root + "."
   if key == root then "(root)"
@@ -128,7 +124,7 @@ let trimRoot (root: String) (key: String) : String =
   else key
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
 let renderModule
   (ctx: PrettyPrinter.ProgramTypes.Context)
   (rootName: String)
@@ -152,7 +148,6 @@ let renderModule
   $"{header}\n{body}"
 
 
-// @compiler blocked: missing-implementation
 type ParsedArgs =
   { root: List<String>
     includeTypes: Bool
@@ -162,7 +157,6 @@ type ParsedArgs =
     parseErrors: List<FlagParser.ParseError> }
 
 
-// @compiler blocked: missing-implementation
 val argSpec =
   FlagParser.Spec
     { flags =
@@ -171,7 +165,6 @@ val argSpec =
 
 
 // The first positional is the filter; later ones are ignored.
-// @compiler blocked: missing-implementation
 let parseArgs (args: List<String>) : ParsedArgs =
   let p = FlagParser.parse argSpec args
   let root =
@@ -188,7 +181,7 @@ let parseArgs (args: List<String>) : ParsedArgs =
       parseErrors = p.errors }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeFiltered
   (state: Cli.AppState)
   (rootPath: List<String>)
@@ -284,7 +277,7 @@ let executeFiltered
   state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let parsed = parseArgs args
 
@@ -315,7 +308,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
       parsed.filter
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Usage: docs signatures [filter|module] [--types] [--module <path>] [--all] [--include-deprecated]"
     ""
@@ -343,7 +336,7 @@ let help (_state: Cli.AppState) : String =
   |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (_state: Cli.AppState)
   (args: List<String>)

@@ -1,7 +1,6 @@
 /// some types that correspond to the `dark-packages` canvas
 module Darklang.DarkPackages
 
-// @compiler blocked: missing-implementation
 type Stats =
   { types: Int
     values: Int

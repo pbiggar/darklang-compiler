@@ -12,7 +12,6 @@ module Darklang.Cli.Accepts
 
 
 /// The arguments one command, or one subcommand, takes.
-// @compiler blocked: missing-implementation
 type Shape =
   {
     /// Flags that take no value, every spelling: `--json`, `--yes`, `-y`.
@@ -29,7 +28,6 @@ type Shape =
     wordsAreNotFlags: Bool
   }
 
-// @compiler blocked: missing-implementation
 type Accepts =
   | Takes of Shape
   /// The first word that is not a flag names a subcommand with its own arguments. `otherwise` is what
@@ -41,56 +39,48 @@ type Accepts =
 // fetched from the store on every start, and a second function behind it would be a second fetch.
 
 /// No words, and these flags.
-// @compiler blocked: missing-implementation
 let flagsOnly (flags: List<String>) : Accepts =
   Accepts.Takes(
     Shape { flags = flags, valueFlags = [], atLeast = 0, atMost = Stdlib.Option.Option.Some 0, wordsAreNotFlags = false }
   )
 
 /// Takes nothing at all.
-// @compiler blocked: missing-implementation
 let nothing () : Accepts =
   Accepts.Takes(
     Shape { flags = [], valueFlags = [], atLeast = 0, atMost = Stdlib.Option.Option.Some 0, wordsAreNotFlags = false }
   )
 
 /// At most <param atMost> words, and these flags.
-// @compiler blocked: missing-implementation
 let upTo (atMost: Int) (flags: List<String>) : Accepts =
   Accepts.Takes(
     Shape { flags = flags, valueFlags = [], atLeast = 0, atMost = Stdlib.Option.Option.Some atMost, wordsAreNotFlags = false }
   )
 
 /// From <param atLeast> to <param atMost> words, and these flags.
-// @compiler blocked: missing-implementation
 let between (atLeast: Int) (atMost: Int) (flags: List<String>) : Accepts =
   Accepts.Takes(
     Shape { flags = flags, valueFlags = [], atLeast = atLeast, atMost = Stdlib.Option.Option.Some atMost, wordsAreNotFlags = false }
   )
 
 /// Any number of words, at least <param atLeast>, and these flags.
-// @compiler blocked: missing-implementation
 let freeText (atLeast: Int) (flags: List<String>) : Accepts =
   Accepts.Takes(
     Shape { flags = flags, valueFlags = [], atLeast = atLeast, atMost = Stdlib.Option.Option.None, wordsAreNotFlags = false }
   )
 
 /// Any number of words, at least <param atLeast>, every one of them a word: see `wordsAreNotFlags`.
-// @compiler blocked: missing-implementation
 let text (atLeast: Int) : Accepts =
   Accepts.Takes(
     Shape { flags = [], valueFlags = [], atLeast = atLeast, atMost = Stdlib.Option.Option.None, wordsAreNotFlags = true }
   )
 
 /// From <param atLeast> to <param atMost> words, every one of them a word.
-// @compiler blocked: missing-implementation
 let textBetween (atLeast: Int) (atMost: Int) : Accepts =
   Accepts.Takes(
     Shape { flags = [], valueFlags = [], atLeast = atLeast, atMost = Stdlib.Option.Option.Some atMost, wordsAreNotFlags = true }
   )
 
 /// Subcommands, each with its own arguments, and what the command takes without one.
-// @compiler blocked: missing-implementation
 let subcommands (named: List<(String * Accepts)>) (otherwise: Accepts) : Accepts =
   match otherwise with
   | Takes s -> Accepts.Subcommands(named, s)
@@ -98,7 +88,6 @@ let subcommands (named: List<(String * Accepts)>) (otherwise: Accepts) : Accepts
   | Subcommands(_, s) -> Accepts.Subcommands(named, s)
 
 /// <param accepts>, plus flags that take a value.
-// @compiler blocked: missing-implementation
 let withValues (valueFlags: List<String>) (accepts: Accepts) : Accepts =
   match accepts with
   | Takes s -> Accepts.Takes({ s with valueFlags = Stdlib.List.append s.valueFlags valueFlags })
@@ -107,7 +96,7 @@ let withValues (valueFlags: List<String>) (accepts: Accepts) : Accepts =
 
 /// <param accepts> with these flags accepted everywhere in it, every subcommand included: for a
 /// command that reads a flag like `--json` wherever it appears.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Accepts.everywhere: Record update requires a record value"
 let everywhere
   (flags: List<String>)
   (valueFlags: List<String>)
@@ -136,7 +125,7 @@ let everywhere
 /// a start reaches is a fetch from the store, about 30 KB each: as a chain of four (check, checkShape,
 /// countRefusal, isFlagUnder) it cost three more fetches per start for being four functions. Don't
 /// split it back into helpers; the allocation gate will notice.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Accepts.check: Field access requires a record value"
 let check
   (name: String)
   (accepts: Accepts)

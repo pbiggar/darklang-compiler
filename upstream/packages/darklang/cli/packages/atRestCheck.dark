@@ -1,11 +1,11 @@
 /// At-rest checker reporting for package commands.
 module Darklang.Cli.Packages.AtRestCheck
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let checkBranch (branchId: Uuid) : LanguageTools.AtRestTypeChecker.Report =
   LanguageTools.AtRestTypeChecker.checkBranch branchId
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let checkModule
   (branchId: Uuid)
   (modules: List<String>)
@@ -15,7 +15,7 @@ let checkModule
 /// The name behind a hash in a diagnostic. Types and traits both appear in them -- "no
 /// implementation of X for Y" names a trait and a type -- and a hash in a message a person reads
 /// is no help, so both are looked up.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.AtRestCheck.customTypeName: Unknown function or value 'LanguageTools.PackageManager.Type.locations'"
 let customTypeName
   (branchId: Uuid)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -31,7 +31,7 @@ let customTypeName
   | Some name -> Stdlib.Option.Option.Some name
   | None -> nameAt (LanguageTools.PackageManager.Trait.locations branchId hash)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.StaticType'"
 let staticType
   (branchId: Uuid)
   (typ: LanguageTools.AtRestTypeChecker.StaticType)
@@ -40,7 +40,7 @@ let staticType
     (customTypeName branchId)
     typ
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Issue'"
 let issueLine
   (branchId: Uuid)
   (issue: LanguageTools.AtRestTypeChecker.Issue)
@@ -52,7 +52,7 @@ let issueLine
       issue
   "  - [" + code + "] " + message
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Issue'"
 let sameOrMirrored
   (first: LanguageTools.AtRestTypeChecker.Issue)
   (second: LanguageTools.AtRestTypeChecker.Issue)
@@ -72,7 +72,7 @@ let sameOrMirrored
     && first.actual == second.expected
   same || mirrored
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Issue'"
 let deduplicate
   (issues: List<LanguageTools.AtRestTypeChecker.Issue>)
   : List<LanguageTools.AtRestTypeChecker.Issue> =
@@ -85,7 +85,7 @@ let deduplicate
         Stdlib.Bool.not(sameOrMirrored issue other))
     Stdlib.List.push (deduplicate remaining) issue
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Issue'"
 let issueLines
   (branchId: Uuid)
   (issues: List<LanguageTools.AtRestTypeChecker.Issue>)
@@ -99,7 +99,7 @@ let issueLines
     if count == 1 then line
     else line + " (" + Stdlib.toString count + " occurrences)")
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let summary
   (report: LanguageTools.AtRestTypeChecker.Report)
   : Stdlib.Option.Option<String> =
@@ -110,7 +110,7 @@ let summary
 
 /// Report a saved WIP batch. Findings do not stop the save; `commit` enforces
 /// definite errors.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let printSaveReport
   (branchId: Uuid)
   (report: LanguageTools.AtRestTypeChecker.Report)
@@ -143,7 +143,7 @@ let printSaveReport
 
 
 /// Script errors name local declarations without exposing their parser-only owner.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let scriptReport
   (branchId: Uuid)
   (report: LanguageTools.AtRestTypeChecker.Report)

@@ -12,7 +12,6 @@ module Darklang.Cli.Workbench
 // something stopped going through here.
 
 /// What every workbench surface needs to know about SCM, read once.
-// @compiler blocked: missing-implementation
 type ScmStatus =
   { /// The NAME, never the uuid. Every surface here is something a person reads.
     branchName: String
@@ -41,7 +40,6 @@ type ScmStatus =
     /// showing zeroes for everything.
     loaded: Bool }
 
-// @compiler blocked: missing-implementation
 let emptyScmStatus () : ScmStatus =
   ScmStatus
     { branchName = SCM.Branch.mainBranchName
@@ -57,11 +55,11 @@ let emptyScmStatus () : ScmStatus =
       loaded = false }
 
 /// Read the whole SCM picture for <param branchId>.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.readScmStatus: Unknown function or value 'scmStatusFrom'"
 let readScmStatus (branchId: Uuid) : ScmStatus = scmStatusFrom branchId (SCM.Draft.read ())
 
 /// `readScmStatus` over a draft already read.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.scmStatusFrom: Unknown function or value 'SCM.PackageOps.commitsOnBranch'"
 let scmStatusFrom (branchId: Uuid) (p: SCM.Draft.Picture) : ScmStatus =
   // This branch's commits, not the store's: the row says "N commits on this branch", and a store-wide
   // count is the same number everywhere and right only on main.

@@ -47,7 +47,7 @@ let buildTable (oldLines: List<String>) (newLines: List<String>) : List<List<Int
 /// At (i, j): `oldRev` and `newRev` start at old line i and new line j (1-based, counting
 /// back), `row` is row j from column i, `prevRow` row j-1 from column i, and `rest` the rows
 /// before that in full. Prefers Added over Removed on a tie.
-// @compiler blocked: compiler-contract
+// @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/stdlib/diff.dark; importing another declaration of Darklang.Stdlib.Diff.trace requires an explicit replacement contract"
 let trace
   (width: Int)
   (oldRev: List<String>)

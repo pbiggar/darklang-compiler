@@ -15,7 +15,6 @@
 module Darklang.Cli.Repl
 
 /// A session binding: the name, the source it stands for, and what that source last evaluated to.
-// @compiler blocked: missing-implementation
 type Binding =
   { name: String
     /// Source text - either a captured literal or the original expression (see `captured`). This is what
@@ -31,7 +30,6 @@ type Binding =
 /// Is this a legal binding name? Letters, digits and underscore, not starting with a digit. Deliberately
 /// stricter than the language: it's the guard that stops `let (a, b) = ...` and other patterns we can't
 /// re-inject from being treated as a simple binding.
-// @compiler blocked: missing-implementation
 let isSimpleName (name: String) : Bool =
   if name == "" then
     false
@@ -59,7 +57,6 @@ let isSimpleName (name: String) : Bool =
 ///
 /// Indentation is the only signal available without parsing, and it matches how Dark is written. Blank lines
 /// separate statements rather than joining them.
-// @compiler blocked: missing-implementation
 let splitStatements (text: String) : List<String> =
   let lines = Stdlib.String.split text "\n"
   let isContinuation =
@@ -83,7 +80,6 @@ let splitStatements (text: String) : List<String> =
 
 /// How many brackets `text` leaves open: `(`, `[` and `{` minus their closers, ignoring anything inside a
 /// string literal (and a `\"` inside one). Negative if it closes more than it opens.
-// @compiler blocked: missing-implementation
 let openBracketDepth (text: String) : Int =
   let (depth, _inString, _escaped) =
     Stdlib.String.toList text
@@ -115,7 +111,6 @@ let openBracketDepth (text: String) : Int =
 /// The rules can still be too eager - a line ending in a `-` you meant as a minus, say. The way out is ⏎ on
 /// the empty `...` line, which runs whatever has accumulated. That, and not a punctuation mark, is the manual
 /// override.
-// @compiler blocked: missing-implementation
 let wantsAnotherLine (text: String) : Bool =
   let t = Stdlib.String.trimEnd (Stdlib.String.trim text)
   if t == "" then
@@ -144,7 +139,6 @@ let wantsAnotherLine (text: String) : Bool =
 /// Recognize a top-level `let <name> = <expr>` typed at the REPL, returning (name, expr). Only a single
 /// simple name binds; anything else (a pattern, a `let` with no `=`, a bare expression) returns None and is
 /// evaluated as an ordinary expression.
-// @compiler blocked: missing-implementation
 let parseLetBinding (text: String) : Stdlib.Option.Option<(String * String)> =
   let trimmed = Stdlib.String.trim text
   // A statement may legitimately span lines - `splitStatements` has already separated a pasted chain, so
@@ -166,7 +160,6 @@ let parseLetBinding (text: String) : Stdlib.Option.Option<(String * String)> =
 
 /// The `let` chain that re-establishes a session's bindings, in binding order, ready to be prefixed to an
 /// expression. Empty for an empty session, so an unbound REPL evaluates exactly what you typed.
-// @compiler blocked: missing-implementation
 let bindingChain (bindings: List<Binding>) : String =
   if Stdlib.List.isEmpty bindings then
     ""
@@ -175,7 +168,6 @@ let bindingChain (bindings: List<Binding>) : String =
     (Stdlib.String.join lines "\n") + "\n"
 
 /// An expression with the session's bindings in scope.
-// @compiler blocked: missing-implementation
 let withBindings (bindings: List<Binding>) (expr: String) : String =
   (bindingChain bindings) + expr
 
@@ -193,7 +185,6 @@ let withBindings (bindings: List<Binding>) (expr: String) : String =
 ///
 /// left the chain as `let a = d` / `let d = ...`, so `d` was undefined when `a` was bound and every
 /// subsequent eval failed with no way out but clearing the session.
-// @compiler blocked: missing-implementation
 let upsert (bindings: List<Binding>) (b: Binding) : List<Binding> =
   let withoutIt = bindings |> Stdlib.List.filter (fun x -> x.name != b.name)
   let alreadyBound = (Stdlib.List.length withoutIt) != (Stdlib.List.length bindings)
@@ -213,7 +204,7 @@ let upsert (bindings: List<Binding>) (b: Binding) : List<Binding> =
 /// miss.
 ///
 /// `branchId` is the branch to resolve type names against.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Repl.captureValue: Unknown function or value 'LanguageTools.RuntimeTypesToProgramTypes.dvalToExpr'"
 let captureValue (branchId: Uuid) (v: 'a) : String =
   match LanguageTools.RuntimeTypesToProgramTypes.dvalToExpr branchId (LanguageTools.RuntimeTypes.reflect v) with
   | Ok e ->
@@ -226,7 +217,6 @@ let captureValue (branchId: Uuid) (v: 'a) : String =
 /// The expression to evaluate for `let <name> = <rhs>`: bind it, then hand the value to `captureValue` so the
 /// session can hold the value. The binding is in scope for its own capture, which is what makes the captured
 /// source correct for expressions that refer to earlier bindings.
-// @compiler blocked: missing-implementation
 let captureExpr (bindings: List<Binding>) (branchId: Uuid) (name: String) (rhs: String) : String =
   let chain = withBindings bindings $"let {name} = {rhs}"
   // `Stdlib.Uuid.parse ".."` rather than a bare literal: this is SOURCE TEXT the REPL evaluates, there
@@ -237,7 +227,6 @@ let captureExpr (bindings: List<Binding>) (branchId: Uuid) (name: String) (rhs: 
 
 /// Read `captureValue`'s output back. `Some source` when the value round-tripped, `None` when it has no
 /// literal form (the caller then falls back to holding the expression).
-// @compiler blocked: missing-implementation
 let readCaptured (output: String) : Stdlib.Option.Option<String> =
   let trimmed = Stdlib.String.trim output
   if Stdlib.String.startsWith trimmed "ok:" then

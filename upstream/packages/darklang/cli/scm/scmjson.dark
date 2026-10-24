@@ -13,7 +13,6 @@ module Darklang.Cli.ScmJson
 /// One name the draft changed. `change` is "new" | "updated" | "signature-changed" -- the last one called out
 /// separately because propagation does a blind hash swap, so a moved signature is the one thing a caller
 /// can't absorb silently.
-// @compiler blocked: missing-implementation
 type ChangedItem =
   { kind: String
     name: String
@@ -25,7 +24,6 @@ type ChangedItem =
     followed: Bool }
 
 /// What `dark status` knows. `propagates` is what WOULD repoint if you committed now.
-// @compiler blocked: missing-implementation
 type StatusJson =
   { branch: String
     draftOps: Int64
@@ -42,7 +40,6 @@ type StatusJson =
 /// What `dark commit` did. Everything StatusJson has, plus the outcome. `commit` is the commit's id;
 /// `committed` is false when the review ran but you declined, so an agent can tell "nothing to do" from
 /// "you said no".
-// @compiler blocked: missing-implementation
 type CommitJson =
   { branch: String
     committed: Bool
@@ -66,7 +63,6 @@ type CommitJson =
 /// consumer: an agent reading `--json` would have to know the convention to say which item was in trouble.
 /// `fqn` is derived here rather than stored, so there is one spelling of the name and no second copy to
 /// keep in step.
-// @compiler blocked: missing-implementation
 type ConflictJson =
   { id: String
     fqn: String
@@ -81,7 +77,6 @@ type ConflictJson =
     status: String
     resolvedBy: String }
 
-// @compiler blocked: missing-implementation
 let conflictWithFqn (c: SCM.Conflicts.Conflict) : ConflictJson =
   ConflictJson
     { id = c.id
@@ -98,13 +93,11 @@ let conflictWithFqn (c: SCM.Conflicts.Conflict) : ConflictJson =
       resolvedBy = c.resolvedBy }
 
 /// What `dark conflicts` returns for a list or a preview.
-// @compiler blocked: missing-implementation
 type ConflictListJson =
   { pending: Int
     conflicts: List<ConflictJson> }
 
 /// The result of acting on one conflict (ack / override).
-// @compiler blocked: missing-implementation
 type ConflictActionJson =
   { id: String
     ok: Bool
@@ -114,7 +107,6 @@ type ConflictActionJson =
 
 /// One dependency edge, as `dark deps --json` reports it: the name it was referenced BY, the version it
 /// references, and whether that version is still what the name means.
-// @compiler blocked: missing-implementation
 type DependencyJson =
   { name: String
     kind: String
@@ -123,21 +115,18 @@ type DependencyJson =
     behind: Bool }
 
 /// What `dark deps --json` returns.
-// @compiler blocked: missing-implementation
 type DepsJson =
   { item: String
     dependencies: List<DependencyJson>
     dependents: List<DependencyJson> }
 
 /// One commit, as `dark commits --json` reports it.
-// @compiler blocked: missing-implementation
 type CommitRowJson =
   { hash: String
     message: String
     ops: Int64 }
 
 /// One branch, as `dark branches --json` reports it.
-// @compiler blocked: missing-implementation
 type BranchJson =
   { id: String
     /// What a person types and reads. Present because an agent that only got the id had no way to display a
@@ -152,12 +141,9 @@ type BranchJson =
     /// able to tell them apart.
     merged: Bool }
 
-// @compiler blocked: missing-implementation
 let depsJson (d: DepsJson) : String = Stdlib.Json.serialize<DepsJson> d
-// @compiler blocked: missing-implementation
 let commitsJson (cs: List<CommitRowJson>) : String =
   Stdlib.Json.serialize<List<CommitRowJson>> cs
-// @compiler blocked: missing-implementation
 let branchesJson (bs: List<BranchJson>) : String =
   Stdlib.Json.serialize<List<BranchJson>> bs
 
@@ -166,25 +152,22 @@ let branchesJson (bs: List<BranchJson>) : String =
 /// `op` is the RENDERED op, the same text the human view prints. Exposing the op's full structure would
 /// mean committing to a JSON shape for every expression form, which is a large promise to keep stable for
 /// a surface whose question is "what did I do, in order".
-// @compiler blocked: missing-implementation
 type BranchOpJson =
   { seq: Int
     op: String }
 
-// @compiler blocked: missing-implementation
 let branchOpsJson (os: List<BranchOpJson>) : String =
   Stdlib.Json.serialize<List<BranchOpJson>> os
 
 /// `dark diff <branch> --json`. The SCM record is serialized directly rather than copied into a shape of
 /// its own: there is nothing to add here, and a second shape would be a second thing to keep in step.
-// @compiler blocked: missing-implementation
 let branchDiffJson (es: List<SCM.PackageOps.BranchDiffEntry>) : String =
   Stdlib.Json.serialize<List<SCM.PackageOps.BranchDiffEntry>> es
 
 
 /// Classify what an update did to a name. Shared by the pretty CHANGED line and the JSON, so they can't
 /// disagree about whether a signature moved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.ScmJson.changeKind: Unknown function or value 'LanguageTools.PackageManager.Function.get'"
 let changeKind
   (branchId: Uuid)
   (b: SCM.Conflicts.Binding)
@@ -210,7 +193,7 @@ let changeKind
           "signature-changed"
       | _ -> "updated"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.ScmJson.changedItem: Unknown function or value 'changeKind'"
 let changedItem
   (branchId: Uuid)
   (propagated: List<String>)
@@ -227,13 +210,11 @@ let changedItem
       followed = Stdlib.List.contains propagated name }
 
 /// Right-pad to <param width> so a column of names lines up under each other.
-// @compiler blocked: missing-implementation
 let pad (s: String) (width: Int) : String =
   let n = Stdlib.String.length s
   if n >= width then s else s + (Stdlib.String.repeat " " (width - n))
 
 /// The human words for a `change` value, so the pretty view reads as prose while the JSON stays a token.
-// @compiler blocked: missing-implementation
 let changeNote (change: String) : String =
   match change with
   | "new" -> "new"
@@ -241,32 +222,24 @@ let changeNote (change: String) : String =
   | _ -> "updated"
 
 /// The same, plus who did it. "followed" is the word for a change you didn't make.
-// @compiler blocked: missing-implementation
 let changeNoteFor (item: ChangedItem) : String =
   if item.followed then
     $"{changeNote item.change}, followed"
   else
     changeNote item.change
 
-// @compiler blocked: missing-implementation
 let statusJson (s: StatusJson) : String = Stdlib.Json.serialize<StatusJson> s
-// @compiler blocked: missing-implementation
 let commitJson (c: CommitJson) : String = Stdlib.Json.serialize<CommitJson> c
-// @compiler blocked: missing-implementation
 let conflictListJson (c: ConflictListJson) : String =
   Stdlib.Json.serialize<ConflictListJson> c
-// @compiler blocked: missing-implementation
 let conflictJson (c: SCM.Conflicts.Conflict) : String =
   Stdlib.Json.serialize<ConflictJson> (conflictWithFqn c)
-// @compiler blocked: missing-implementation
 let conflictActionJson (a: ConflictActionJson) : String =
   Stdlib.Json.serialize<ConflictActionJson> a
 
 /// `--json` present?
-// @compiler blocked: missing-implementation
 let wantsJson (args: List<String>) : Bool = Stdlib.List.contains args "--json"
 
 /// Strip the flag so the rest of the parsing doesn't have to know about it.
-// @compiler blocked: missing-implementation
 let stripJson (args: List<String>) : List<String> =
   args |> Stdlib.List.filter (fun a -> a != "--json")

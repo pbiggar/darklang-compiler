@@ -2,32 +2,24 @@ module Darklang.PrettyPrinter.RuntimeTypes
 
 
 // <aliases>
-// @compiler blocked: missing-implementation
 type FQFnName = LanguageTools.RuntimeTypes.FQFnName.FQFnName
-// @compiler blocked: missing-implementation
 type FQTypeName = LanguageTools.RuntimeTypes.FQTypeName.FQTypeName
-// @compiler blocked: missing-implementation
 type FQValueName = LanguageTools.RuntimeTypes.FQValueName.FQValueName
-// @compiler blocked: missing-implementation
 type TypeReference = LanguageTools.RuntimeTypes.TypeReference
-// @compiler blocked: missing-implementation
 type ValueType = LanguageTools.RuntimeTypes.ValueType
-// @compiler blocked: missing-implementation
 type Dval = LanguageTools.RuntimeTypes.Dval
-// @compiler blocked: missing-implementation
 type LetPattern = LanguageTools.RuntimeTypes.LetPattern
 // </aliases>
 
 module RuntimeError =
   /// Human-facing context for a structured SQL compiler error.
-  // @compiler blocked: missing-implementation
   val sqlErrorPrefix = "You're using our new experimental Datastore query compiler. It compiles your lambdas into optimized (and partially indexed) Datastore queries, which should be reasonably fast.\n\nUnfortunately, we hit a snag while compiling your lambda. We only support a subset of Darklang's functionality, but will be expanding it in the future.\n\nSome Darklang code is not supported in DB::query lambdas for now, and some of it won't be supported because it's an odd thing to do in a datastore query. If you think your operation should be supported, let us know in #general in Discord.\n\n  Error: "
 
   /// Error pretty printing
   /// ---------------
   /// Segments allow us to build error messages where the UI and CLI can both
   /// decorate/link to the sources in a native way
-  // @compiler blocked: compiler-contract
+  // @compiler blocked: compiler-contract diagnostic="Already selected from packages/darklang/prettyPrinter/runtimeTypes/runtimeError.dark; importing another declaration of Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.ErrorSegment requires an explicit replacement contract"
   type ErrorSegment =
     // -- Basic types
     | String of String
@@ -150,7 +142,6 @@ module RuntimeError =
   /// For a value type that has a `toString` in stdlib, return a hint
   /// suffix pointing the user at the right conversion function. Empty
   /// string otherwise (Unknown, Unit, String, collection/custom types).
-  // @compiler blocked: missing-implementation
   let toStringHint (vt: LanguageTools.RuntimeTypes.ValueType) : String =
     // One hint for the types that have a ToString impl; `Stdlib.toString` is the fn to
     // reach for whichever it is. Collections and custom types have none, so no hint.
@@ -176,7 +167,7 @@ module RuntimeError =
 
   // The only exhaustive match over RuntimeError on the Dark side. A new RuntimeError case needs an
   // arm here, and Dark says nothing at build time: the first error of that kind raises right here.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.toSegments: Unknown constructor 'Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.ErrorSegment.TraitName'"
   let toSegments
     (e: LanguageTools.RuntimeTypes.RuntimeError.Error)
     : ErrorSegments =
@@ -682,7 +673,7 @@ module RuntimeError =
 
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.toString: Unknown function or value 'toSegments'"
   let toString
     (branchId: Uuid)
     (e: LanguageTools.RuntimeTypes.RuntimeError.Error)
@@ -691,10 +682,9 @@ module RuntimeError =
     segmentsToString branchId s
 
 
-  // @compiler blocked: missing-implementation
   type ErrorMessage = ErrorString of String
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.toErrorMessage: Unknown function or value 'toString'"
   let toErrorMessage
         (branchId: Uuid)
         (e: LanguageTools.RuntimeTypes.RuntimeError.Error)

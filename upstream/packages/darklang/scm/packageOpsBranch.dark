@@ -13,7 +13,7 @@ module Darklang.SCM.PackageOps
 
 /// What a BRANCH binds, from its OWN frontier (not the parent chain) -- exactly the ops a merge would flip
 /// effective and fold, so this is the incoming side of a merge.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchBindings: Unknown function or value 'bindingsFromOpRows'"
 let branchBindings (branchId: Uuid) : List<Conflicts.Binding> =
   bindingsFromOpRows (Branches.ownOpRows branchId)
 
@@ -21,7 +21,7 @@ let branchBindings (branchId: Uuid) : List<Conflicts.Binding> =
 /// Does this branch exist at all? Checks BOTH the registry row and the op tags, because either can exist
 /// without the other: switching registers a branch before it has ops, and an imported branch arrives as
 /// tagged ops before anything registers it. Otherwise "unknown" reads as "empty".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchExists: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let branchExists (branchId: Uuid) : Bool =
   let registered =
     Stdlib.Sqlite.queryOneP
@@ -44,7 +44,7 @@ let branchExists (branchId: Uuid) : Bool =
 
 /// A branch's registered parent, or MAIN's id when it has none. The id, not the name "main"
 /// (see `SCM.Branch.mainBranchId`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchParentOf: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let branchParentOf (branchId: Uuid) : Uuid =
   match
     Stdlib.Sqlite.queryOneP
@@ -59,7 +59,7 @@ let branchParentOf (branchId: Uuid) : Uuid =
 
 /// What the PARENT binds for <param names> -- the LOCAL side a branch merges into. parent=main is just
 /// `locations`; a non-main parent is main overlaid by that chain's own rebinds.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.parentBindings: Unknown function or value 'Conflicts.localBindingsFor'"
 let parentBindings (parentId: Uuid) (names: List<String>) : List<Conflicts.Binding> =
   let fromMain = Conflicts.localBindingsFor names
 
@@ -96,7 +96,7 @@ let parentBindings (parentId: Uuid) (names: List<String>) : List<Conflicts.Bindi
 /// Conflicts a merge of <param branchId> into its parent WOULD raise: the branch's own frontier bindings vs
 /// the parent's current bindings, tested against the bases the branch recorded at its fork. Nothing is
 /// recorded by looking -- a conflict is only written once a reconciliation actually happens.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchPreview: Unknown function or value 'branchBindings'"
 let branchPreview (branchId: Uuid) : List<Conflicts.Conflict> =
   let incoming = branchBindings branchId
   let names = incoming |> Stdlib.List.map (fun b -> b.name)
@@ -114,7 +114,7 @@ let branchPreview (branchId: Uuid) : List<Conflicts.Conflict> =
 /// Compares the same two sides as `branchPreview`, so the diff and the conflict list cannot disagree.
 /// Returns a record rather than rendered lines: both renderers below read it, so the human and the JSON
 /// caller cannot be told different things.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchDiffEntries: Unknown function or value 'branchBindings'"
 let branchDiffEntries (branchId: Uuid) : List<BranchDiffEntry> =
   let branchBinds = branchBindings branchId
   let names = Branches.touchedNames branchId
@@ -152,13 +152,13 @@ let branchDiffEntries (branchId: Uuid) : List<BranchDiffEntry> =
 
 /// The branch this process is on. This is an ID. Defined in `SCM.Branches`; this is the
 /// spelling most callers use.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.currentBranch: Unknown function or value 'Branches.current'"
 let currentBranch () : Uuid = Branches.current ()
 
 
 /// The NAME to show for a branch id. Ids are what everything refers to; names are what
 /// people read, so anything user-facing goes through here rather than printing the id.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchName: Unknown function or value 'Stdlib.Sqlite.queryP'"
 let branchName (branchId: Uuid) : String =
   // Main has no `branches` row, so a lookup would fall through to showing its raw id.
   if SCM.Branch.isMain branchId then
@@ -185,7 +185,7 @@ let branchName (branchId: Uuid) : String =
 /// It lives here rather than in the CLI because the LSP needs the same answer, and a second copy drifts:
 /// main has no `branches` row, so only the special case below finds it, and a resolver written without
 /// that case cannot resolve `main` at all.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.resolveBranchRef: Unknown function or value 'branchIdForName'"
 let resolveBranchRef (branchRef: String) : BranchRefResult =
   let asId =
     match Stdlib.Uuid.parse branchRef with
@@ -226,7 +226,7 @@ let resolveBranchRef (branchRef: String) : BranchRefResult =
 /// The id a person means by <param name> at a branch verb: the most recent branch still listed under it.
 /// Never creates. Merged branches count, because `dark branches` lists them and a name you can read off
 /// the listing has to be a name you can type.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchIdForName: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let branchIdForName (name: String) : Stdlib.Option.Option<Uuid> =
   match
     Stdlib.Sqlite.queryOneP
@@ -241,7 +241,7 @@ let branchIdForName (name: String) : Stdlib.Option.Option<Uuid> =
 
 
 /// Is this branch's work already in its parent?
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchIsMerged: Unknown function or value 'Stdlib.Sqlite.queryP'"
 let branchIsMerged (branchId: Uuid) : Bool =
   match
     Stdlib.Sqlite.queryP
@@ -261,7 +261,7 @@ let branchIsMerged (branchId: Uuid) : Bool =
 /// table says the branch never held anything. The `Merged` event is the one record of
 /// which ops were its, and there can be several: a branch merged in two rounds has two.
 /// Oldest first, like `branchOps`. Empty for a branch that has not merged.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let mergedOpsOf (branchId: Uuid) : List<LanguageTools.ProgramTypes.PackageOp> =
   // Byte 9 of the blob is the op tag; 0x0A is BranchEvent. There are few of these, so
   // decoding them all to find this branch's is cheaper than a column would be worth.
@@ -296,7 +296,7 @@ let mergedOpsOf (branchId: Uuid) : List<LanguageTools.ProgramTypes.PackageOp> =
 /// Turn a branch NAME into its id, starting the branch if that name has none. Returns (id, wasCreated);
 /// callers announce a creation, because silently running on a branch you didn't mean to start reads
 /// exactly like running on the one you did.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.resolveBranch: Unknown function or value 'Builtin.scmResolveBranch'"
 let resolveBranch (name: String) (parentId: Uuid) : (Uuid * Bool) =
   Builtin.scmResolveBranch name parentId
 
@@ -307,7 +307,7 @@ let resolveBranch (name: String) (parentId: Uuid) : (Uuid * Bool) =
 ///
 /// Persisting the choice is separate and deliberately not done here: `--branch` is a one-off and must not
 /// move `current_branch`, while `ops switch` sets both.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.selectBranch: Unknown function or value 'Builtin.scmSelectBranch'"
 let selectBranch (branchId: Uuid) : Uuid = Builtin.scmSelectBranch branchId
 
 
@@ -315,7 +315,7 @@ let selectBranch (branchId: Uuid) : Uuid = Builtin.scmSelectBranch branchId
 ///
 /// Propagation needs the versions a dependent might still point at. On main that history is the `locations`
 /// rows; a branch-only name has none, its whole history being its ops.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchHashHistoryFor: Unknown function or value 'branchHashHistories'"
 let branchHashHistoryFor
   (branchId: Uuid)
   (owner: String)
@@ -329,7 +329,7 @@ let branchHashHistoryFor
 
 /// <fn branchHashHistoryFor> for every name the chain has bound, from one read of the chain, keyed by
 /// `Conflicts.bindingKey`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.branchHashHistories: Unknown function or value 'decodeOpRows'"
 let branchHashHistories (branchId: Uuid) : Dict<String, List<String>> =
   // Deliberately SetName-only: an Override is a decision, not authoring history.
   decodeOpRows (chainOpRows branchId)
@@ -359,6 +359,6 @@ let branchHashHistories (branchId: Uuid) : Dict<String, List<String>> =
 /// Skips an op this build cannot decode rather than raising on it. A synced store's log holds a peer's
 /// ops on a format this binary does not know, stored and left unapplied on purpose, and a history
 /// listing is the last thing that should die because one of them is in the way.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let branchOps (branchId: Uuid) : List<LanguageTools.ProgramTypes.PackageOp> =
   decodeOpRows (Branches.ownOpRows branchId)

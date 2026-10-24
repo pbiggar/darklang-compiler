@@ -16,7 +16,7 @@ module Darklang.Cli.Packages.Rename
 /// `SetName` carries one: a merge wants to know what was replaced. The `SetName`'s predecessor is
 /// None because the new name was not in use -- "no predecessor known" is the honest answer, and
 /// the divergence detector only concludes anything when both sides claim one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let ops
   (oldLocation: LanguageTools.ProgramTypes.PackageLocation)
   (newLocation: LanguageTools.ProgramTypes.PackageLocation)
@@ -35,7 +35,7 @@ let ops
 
 /// What lives at <param location> right now, as the reference a rename rebinds. `None` when the
 /// name holds nothing here -- a typo, or a name that only exists on another branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Rename.referenceAt: Unknown function or value 'Packages.Query.searchExactMatch'"
 let referenceAt
   (branchId: Uuid)
   (location: LanguageTools.ProgramTypes.PackageLocation)
@@ -81,7 +81,7 @@ let referenceAt
             | [] -> Stdlib.Option.Option.None
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [ oldName, newName ] ->
@@ -137,7 +137,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
     { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ ""
     "  dark rename <name> <new-name>"
@@ -153,7 +153,7 @@ let help (_state: Cli.AppState) : String =
   |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (state: Cli.AppState)
   (args: List<String>)

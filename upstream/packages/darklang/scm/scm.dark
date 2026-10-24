@@ -11,5 +11,5 @@ module Darklang.SCM
 ///
 /// A function rather than a `val` because the path follows the store swap a test does, and a `val`
 /// is evaluated once.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.localDb: Unknown function or value 'Stdlib.LocalStore.path'"
 let localDb () : String = Stdlib.LocalStore.path ()

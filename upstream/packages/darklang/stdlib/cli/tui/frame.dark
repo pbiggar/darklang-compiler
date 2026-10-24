@@ -8,7 +8,6 @@ module Darklang.Stdlib.Cli.Tui.Frame
 
 
 /// One logical row that changed between two views.
-// @compiler blocked: missing-implementation
 type RowChange =
   { /// Zero-based row in the logical view.
     row: Int
@@ -17,7 +16,6 @@ type RowChange =
 
 
 /// Compare both row lists once while accumulating changes in reverse order.
-// @compiler blocked: missing-implementation
 let changedRowsFrom
   (row: Int)
   (previousRows: List<String>)
@@ -53,7 +51,6 @@ let changedRowsFrom
 ///
 /// Comparing through the longer view ensures rows removed from the next view
 /// are returned with empty content and erased from the terminal.
-// @compiler blocked: missing-implementation
 let changedRows
   (previousRows: List<String>)
   (nextRows: List<String>)
@@ -62,7 +59,6 @@ let changedRows
 
 
 /// Traverse both lists once while accumulating a complete repaint.
-// @compiler blocked: missing-implementation
 let fullRedrawRowsFrom
   (row: Int)
   (previousRows: List<String>)
@@ -96,7 +92,6 @@ let fullRedrawRowsFrom
 ///
 /// This is used after resize: every retained row is repainted, while content
 /// outside a now-shorter logical view is explicitly erased.
-// @compiler blocked: missing-implementation
 let fullRedrawRows
   (previousRows: List<String>)
   (nextRows: List<String>)
@@ -112,7 +107,6 @@ let fullRedrawRows
 /// style reset precedes the erase so blank cells never inherit styling, and a
 /// final reset contains any style left open by the logical row. Returning to
 /// column one cancels deferred wrap before the next terminal update.
-// @compiler blocked: missing-implementation
 let renderRowChangeAtWidth
   (width: Int)
   (change: RowChange)
@@ -123,7 +117,6 @@ let renderRowChangeAtWidth
 
 
 /// Render the desired final cursor state.
-// @compiler blocked: missing-implementation
 let renderCursor (cursor: Tui.Cursor) : String =
   match cursor with
   | Hidden -> ""
@@ -137,7 +130,6 @@ let renderCursor (cursor: Tui.Cursor) : String =
 ///
 /// The caller writes this returned string once. Terminal session modes are
 /// deliberately excluded: the terminal session owns those effects.
-// @compiler blocked: missing-implementation
 let renderAtWidth
   (width: Int)
   (previous: Stdlib.Option.Option<Tui.View>)
@@ -167,7 +159,6 @@ let renderAtWidth
 
 
 /// Produce a complete repaint while clearing rows removed from the prior view.
-// @compiler blocked: missing-implementation
 let renderFullAtWidth
   (width: Int)
   (previous: Stdlib.Option.Option<Tui.View>)

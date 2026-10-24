@@ -1,7 +1,6 @@
 module Darklang.Cli.Logo
 
 
-// @compiler blocked: missing-implementation
 val logo = $"""
   ????      ??????
 ????????   ????????
@@ -20,7 +19,6 @@ val logo = $"""
  """
 
 // Alternative logo using lower half blocks - kept for potential future use
-// @compiler blocked: missing-implementation
 val logoBlock = $"""
   ▄▄▄▄      ▄▄▄▄▄▄
 ▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄
@@ -39,7 +37,6 @@ val logoBlock = $"""
  """
 
 
-// @compiler blocked: missing-implementation
 let combineLogoAndText (logoStr: String) (textLines: List<String>) (color: String) : String =
   // Split the logo string by newlines
   let logoLines =

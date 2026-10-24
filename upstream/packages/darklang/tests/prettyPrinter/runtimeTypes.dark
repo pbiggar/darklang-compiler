@@ -28,7 +28,6 @@ let loc
   Darklang.LanguageTools.ProgramTypes.PackageLocation
     { owner = owner, modules = modules, name = name }
 
-// @compiler blocked: upstream-dependency
 let short
   (currentModule: List<String>)
   (owner: String)
@@ -37,7 +36,7 @@ let short
   : String =
   Darklang.PrettyPrinter.shortenName currentModule owner modules name
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.Tests.at: Unknown function or value 'Darklang.PrettyPrinter.RuntimeTypes.dvalWith'"
 let at (width: Int) (value: 'a) : String =
   Darklang.PrettyPrinter.RuntimeTypes.dvalWith
     Darklang.SCM.Branch.mainBranchId
@@ -71,7 +70,6 @@ test scalars =
 // fraction through, to drop trailing zeros. It parses and reprints the fraction,
 // which comes back in exponent form when small enough; that used to print
 // `0.00001` as `0.-05`.
-// @compiler xfail compile: "Unknown function or value 'Darklang.PrettyPrinter.processRemainder'" class=missing-support reason=upstream-dependency
 test floatLiterals =
   Stdlib.Test.all
     [ Darklang.PrettyPrinter.processRemainder "5" |> Stdlib.Test.equal "5"
@@ -171,7 +169,6 @@ test enums =
 // progressively shorter prefixes of the current module glued on. So the shortest
 // spelling that still resolves is the target's path minus its longest common
 // prefix with the current module. These cases are the shapes that matter.
-// @compiler xfail compile: "Unknown function or value 'short'" class=missing-support reason=upstream-dependency
 test shortening =
   Stdlib.Test.all
     [ // Same module: the leaf name alone.

@@ -3,7 +3,6 @@ module Darklang.Stdlib.Cli.Tui.TerminalSession
 
 
 /// The terminal surface currently owned by the session.
-// @compiler blocked: missing-implementation
 type Status =
   | Stopped
   | RunningInline
@@ -11,7 +10,6 @@ type Status =
 
 
 /// Retained presentation state for one terminal UI session.
-// @compiler blocked: missing-implementation
 type State =
   { status: Status
     previousView: Stdlib.Option.Option<Tui.View>
@@ -21,7 +19,6 @@ type State =
 /// A state transition and terminal update prepared without writing.
 ///
 /// This keeps lifecycle behavior testable without a real terminal.
-// @compiler blocked: missing-implementation
 type Prepared =
   { state: State
     output: String }
@@ -75,7 +72,6 @@ module Ansi =
   ///
   /// Supporting terminals display the update atomically; other terminals ignore
   /// the markers.
-  // @compiler blocked: missing-implementation
   let wrapUpdate (output: String) : String =
     if output == "" then
       ""
@@ -84,7 +80,6 @@ module Ansi =
 
 
 /// Create a stopped session with no retained view.
-// @compiler blocked: missing-implementation
 let init () : State =
   State {
     status = Status.Stopped
@@ -93,18 +88,17 @@ let init () : State =
   }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.armRestoreGuard: Unknown function or value 'Builtin.cliTerminalRestoreArm'"
 let armRestoreGuard (sequence: String) : Unit =
   Builtin.cliTerminalRestoreArm sequence
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.disarmRestoreGuard: Unknown function or value 'Builtin.cliTerminalRestoreDisarm'"
 let disarmRestoreGuard () : Unit =
   Builtin.cliTerminalRestoreDisarm ()
 
 
 /// Return the session status for a view mode.
-// @compiler blocked: missing-implementation
 let statusForMode (mode: Tui.ViewMode) : Status =
   match mode with
   | Fullscreen -> Status.RunningFullscreen
@@ -112,7 +106,6 @@ let statusForMode (mode: Tui.ViewMode) : Status =
 
 
 /// Return the fallback restoration sequence for a view mode.
-// @compiler blocked: missing-implementation
 let restoreForMode (mode: Tui.ViewMode) : String =
   match mode with
   | Fullscreen -> Ansi.restoreFullscreen
@@ -120,7 +113,6 @@ let restoreForMode (mode: Tui.ViewMode) : String =
 
 
 /// Return whether presenting a mode moves to a different terminal surface.
-// @compiler blocked: missing-implementation
 let changesSurface (status: Status) (mode: Tui.ViewMode) : Bool =
   match status, statusForMode mode with
   | RunningInline, RunningInline
@@ -135,7 +127,6 @@ let changesSurface (status: Status) (mode: Tui.ViewMode) : Bool =
 
 
 /// Build the terminal control prefix needed to present a view mode.
-// @compiler blocked: missing-implementation
 let transitionOutput (status: Status) (mode: Tui.ViewMode) : String =
   match status, mode with
   | Stopped, Fullscreen
@@ -147,7 +138,6 @@ let transitionOutput (status: Status) (mode: Tui.ViewMode) : String =
 
 
 /// Read and normalize the current terminal viewport dimensions.
-// @compiler blocked: missing-implementation
 let currentSize () : Tui.Size =
   let (width, height) = Darklang.Cli.Terminal.getSize ()
   Tui.Size {
@@ -165,7 +155,6 @@ let currentSize () : Tui.Size =
 /// Dynamic row content is sanitized and clipped only when a changed row is
 /// emitted. Keeping raw logical rows here makes unchanged frames cheap while
 /// the renderer remains the single terminal-safety boundary.
-// @compiler blocked: missing-implementation
 let normalizeView
   (size: Tui.Size)
   (view: Tui.View)
@@ -223,7 +212,6 @@ let normalizeView
 /// Moving between terminal surfaces or changing viewport size invalidates the
 /// retained view so the surface receives a complete redraw. Otherwise only
 /// changed rows are emitted.
-// @compiler blocked: missing-implementation
 let preparePresentAtSize
   (state: State)
   (size: Tui.Size)
@@ -276,7 +264,7 @@ let preparePresentAtSize
 ///
 /// This is useful when a layout needs to use the same size sample that the
 /// session records for resize detection.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.presentAtSize: Unknown function or value 'armRestoreGuard'"
 let presentAtSize
   (state: State)
   (size: Tui.Size)
@@ -313,7 +301,7 @@ let presentAtSize
 ///
 /// Empty updates are not written. `Stdlib.print` queues each non-empty update
 /// as one complete value for the host's single `Console.Write`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.present: Unknown function or value 'presentAtSize'"
 let present (state: State) (next: Tui.View) : State =
   presentAtSize state (currentSize ()) next
 
@@ -322,7 +310,7 @@ let present (state: State) (next: Tui.View) : State =
 ///
 /// Terminal support is checked before writing any terminal control sequences.
 /// Continuing an existing session uses `presentAtSize`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.startAtSize: Unknown function or value 'presentAtSize'"
 let startAtSize
   (size: Tui.Size)
   (next: Tui.View)
@@ -338,7 +326,7 @@ let startAtSize
 
 
 /// Start a terminal session using the current terminal size.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.start: Unknown function or value 'present'"
 let start (next: Tui.View) : Stdlib.Result.Result<State, String> =
   match TerminalSupport.current () with
   | Available ->
@@ -358,7 +346,7 @@ let start (next: Tui.View) : Stdlib.Result.Result<State, String> =
 ///
 /// Falls back to a blank session if the terminal has become unavailable, so a resume can't fail the caller.
 /// Every `SubApp.onResume` is this plus rebuilding the app around the result.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.resumed: Unknown function or value 'startAtSize'"
 let resumed (viewFor: Tui.Size -> Tui.View) : State =
   let size = currentSize ()
   match startAtSize size (viewFor size) with
@@ -369,7 +357,6 @@ let resumed (viewFor: Tui.Size -> Tui.View) : State =
 /// Prepare normal terminal restoration and reset the session.
 ///
 /// Calling this on a stopped session is safe and produces no output.
-// @compiler blocked: missing-implementation
 let prepareStop (state: State) : Prepared =
   let output =
     match state.status with
@@ -381,7 +368,7 @@ let prepareStop (state: State) : Prepared =
 
 
 /// Stop the session and restore terminal state with one stdout write.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.stop: Unknown function or value 'disarmRestoreGuard'"
 let stop (state: State) : State =
   let prepared = prepareStop state
 
@@ -403,7 +390,6 @@ let stop (state: State) : State =
 /// rows such as completion hints are dropped, or every row for a discarded
 /// prompt — and the cursor parks on the final view's last row so subsequent
 /// output begins on the following line.
-// @compiler blocked: missing-implementation
 let prepareStopInlineWithView
   (state: State)
   (final: Tui.View)
@@ -435,7 +421,7 @@ let prepareStopInlineWithView
 
 
 /// Stop an inline session on a final view with one logical terminal update.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.TerminalSession.stopInlineWithView: Unknown function or value 'disarmRestoreGuard'"
 let stopInlineWithView (state: State) (final: Tui.View) : State =
   let prepared = prepareStopInlineWithView state final
 

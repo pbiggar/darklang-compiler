@@ -3,14 +3,12 @@ module Darklang.Cli.Packages.Errors
 
 /// Whether an invalid name uses the internal `PACKAGE.` notation, allowing the
 /// CLI to show its source spelling.
-// @compiler blocked: missing-implementation
 let isInternalPackageName (originalName: List<String>) : Bool =
   match originalName with
   | "PACKAGE" :: _ -> true
   | _ -> false
 
 
-// @compiler blocked: missing-implementation
 let sourceNameWithoutInternalPrefix (originalName: List<String>) : String =
   let sourceParts =
     match originalName with
@@ -21,7 +19,6 @@ let sourceNameWithoutInternalPrefix (originalName: List<String>) : String =
   Stdlib.String.join sourceParts "."
 
 
-// @compiler blocked: missing-implementation
 let splitLast
   (parts: List<String>)
   : Stdlib.Option.Option<(List<String> * String)> =
@@ -33,7 +30,7 @@ let splitLast
 
 /// Suggest the `Stdlib.`-qualified form of an unresolved multi-part name when
 /// an item exists at that standard-library location.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Errors.stdlibSuggestion: Unknown function or value 'LanguageTools.PackageManager.findAny'"
 let stdlibSuggestion
   (branchId: Uuid)
   (originalName: List<String>)
@@ -59,7 +56,6 @@ let stdlibSuggestion
 
 
 /// Prints the first parse diagnostic. Returns true when parsing failed.
-// @compiler blocked: missing-implementation
 let reportParseErrors
   (diagnostics: List<(LanguageTools.Parser.Range * String)>)
   : Bool =
@@ -81,7 +77,7 @@ let reportParseErrors
 /// The arguments are joined into one source, so a stray extra one parses as a second
 /// declaration or a bare expression. Taking the first declaration and ignoring the rest
 /// saved `dark val Me.A.x 42L zzznope` as `42L` and reported success.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.WrittenTypes.SourceFile.SourceFile'"
 let reportTrailing (sourceFile: LanguageTools.WrittenTypes.SourceFile.SourceFile) : Bool =
   let decls = Stdlib.List.length sourceFile.declarations
   let extra = decls + (Stdlib.List.length sourceFile.exprsToEval) - 1
@@ -96,7 +92,6 @@ let reportTrailing (sourceFile: LanguageTools.WrittenTypes.SourceFile.SourceFile
 
 /// The unresolved names in one line, `Nope.missing (line 1), Other.thing (line 3)`, for a surface with no
 /// room for <fn reportUnresolvedNames>'s list: the workbench's footer.
-// @compiler blocked: missing-implementation
 let unresolvedNamesText
   (unresolvedNames:
     List<LanguageTools.Parser.Range
@@ -114,7 +109,7 @@ let unresolvedNamesText
 /// Returns true if there are invalid names (which block creation).
 /// Unresolved names are allowed in WIP — they'll be resolved by WipRefresh when
 /// the missing items are added, and rejected at commit time if still unresolved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Errors.reportUnresolvedNames: Unknown function or value 'stdlibSuggestion'"
 let reportUnresolvedNames
   (branchId: Uuid)
   (unresolvedNames:

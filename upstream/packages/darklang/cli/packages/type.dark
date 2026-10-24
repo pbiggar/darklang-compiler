@@ -1,7 +1,7 @@
 module Darklang.Cli.Packages.Type
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [] ->
@@ -34,7 +34,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
         state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let createTypeInline
   (currentLocation: Packages.PackageLocation)
   (locationStr: String)
@@ -111,7 +111,7 @@ let createTypeInline
     Cli.exitWith state false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [
     "Create or update a type"
@@ -148,6 +148,6 @@ let help (_state: Cli.AppState) : String =
 
 /// CLEANUP could offer useful completions: nav-style help on the LHS of the `=`;
 /// probably nothing on the RHS.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (_args: List<String>) : List<Cli.Completion.CompletionItem> =
   []

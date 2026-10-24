@@ -7,13 +7,13 @@ type ParseError =
   | OutOfRange
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Modulo for Int8 requires an explicit replacement contract"
 impl Modulo for Int8 =
   /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
   /// The modulus <param b> must be greater than 0.
   /// Use <fn Int8.remainder> if you want the remainder after division, which has
   /// a different behavior for negative numbers.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Modulo for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Modulo for Int8 requires an explicit replacement contract"
   let modulo (a: Int8) (b: Int8) : Int8 = Builtin.int8Mod a b
 
 
@@ -31,65 +31,65 @@ let remainder
   Builtin.int8Remainder value divisor
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Add for Int8 requires an explicit replacement contract"
 impl Add for Int8 =
   /// Adds two 8-bit signed integers together (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Add for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Add for Int8 requires an explicit replacement contract"
   let add (a: Int8) (b: Int8) : Int8 = Builtin.int8Add a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Subtract for Int8 requires an explicit replacement contract"
 impl Subtract for Int8 =
   /// Subtracts two 8-bit signed integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Subtract for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Subtract for Int8 requires an explicit replacement contract"
   let subtract (a: Int8) (b: Int8) : Int8 = Builtin.int8Subtract a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Multiply for Int8 requires an explicit replacement contract"
 impl Multiply for Int8 =
   /// Multiplies two 8-bit signed integers (wraps on overflow)
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Multiply for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Multiply for Int8 requires an explicit replacement contract"
   let multiply (a: Int8) (b: Int8) : Int8 = Builtin.int8Multiply a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Power for Int8 requires an explicit replacement contract"
 impl Power for Int8 =
   /// Raise <param base> to the power of <param exponent>.
   /// Overflow wraps around.
   /// Raises an error if <param exponent> is negative.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Power for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Power for Int8 requires an explicit replacement contract"
   let power (``base``: Int8) (exponent: Int8) : Int8 =
     Builtin.int8Power ``base`` exponent
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Divide for Int8 requires an explicit replacement contract"
 impl Divide for Int8 =
   /// Divides two 8-bit signed integers
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Divide for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Divide for Int8 requires an explicit replacement contract"
   let divide (a: Int8) (b: Int8) : Int8 = Builtin.int8Divide a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Negate for Int8 requires an explicit replacement contract"
 impl Negate for Int8 =
   /// Returns the negation of <param a>, {{-a}}. Negating the minimum value wraps back to itself.
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Negate for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Negate for Int8 requires an explicit replacement contract"
   let negate (a: Int8) : Int8 = Builtin.int8Negate a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Compare for Int8 requires an explicit replacement contract"
 impl Compare for Int8 =
   /// Returns {{true}} if <param a> is less than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Compare for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Compare for Int8 requires an explicit replacement contract"
   let lessThan (a: Int8) (b: Int8) : Bool = Builtin.int8LessThan a b
   /// Returns {{true}} if <param a> is less than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Compare for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Compare for Int8 requires an explicit replacement contract"
   let lessThanOrEqualTo (a: Int8) (b: Int8) : Bool =
     Builtin.int8LessThanOrEqualTo a b
   /// Returns {{true}} if <param a> is greater than <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Compare for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Compare for Int8 requires an explicit replacement contract"
   let greaterThan (a: Int8) (b: Int8) : Bool = Builtin.int8GreaterThan a b
   /// Returns {{true}} if <param a> is greater than or equal to <param b>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Compare for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Compare for Int8 requires an explicit replacement contract"
   let greaterThanOrEqualTo (a: Int8) (b: Int8) : Bool =
     Builtin.int8GreaterThanOrEqualTo a b
 
@@ -169,59 +169,59 @@ let fromUInt128 (i: UInt128) : Stdlib.Option.Option<Int8> =
   Builtin.int8FromUInt128 i
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseAnd for Int8 requires an explicit replacement contract"
 impl BitwiseAnd for Int8 =
   /// Bitwise AND on two <type Int8> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl BitwiseAnd for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseAnd for Int8 requires an explicit replacement contract"
   let bitwiseAnd (a: Int8) (b: Int8) : Int8 = Builtin.int8BitwiseAnd a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseOr for Int8 requires an explicit replacement contract"
 impl BitwiseOr for Int8 =
   /// Bitwise OR on two <type Int8> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl BitwiseOr for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseOr for Int8 requires an explicit replacement contract"
   let bitwiseOr (a: Int8) (b: Int8) : Int8 = Builtin.int8BitwiseOr a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseXor for Int8 requires an explicit replacement contract"
 impl BitwiseXor for Int8 =
   /// Bitwise XOR on two <type Int8> values
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl BitwiseXor for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseXor for Int8 requires an explicit replacement contract"
   let bitwiseXor (a: Int8) (b: Int8) : Int8 = Builtin.int8BitwiseXor a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseNot for Int8 requires an explicit replacement contract"
 impl BitwiseNot for Int8 =
   /// Bitwise NOT on an <type Int8> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl BitwiseNot for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl BitwiseNot for Int8 requires an explicit replacement contract"
   let bitwiseNot (a: Int8) : Int8 = Builtin.int8BitwiseNot a
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl ShiftLeft for Int8 requires an explicit replacement contract"
 impl ShiftLeft for Int8 =
   /// Bitwise left shift of an <type Int8> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl ShiftLeft for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl ShiftLeft for Int8 requires an explicit replacement contract"
   let shiftLeft (a: Int8) (b: Int8) : Int8 = Builtin.int8ShiftLeft a b
 
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl ShiftRight for Int8 requires an explicit replacement contract"
 impl ShiftRight for Int8 =
   /// Bitwise right shift of an <type Int8> value
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl ShiftRight for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl ShiftRight for Int8 requires an explicit replacement contract"
   let shiftRight (a: Int8) (b: Int8) : Int8 = Builtin.int8ShiftRight a b
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl ToString for Int8 requires an explicit replacement contract"
 impl ToString for Int8 =
   /// Stringify <param int8>
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl ToString for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl ToString for Int8 requires an explicit replacement contract"
   let toString (int8: Int8) : String = Builtin.int8ToString int8
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Zero for Int8 requires an explicit replacement contract"
 impl Zero for Int8 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl Zero for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl Zero for Int8 requires an explicit replacement contract"
   let zero () : Int8 = 0y
 
-// @compiler blocked: container-adaptation
+// @compiler blocked: container-adaptation diagnostic="Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl One for Int8 requires an explicit replacement contract"
 impl One for Int8 =
-  // @compiler blocked: container-adaptation
+  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.Int8.impl One for Int8: Already selected from packages/darklang/stdlib/int8.dark; importing another declaration of Darklang.Stdlib.Int8.impl One for Int8 requires an explicit replacement contract"
   let one () : Int8 = 1y

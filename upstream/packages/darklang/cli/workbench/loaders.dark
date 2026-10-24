@@ -6,7 +6,7 @@ module Darklang.Cli.Workbench
 /// A one-line, clipped rendering of a value's body for the row description:
 /// `"hello"`, `[1, 2, 3]`. First line only, and no more than `width`
 /// columns - a value can be a whole table.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let valueDesc (ctx: PrettyPrinter.ProgramTypes.Context) (body: LanguageTools.ProgramTypes.Expr) (width: Int) : String =
   let printed = PrettyPrinter.ProgramTypes.expr ctx body
   let firstLine = Stdlib.String.split printed "\n" |> Stdlib.List.head |> Stdlib.Option.withDefault printed
@@ -17,7 +17,7 @@ let valueDesc (ctx: PrettyPrinter.ProgramTypes.Context) (body: LanguageTools.Pro
 
 /// The rows of a module for the Code list: its submodules, then types, values, fns, traits,
 /// implementations and tests, by name. Names only; the Inspect pane says what each is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let loadItems (branchId: Uuid) (location: Packages.PackageLocation) : List<BodyItem> =
   moduleRows branchId location false
 
@@ -25,7 +25,7 @@ let loadItems (branchId: Uuid) (location: Packages.PackageLocation) : List<BodyI
 /// type's shape, a value's literal - so the Inspect pane's preview of a
 /// module reads as a table of contents. Not for the list: there a signature
 /// clipped to a prefix that told no two rows apart.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let moduleContents
   (branchId: Uuid)
   (location: Packages.PackageLocation)
@@ -35,7 +35,7 @@ let moduleContents
 /// A module's rows in display order. `describe` fills the description
 /// column, which pretty-prints every signature and literal, so the list,
 /// which reloads on every move, leaves it off.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let moduleRows
   (branchId: Uuid)
   (location: Packages.PackageLocation)
@@ -142,20 +142,18 @@ let moduleRows
 ///
 /// No branch to pass: `SCM.Draft.read ()` resolves through the process branch overlay, which `onBranch`
 /// keeps in step with `state.branchId`. For any OTHER branch, ask `draftBindingsFor` by id.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.wipItemCount: Unknown function or value 'SCM.Draft.read'"
 let wipItemCount () : Int =
   Stdlib.List.length (SCM.Draft.read ()).bindings
 
 /// The glyph a Changes row leads with, by what the row is: a fn, a type, a
 /// value, a test, a removal, or a conflict waiting on you.
-// @compiler blocked: missing-implementation
 let changeIcon (kind: String) : String =
   if kind == "conflict" then "⚠"
   else if kind == "removed" then "✕"
   else Stdlib.String.trim (Darklang.Cli.Glyphs.forKind kind)
 
 /// `+3 -1` for a diff, dim; "" for a diff with no changed lines.
-// @compiler blocked: missing-implementation
 let diffStat (lines: List<Stdlib.Diff.DiffLine>) : String =
   let added = lines |> Stdlib.List.filter (fun l -> match l with | Added _ -> true | _ -> false) |> Stdlib.List.length
   let removed = lines |> Stdlib.List.filter (fun l -> match l with | Removed _ -> true | _ -> false) |> Stdlib.List.length
@@ -177,7 +175,7 @@ let diffStat (lines: List<Stdlib.Diff.DiffLine>) : String =
 ///
 /// The row's `name` stays the bare full path: the detail and the reader look the item up by
 /// it. The icon is drawn by the list from `kind`, and the change is in `desc`, pre-coloured.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.loadChangedItems: Unknown function or value 'SCM.Conflicts.pending'"
 let loadChangedItems (branchId: Uuid) : List<BodyItem> =
   let paint (color: String) (s: String) : String = Stdlib.Cli.UI.Colors.colorize color s
   let dim (s: String) : String = Stdlib.Cli.UI.Colors.dimText s
@@ -216,7 +214,7 @@ let loadChangedItems (branchId: Uuid) : List<BodyItem> =
   Stdlib.List.flatten [ conflictRows, changed, removed ]
 
 /// History and Home share the same store-wide commit order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.recentCommitRows: Unknown function or value 'SCM.Commits.recent'"
 let recentCommitRows (limit: Int64) : List<ScmJson.CommitRowJson> =
   SCM.Commits.recent limit
   |> Stdlib.List.map (fun c ->
@@ -226,7 +224,7 @@ let recentCommitRows (limit: Int64) : List<ScmJson.CommitRowJson> =
 
 /// Recent commits across all branches, one line each, for the reader Home's
 /// "more commits" row opens.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.commitListText: Unknown function or value 'recentCommitRows'"
 let commitListText () : String =
   let rows =
     recentCommitRows 30L
@@ -241,7 +239,7 @@ let commitListText () : String =
     "\n"
 
 /// The ops of the selected commit, rendered for the reader. Capped - a seed commit can have 10k+ ops.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.commitOpsText: Unknown function or value 'recentCommitRows'"
 let commitOpsText (branchId: Uuid) (selected: Int) : String =
   let commits = recentCommitRows 30L
   match Stdlib.List.getAt commits selected with
@@ -273,7 +271,7 @@ let commitOpsText (branchId: Uuid) (selected: Int) : String =
 /// it belongs to. A highlighted line carries resets, which would end the wash
 /// mid-line; the wash is re-asserted after each, and the line is padded so it
 /// reads as a highlighter stroke to the pane's edge.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderDiffLines (lines: List<Stdlib.Diff.DiffLine>) (state: State) : List<String> =
   let textOf (dl: Stdlib.Diff.DiffLine) : String =
     match dl with
@@ -333,7 +331,7 @@ let renderDiffLines (lines: List<Stdlib.Diff.DiffLine>) (state: State) : List<St
 /// The diff of one draft binding against `previous`, its hashes before the draft (see
 /// `Cli.Commit.previousHashesOf`), newest first. Takes them rather than looking them up so a
 /// caller that already has them - the Changes list, once per row - pays for the lookup once.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.bindingDiff: Unknown function or value 'Cli.Conflicts.renderItem'"
 let bindingDiff
   (branchId: Uuid)
   (b: SCM.Conflicts.Binding)
@@ -359,7 +357,7 @@ let bindingDiff
   else
     Stdlib.Diff.lines oldText newText
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.sourceDiffFor: Unknown function or value 'SCM.PackageOps.draftBindingsFor'"
 let sourceDiffFor (branchId: Uuid) (fqn: String) : List<Stdlib.Diff.DiffLine> =
   let binding =
     SCM.PackageOps.draftBindingsFor branchId
@@ -372,7 +370,7 @@ let sourceDiffFor (branchId: Uuid) (fqn: String) : List<Stdlib.Diff.DiffLine> =
 
 /// The selected draft item's diff, as text. Matched by name so it lines up with the workbench's
 /// own WIP list regardless of ordering.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let wipDiffText (state: State) : String =
   match Stdlib.List.getAt state.items state.selected with
   | None -> "(no change selected)"
@@ -389,7 +387,7 @@ let wipDiffText (state: State) : String =
 /// needs and what the policy says about that, then what it uses and what uses it. The same blocks the
 /// tree's item page shows, because a person reviewing a draft asks the same three questions of it
 /// that they ask of anything else, plus "what moved".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let changedItemDetail (state: State) : List<String> =
   match Stdlib.List.getAt state.items state.selected with
   | None -> [ "(no change selected)" ]
@@ -415,7 +413,7 @@ let changedItemDetail (state: State) : List<String> =
 /// The current source of a WIP item, for the Changes reader. By the ROW, not
 /// an index: the list is filterable, so an index into a fresh load would name
 /// whatever sat at that position in the whole list.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.changesSourceText: Unknown function or value 'Packages.Query.searchExactMatch'"
 let changesSourceText (branchId: Uuid) (row: Stdlib.Option.Option<BodyItem>) : String =
   match row with
   | None -> "(no change selected)"
@@ -457,7 +455,7 @@ let changesSourceText (branchId: Uuid) (row: Stdlib.Option.Option<BodyItem>) : S
 
 /// Run a package search across the whole tree and return jumpable hits (each carries its module path + leaf so
 /// Enter can navigate there). The `/` global action opens these in the search-results mode.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.runSearch: Unknown function or value 'LanguageTools.PackageManager.Search.search'"
 let runSearch (branchId: Uuid) (queryText: String) : List<SearchHit> =
   let query =
     LanguageTools.ProgramTypes.Search.SearchQuery
@@ -491,18 +489,17 @@ let runSearch (branchId: Uuid) (queryText: String) : List<SearchHit> =
   |> Stdlib.List.sortBy rank
 
 /// How many references a list on the item page shows before pointing at `:deps`.
-// @compiler blocked: missing-implementation
 val referenceCap = 12
 
 /// What `leaf` in `modulePath` uses and what uses it, spelled from `state.location`. The tree page
 /// and the Changes preview both show this; the Changes list carries full paths, which is why the
 /// module path is a parameter rather than read off the location.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let referencesText (state: State) (modulePath: List<String>) (leaf: String) (kind: String) : String =
   referencesFrom state modulePath leaf kind (Packages.Query.searchExactMatch state.branchId modulePath leaf)
 
 /// <fn referencesText>, from a lookup the caller already made.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let referencesFrom
   (state: State)
   (modulePath: List<String>)
@@ -582,7 +579,7 @@ let referencesFrom
 
 
 /// Read the badge sets for a state: which items have uncommitted edits, and which are deprecated.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let readBadges (state: State) : (List<String> * List<String>) =
   // Only the Matter tree shows badges, and the values lens hides them, so everything else skips both reads.
   if (state.activeView != vMatter) || (state.matter.lens == Lens.ValuesOnly) then
@@ -609,7 +606,7 @@ let readBadges (state: State) : (List<String> * List<String>) =
 ///
 /// The dependency is the branch, where you are, the lens, the view, and the item list itself (a commit or a
 /// discard changes what's uncommitted without moving you). Comparing those is cheap; the reads are not.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let refreshBadges (previous: State) (next: State) : State =
   let unchanged =
     (previous.branchId == next.branchId)
@@ -636,7 +633,7 @@ let refreshBadges (previous: State) (next: State) : State =
 /// ops, so on those paths the comparison would carry a stale "N need you" over work you have just
 /// answered. `forceScmRefresh` covers them, and it is a separate function rather than a flag so a caller
 /// has to mean it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let refreshScmStatus (previous: State) (next: State) : State =
   let unchanged =
     next.scmStatus.loaded
@@ -650,7 +647,7 @@ let refreshScmStatus (previous: State) (next: State) : State =
 
 /// Re-read the SCM picture whatever the counts say. For the actions that change it without moving an op
 /// count: an ack, and any command run in a frame (a pull lands other people's commits).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let forceScmRefresh (state: State) : State =
   { state with scmStatus = readScmStatus state.branchId, preview = Stdlib.Option.Option.None, liveFor = "" }
 
@@ -671,7 +668,7 @@ let forceScmRefresh (state: State) : State =
 /// code as it is now, each call's value rendered for the printer to put beside it. Runs user code,
 /// so it happens here on the transition. Nothing recorded, or a run that fails, leaves the pane as
 /// it was: the source, with no values beside it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let refreshLiveValues (next: State) : State =
   let selectedFn =
     if next.activeView != vMatter then
@@ -709,7 +706,7 @@ let refreshLiveValues (next: State) : State =
 
       { next with liveValues = values, liveFor = key, liveNote = note }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let refreshPeek (next: State) : State =
   let peek =
     if (next.activeView != vMatter) || (next.matter.lens == Lens.ValuesOnly) then

@@ -7,7 +7,7 @@ module Darklang.Cli.Backups
 // lives here rather than in `ls`, and so does the pruning.
 
 /// Where the upgrade path puts them: a `backups` directory beside the store.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Backups.backupDir: Unknown function or value 'Stdlib.LocalStore.path'"
 let backupDir () : String =
   let db = Stdlib.LocalStore.path ()
 
@@ -19,7 +19,7 @@ let backupDir () : String =
 /// (`before-upgrade-`, `manual-`, `pre-restore-`), and a name sort groups by prefix before it looks
 /// at the stamp -- which made `prune` keep a January backup over this week's. Every name ends in
 /// its stamp (both stamp shapes sort correctly as text), so ordering by the digits alone is right.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Backups.list: Unknown function or value 'backupDir'"
 let list () : List<String> =
   let stampOf (n: String) : String =
     n |> Stdlib.String.toList |> Stdlib.List.filter Stdlib.Char.isDigit |> Stdlib.String.fromList
@@ -32,14 +32,14 @@ let list () : List<String> =
     |> Stdlib.List.reverse
   | Error _ -> []
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Backups.sizeOf: Unknown function or value 'backupDir'"
 let sizeOf (name: String) : String =
   match Stdlib.Cli.File.size $"{backupDir ()}/{name}" with
   | Ok bytes -> Cli.Text.bytes bytes
   | Error _ -> "?"
 
 /// `dark backups`
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeList (state: AppState) : AppState =
   match list () with
   | [] ->
@@ -63,7 +63,7 @@ let executeList (state: AppState) : AppState =
 
 /// `dark backups now`. Named for the moment rather than the day, so an on-demand copy never collides
 /// with the upgrade path's daily one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeNow (state: AppState) : AppState =
   let dir = backupDir ()
   let _ = Stdlib.Cli.Dir.createRecursive dir
@@ -83,7 +83,7 @@ let executeNow (state: AppState) : AppState =
 
 /// `dark backups restore <name> [-y]`. Puts the named backup in place of the store. The store as it is
 /// now is copied aside first (`data.db.pre-restore-<stamp>`), so a restore is itself undoable.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeRestore (state: AppState) (name: String) (autoConfirm: Bool) : AppState =
   let source = $"{backupDir ()}/{name}"
 
@@ -131,7 +131,7 @@ let executeRestore (state: AppState) (name: String) (autoConfirm: Bool) : AppSta
 /// `dark backups prune <keep> [-y]`. Deletes the oldest, keeping the newest <keep>. Shows what would go
 /// and takes an explicit yes, like every other verb that destroys something: a backup is the thing you
 /// reach for AFTER a mistake, and the one command that must not make one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executePrune (state: AppState) (keepArg: String) (autoConfirm: Bool) : AppState =
   match Stdlib.Int.parse keepArg with
   | Error _ ->
@@ -178,7 +178,7 @@ let executePrune (state: AppState) (keepArg: String) (autoConfirm: Bool) : AppSt
         Cli.exitWith state (Stdlib.List.length deleted == Stdlib.List.length doomed)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   match args with
   | [] -> executeList state
@@ -203,7 +203,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
     Cli.exitWith state false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ ""
     "  dark backups                      what copies of the store exist"
@@ -218,7 +218,7 @@ let help (_state: AppState) : String =
   |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete
   (_state: AppState)
   (args: List<String>)

@@ -1,0 +1,21 @@
+// Unqualified constructors use the nearest lexical type declarations.
+module Imported =
+  type Remote = | ScopeCase of Int64
+module Local =
+  type Own = | ScopeCase of String
+  let describe () : String =
+    let value = ScopeCase "local"
+    match value with | ScopeCase text -> text
+type Root = | ScopeCase of Bool
+module Child =
+  let parent () : Bool =
+    let value = ScopeCase false
+    match value with | ScopeCase flag -> flag
+
+Local.describe () = "local"
+let value = ScopeCase true in match value with | ScopeCase flag -> flag = true
+Child.parent () = false
+match Imported.Remote.ScopeCase 5L with | ScopeCase n -> n = 5L
+
+// Two owners in the same scope still require an expected type.
+type AmbiguousFirst = ScopeDuplicate of Int64 type AmbiguousSecond = ScopeDuplicate of String ScopeDuplicate 1L = compileerror="requires an expected enum type"

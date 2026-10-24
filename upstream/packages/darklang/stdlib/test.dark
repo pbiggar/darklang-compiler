@@ -19,14 +19,14 @@ let raiseRuntimeError (message: String) : Int64 =
 /// Increment this test's counter and return the value unchanged. Use to check
 /// how often a callback or expression runs. The counter starts at zero for each
 /// test run and is shared with its helper calls. Only available in package tests.
-// @compiler blocked: test-counter
+// @compiler blocked: test-counter diagnostic="Darklang.Stdlib.Test.incrementCounter: Unknown function or value 'Builtin.testIncrementCounter'"
 let incrementCounter (value: 'a) : 'a =
   Builtin.testIncrementCounter value
 
 /// Return this test's counter, which starts at zero for each test run.
 /// Tests using the counter rerun rather than reuse a cached pass.
 /// Only available in package tests; no database or host permissions needed.
-// @compiler blocked: test-counter
+// @compiler blocked: test-counter diagnostic="Darklang.Stdlib.Test.counterValue: Unknown function or value 'Builtin.testCounterValue'"
 let counterValue () : Int64 =
   Builtin.testCounterValue ()
 

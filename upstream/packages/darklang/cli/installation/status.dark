@@ -1,7 +1,7 @@
 module Darklang.Cli.Installation.Status
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let host = (Stdlib.Cli.Host.getRuntimeHost ()) |> Builtin.unwrap
   let currentMode = Installation.System.getInstallationMode ()
@@ -26,12 +26,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
   state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
   []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: status"

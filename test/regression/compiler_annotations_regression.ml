@@ -71,8 +71,36 @@ let () =
       "module Tests =\n  // @compiler blocked: test-counter\n  test once = 1"
   in
   require
-    (A.at entries { Tokenizer.row = 2; column = 2 } = A.Blocked "test-counter")
+    (A.at entries { Tokenizer.row = 2; column = 2 }
+    = A.Blocked { reason = "test-counter"; diagnostic = None })
     "Nested test lost metadata";
+  let entries =
+    accepts
+      [ item 1 0 false ]
+      "// @compiler blocked: test-counter diagnostic=\"Unknown function \
+       'counter'\"\n\
+       let count () : Int = 1"
+  in
+  require
+    (A.at entries { Tokenizer.row = 1; column = 0 }
+    = A.Blocked
+        {
+          reason = "test-counter";
+          diagnostic = Some "Unknown function 'counter'";
+        })
+    "Blocked diagnostic was not preserved";
+  List.iter
+    (fun suffix ->
+      rejects
+        [ item 1 0 false ]
+        ("// @compiler blocked: test-counter " ^ suffix
+       ^ "\nlet count () : Int = 1"))
+    [
+      "diagnostic=\"\"";
+      "diagnostic=null";
+      "diagnostic=unquoted";
+      "other=\"text\"";
+    ];
   let entries =
     accepts
       [ item 1 0 false ]

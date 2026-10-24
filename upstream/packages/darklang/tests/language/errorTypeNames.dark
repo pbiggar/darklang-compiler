@@ -12,7 +12,7 @@ module AmbiguousHash =
   // one survived rather than each of them.
   let takesIntParseError (e: Darklang.Stdlib.Int.ParseError) : Int = 1
   let takesUuidParseError (e: Darklang.Stdlib.Uuid.ParseError) : Int = 2
-  // @compiler blocked: compiler-gap
+  // @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.ErrorTypeNames.AmbiguousHash.returnsIntParseError: Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   let returnsIntParseError (n: Int) : Darklang.Stdlib.Int.ParseError = n
 
   // One hash, three declarations, three names printed.
@@ -78,14 +78,14 @@ module RecordAndEnumFields =
   type HasUuidParseErrors = { es: List<Darklang.Stdlib.Uuid.ParseError> }
   type WrapsUuidParseError = | Wrap of Darklang.Stdlib.Uuid.ParseError
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.ErrorTypeNames.RecordAndEnumFields.makeIntRecord: Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   let makeIntRecord () : HasIntParseError = HasIntParseError { e = 5 }
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.ErrorTypeNames.RecordAndEnumFields.makeUuidRecord: Expected TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])), got TInt"
   let makeUuidRecord () : HasUuidParseErrors = HasUuidParseErrors { es = 5 }
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.ErrorTypeNames.RecordAndEnumFields.makeEnum: Expected TSum (\"Darklang.Stdlib.Uuid.ParseError\", []), got TInt"
   let makeEnum () : WrapsUuidParseError = WrapsUuidParseError.Wrap 5
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: aot-type-error diagnostic="Darklang.Language.Tests.ErrorTypeNames.RecordAndEnumFields.updateIntRecord: Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   let updateIntRecord () : HasIntParseError =
     let start =
       HasIntParseError { e = Darklang.Stdlib.Int.ParseError.BadFormat }

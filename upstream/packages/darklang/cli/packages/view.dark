@@ -3,7 +3,7 @@ module Darklang.Cli.Packages.View
 
 /// Resolve a replacement Reference to a human-readable location name for the
 /// current branch, falling back to a short hash if no location is bound.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.View.resolveReplacementName: Unknown function or value 'LanguageTools.PackageManager.Function.locations'"
 let resolveReplacementName
   (branchId: Uuid)
   (ref: LanguageTools.ProgramTypes.Reference)
@@ -32,7 +32,7 @@ let resolveReplacementName
 ///
 /// Reading an item and writing it back should be a pipe. Stripping a trailer and a
 /// prefix with `sed` is a screen-scrape: it works until the display changes.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let rawSource
   (branchId: Uuid)
   (location: PackageLocation)
@@ -83,7 +83,7 @@ let rawSource
 
 
 /// Print `rawSource`, or say why there is none.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let printRaw (branchId: Uuid) (location: PackageLocation) : Unit =
   match rawSource branchId location with
   | Ok src -> Stdlib.printLine src
@@ -91,7 +91,7 @@ let printRaw (branchId: Uuid) (location: PackageLocation) : Unit =
 
 
 /// Build a deprecation header for an item, if any.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.View.deprecationHeaderRowsFor: Unknown function or value 'LanguageTools.PackageManager.currentDeprecation'"
 let deprecationHeaderRowsFor
   (branchId: Uuid)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -134,14 +134,12 @@ let deprecationHeaderRowsFor
 
 
 /// Split rendered source into logical terminal rows.
-// @compiler blocked: missing-implementation
 let sourceRows (source: String) : List<String> =
   if source == "" then [ "" ] else Stdlib.String.split source "\n"
 
 
 /// Build the complete textual representation of an entity without printing it.
 /// A printer context for `modulePath`, laid out for the terminal's width rather than a fixed 80.
-// @compiler blocked: missing-implementation
 let terminalContext (branchId: Uuid) (modulePath: List<String>) : PrettyPrinter.ProgramTypes.Context =
   let (width, _rows) = Terminal.getSize ()
   { PrettyPrinter.ProgramTypes.Context.forModule branchId modulePath with width = width }
@@ -154,7 +152,7 @@ let terminalContext (branchId: Uuid) (modulePath: List<String>) : PrettyPrinter.
 ///
 /// <param cmdPrefix> is how the reader runs a command where these rows are
 /// shown: "dark " in a shell, ":" in the workbench's command bar.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.View.testRows: Unknown function or value 'Query.loadDeprecationSets'"
 let testRows
   (branchId: Uuid)
   (location: LanguageTools.ProgramTypes.PackageLocation)
@@ -214,7 +212,7 @@ let testRows
 
 
 /// <param includeTests> appends a function's tests (`view --include-tests`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let entityRows
   (branchId: Uuid)
   (location: PackageLocation)
@@ -440,7 +438,7 @@ let entityRows
       ]
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let viewEntity
   (branchId: Uuid)
   (location: PackageLocation)
@@ -451,7 +449,7 @@ let viewEntity
 
 /// What `view` shows. Source is the default and the only one that works for every kind of item; the
 /// other two are compiler views of a function.
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 2776: Darklang.Cli.Packages.View.ViewMode.Source, Darklang.Stdlib.Float.ParseError.BadFormat"
 type ViewMode =
   | Source
   /// The declaration alone: no highlighting, no deprecation header, no capabilities
@@ -465,7 +463,7 @@ type ViewMode =
   | Instructions
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ViewMode'"
 let modeName (mode: ViewMode) : String =
   match mode with
   | Source -> "source"
@@ -493,7 +491,7 @@ let modeName (mode: ViewMode) : String =
 /// Flags are accepted in any position, so `view --ast List.last` and `view List.last --ast` both work.
 /// Returns the path (if one was given), the mode, and whether `--include-tests` was passed, or
 /// an error naming the bad flag.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ViewMode'"
 let parseArgs
   (args: List<String>)
   : Stdlib.Result.Result<(Stdlib.Option.Option<String> * ViewMode * Bool), String> =
@@ -531,7 +529,7 @@ let parseArgs
 
 /// The function at a location, if the location names one. `--ast` and `--instructions` are function-only
 /// views, and saying which kind of thing you actually pointed at beats a bare "not found".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let fnAt
   (branchId: Uuid)
   (location: PackageLocation)
@@ -562,7 +560,7 @@ let fnAt
 
 /// The ProgramTypes tree, indented by depth. Node kinds are colored and payloads dimmed, so the shape
 /// reads at a glance and the detail is there when you look for it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let astRows
   (branchId: Uuid)
   (name: String)
@@ -585,7 +583,7 @@ let astRows
 
 /// The disassembly, plus any lambdas defined inside it. Lambdas get their own section rather than being
 /// inlined, because `CreateLambda` is otherwise a dead end in the listing.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.Instructions'"
 let instructionRows
   (branchId: Uuid)
   (instrs: LanguageTools.RuntimeTypes.Instructions)
@@ -634,7 +632,7 @@ let instructionRows
 
 
 /// Render one of the compiler views of the function at <param location>.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let viewCompiled
   (branchId: Uuid)
   (location: PackageLocation)
@@ -665,7 +663,6 @@ let viewCompiled
 
 
 /// Is every character a hex digit? (Cheaper than a parse, and an FQN never looks like this.)
-// @compiler blocked: missing-implementation
 let looksLikeHex (s: String) : Bool =
   s
   |> Stdlib.String.toList
@@ -675,7 +672,6 @@ let looksLikeHex (s: String) : Bool =
 /// A 64-hex argument is an item HASH: every --json surface hands them out, and a
 /// content-addressed store whose ids were dead ends on the command line taught agents to
 /// route back through names that propagation can move underneath them.
-// @compiler blocked: missing-implementation
 let isItemHash (s: String) : Bool =
   (Stdlib.String.length s == 64)
   && (Stdlib.String.toLowercase s == s)
@@ -685,7 +681,7 @@ let isItemHash (s: String) : Bool =
 /// Resolve an item hash (see `isItemHash`) to the location main binds it to, wrapped by
 /// the KIND the store records for it, so the viewer renders it as itself. Errors when no
 /// live name binds the hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let resolveHashArg
   (hash: String)
   : Stdlib.Result.Result<PackageLocation, String> =
@@ -713,7 +709,7 @@ let resolveHashArg
 /// The one bridge from the package viewer to `dark traces`. Silent when there are none, since a
 /// line saying nothing has run is noise on every function you ever look at, and silent for a type
 /// or a value, which do not run.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let printTraceHint (branchId: Uuid) (location: PackageLocation) : Unit =
   match location with
   | Module _ -> ()
@@ -738,7 +734,7 @@ let printTraceHint (branchId: Uuid) (location: PackageLocation) : Unit =
 
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let branchId = state.currentBranchId
 
@@ -781,7 +777,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
 
       state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (state: AppState) (args: List<String>) : List<Completion.CompletionItem> =
   let branchId = state.currentBranchId
   // Complete the path as before, and offer the view flags once something is typed. Flags are filtered
@@ -801,7 +797,7 @@ let complete (state: AppState) (args: List<String>) : List<Completion.Completion
     Traversal.completePartialPath branchId state.packageData.currentLocation ""
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: view [path] [--include-tests] [--raw | --ast | --instructions]"

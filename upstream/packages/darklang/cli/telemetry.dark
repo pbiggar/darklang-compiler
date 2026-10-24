@@ -11,22 +11,20 @@ module Darklang.Cli.Telemetry
 ///   // Or for spans with extra context:
 ///   Telemetry.logWithContext "completionHint" t0 [("input", promptText)]
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Telemetry.logFilePath: Unknown function or value 'Builtin.cliGetLogDir'"
 val logFilePath =
   (Builtin.cliGetLogDir ()) + "/telemetry.jsonl"
 
 /// Returns monotonic millisecond timestamp (only differences are meaningful)
-// @compiler blocked: missing-implementation
 let now () : Int = Stdlib.DateTime.__monotonicMilliseconds ()
 
 /// Compute elapsed ms between a start timestamp and now
-// @compiler blocked: missing-implementation
 let elapsedMs (startMs: Int) : Int =
   (now ()) - startMs
 
 /// Write a single telemetry event line to the log file.
 /// Format: {"event":"<label>","ms":<elapsed>,"wall":"<ISO8601>","ctx":{...}}
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Telemetry.logWithContext: Unbound local variable 'logFilePath'"
 let logWithContext
   (label: String)
   (startMs: Int)
@@ -53,12 +51,12 @@ let logWithContext
   ()
 
 /// Shorthand: log a timing event with no extra context
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Telemetry.log: Unknown function or value 'logWithContext'"
 let log (label: String) (startMs: Int) : Unit =
   logWithContext label startMs []
 
 /// Log a raw message (not a timing span) — useful for one-off markers
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Telemetry.logMessage: Unbound local variable 'logFilePath'"
 let logMessage (label: String) (message: String) : Unit =
   let wall = Stdlib.toString (Stdlib.DateTime.now ())
   let escaped = Stdlib.String.replaceAll message "\"" "\\\""
@@ -68,7 +66,7 @@ let logMessage (label: String) (message: String) : Unit =
   ()
 
 /// Log the start of a session so we can separate runs in the log
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Telemetry.logSessionStart: Unbound local variable 'logFilePath'"
 let logSessionStart () : Unit =
   let wall = Stdlib.toString (Stdlib.DateTime.now ())
   let line = $"{{\"event\":\"session_start\",\"wall\":\"{wall}\"}}"

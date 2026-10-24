@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.PatternMatching
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Pattern Matching
 

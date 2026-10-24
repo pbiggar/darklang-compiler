@@ -4,28 +4,23 @@
 /// with no confirmation and no way back.
 module Darklang.Stdlib.Cli.UI.Confirm
 
-// @compiler blocked: missing-implementation
 type State =
   { question: String
     detail: String
     /// Draws the box in red and makes `n` the default reading of the prompt.
     danger: Bool }
 
-// @compiler blocked: missing-implementation
 type Msg =
   | Confirmed
   | Declined
 
-// @compiler blocked: missing-implementation
 let ask (question: String) : State =
   State { question = question, detail = "", danger = false }
 
-// @compiler blocked: missing-implementation
 let askDangerous (question: String) (detail: String) : State =
   State { question = question, detail = detail, danger = true }
 
 
-// @compiler blocked: missing-implementation
 let onKey (state: State) (kp: Widget.KeyPress) : Widget.Outcome<State, Msg> =
   match kp.key with
   | Enter ->
@@ -47,7 +42,6 @@ let onKey (state: State) (kp: Widget.KeyPress) : Widget.Outcome<State, Msg> =
 
 
 /// Centre a box `rows` x `cols` inside `region`.
-// @compiler blocked: missing-implementation
 let centred (region: Layout.Region) (rows: Int) (cols: Int) : Layout.Region =
   let w = Stdlib.min region.cols cols
   let h = Stdlib.min region.rows rows
@@ -58,7 +52,7 @@ let centred (region: Layout.Region) (rows: Int) (cols: Int) : Layout.Region =
       rows = h
       cols = w }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.UI.Confirm.view: Unknown function or value 'Box.panel'"
 let view (state: State) (region: Layout.Region) : List<Layout.Span> =
   let hasDetail = state.detail != ""
   let width =

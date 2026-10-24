@@ -7,7 +7,6 @@ module Darklang.Cli.Packages.Deprecate
 // TODO (v1.5): `--json` output for agents.
 
 
-// @compiler blocked: missing-implementation
 type ParsedArgs =
   { itemType: Stdlib.Option.Option<String>
     target: Stdlib.Option.Option<String>
@@ -19,7 +18,6 @@ type ParsedArgs =
     parseErrors: List<FlagParser.ParseError> }
 
 
-// @compiler blocked: missing-implementation
 val argSpec =
   FlagParser.Spec
     { flags = [ ("--yes", [ "-y" ]), ("--dry-run", []) ]
@@ -29,7 +27,6 @@ val argSpec =
 
 /// Parse `--key value` / `--flag` style args into a ParsedArgs.
 /// Positional args fill itemType, then target.
-// @compiler blocked: missing-implementation
 let parseArgs (args: List<String>) : ParsedArgs =
   let p = FlagParser.parse argSpec args
   ParsedArgs
@@ -48,7 +45,7 @@ let parseArgs (args: List<String>) : ParsedArgs =
 /// TODO: the design doc also promises hash-prefix resolution (e.g.
 ///       `deprecate fn ab12cd34`); not implemented yet. Add when the first
 ///       caller needs it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let resolveTarget
   (branchId: Uuid)
   (currentLocation: Packages.PackageLocation)
@@ -94,7 +91,6 @@ let resolveTarget
 
 /// What `deprecate` is being pointed at: the kind, its word (for the messages), the name as typed,
 /// and the item it resolved to.
-// @compiler blocked: missing-implementation
 type Target =
   { itemKind: LanguageTools.ProgramTypes.ItemKind
     itemTypeStr: String
@@ -102,7 +98,6 @@ type Target =
     targetRef: LanguageTools.ProgramTypes.Reference }
 
 
-// @compiler blocked: missing-implementation
 val allItemKinds =
   [ (LanguageTools.ProgramTypes.ItemKind.Fn, "fn")
     (LanguageTools.ProgramTypes.ItemKind.Type, "type")
@@ -118,7 +113,7 @@ val allItemKinds =
 /// `delete` and `undeprecate`. `locations` does not stop one name holding two
 /// kinds, so a name that resolves twice is refused rather than guessed at; the
 /// explicit form is how you say which.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let resolveKindAndTarget
   (branchId: Uuid)
   (currentLoc: Packages.PackageLocation)
@@ -175,7 +170,6 @@ let resolveKindAndTarget
          + $"Say which: `dark deprecate <{kinds |> Stdlib.String.replaceAll ", " "|"}> {first}`")
 
 
-// @compiler blocked: missing-implementation
 let parseKind
   (itemKind: LanguageTools.ProgramTypes.ItemKind)
   (kindStr: String)
@@ -211,12 +205,12 @@ let parseKind
 /// unrelated names, including stdlib constants (deprecating a `= 1` retires `Errno.eperm`). We surface the
 /// full set before the confirm so the collateral is never a surprise. A normal fn/type has a near-unique
 /// hash, so this is a single name and no heads-up fires.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Deprecate.namesAtContent: Unknown function or value 'SCM.PackageOps.namesAtContent'"
 let namesAtContent (branchId: Uuid) (hashStr: String) (itemType: String) : List<String> =
   SCM.PackageOps.namesAtContent branchId hashStr itemType
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let parsed = parseArgs args
   let branchId = state.currentBranchId
@@ -384,7 +378,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
 ///
 /// The kind is inferred rather than asked for. You know the name; making you also name its kind to undo
 /// something is the sort of question a tool asks because it is easy to implement.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeUndeprecate (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let branchId = state.currentBranchId
   // Any dash-led argument, not just `--` ones. `delete <name> -y` is how you get here in the first
@@ -485,7 +479,7 @@ let executeUndeprecate (state: Cli.AppState) (args: List<String>) : Cli.AppState
 
 /// `undeprecate`'s own help. Registered against `undeprecate`, not shared with `deprecate`, whose flags
 /// are not this command's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let undeprecateHelp (_state: Cli.AppState) : String =
   [ "Put a deprecated fn, type, value, trait or impl back on the shelf."
     ""
@@ -498,7 +492,7 @@ let undeprecateHelp (_state: Cli.AppState) : String =
     "  deprecate -- mark an item superseded, harmful or obsolete" ]
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Mark a function, type, value, trait, implementation or test as deprecated."
     ""
@@ -537,7 +531,7 @@ let help (_state: Cli.AppState) : String =
   |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (_state: Cli.AppState)
   (args: List<String>)

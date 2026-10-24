@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.HttpServer
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# HTTP Server
 

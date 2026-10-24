@@ -25,7 +25,7 @@ let styledWidth (text: String) : Int =
 
 
 /// Drop SGR styling, other escapes and control characters, leaving the visible text.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.Text.stripSgr: Unknown function or value 'Builtin.cliTerminalStripSgr'"
 let stripSgr (text: String) : String =
   Builtin.cliTerminalStripSgr text
 
@@ -55,21 +55,20 @@ let clipMarked (text: String) (maxWidth: Int) : String =
 
 /// Break a row at the column, restating styling that spans the wrap. To break at spaces where it
 /// can, use `wrapAtWords`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.Text.wrapAtColumn: Unknown function or value 'Builtin.cliTerminalWrapAtColumn'"
 let wrapAtColumn (text: String) (maxWidth: Int) : List<String> =
   Builtin.cliTerminalWrapAtColumn text maxWidth
 
 
 /// Zero-based cursor position immediately after plain text. Exactly past the last column reads as
 /// column zero of the next row, matching what the terminal does.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.Tui.Text.positionAfter: Unknown function or value 'Builtin.cliTerminalPositionAfter'"
 let positionAfter (text: String) (maxWidth: Int) : (Int * Int) =
   Builtin.cliTerminalPositionAfter text maxWidth
 
 
 /// Clip, but skip the work for a row already plain and within bounds. That is the common case, and
 /// it costs one measurement.
-// @compiler blocked: missing-implementation
 let normalizeToWidth (text: String) (maxWidth: Int) : String =
   let width = Stdlib.max 0 maxWidth
   let (measuredWidth, containsControl) = inspect text
@@ -81,7 +80,6 @@ let normalizeToWidth (text: String) (maxWidth: Int) : String =
 
 
 /// Pad or clip text to exactly the requested terminal-column width.
-// @compiler blocked: missing-implementation
 let fitToWidth (text: String) (targetWidth: Int) : String =
   let clipped = clipToWidth text targetWidth
   let padding = Stdlib.max 0 (targetWidth - (styledWidth clipped))
@@ -91,7 +89,6 @@ let fitToWidth (text: String) (targetWidth: Int) : String =
 // --- Word wrapping ---
 
 /// Break one long word across lines, since it can't be fitted whole.
-// @compiler blocked: missing-implementation
 let splitLongWord (word: String) (width: Int) : List<String> =
   if (Stdlib.String.displayWidth word) <= width then
     [ word ]
@@ -104,7 +101,6 @@ let splitLongWord (word: String) (width: Int) : List<String> =
 
 
 /// Fold one word into the lines built so far.
-// @compiler blocked: missing-implementation
 let addWord
   (lines: List<String>)
   (current: String)
@@ -127,7 +123,6 @@ let addWord
 
 /// Break plain text at spaces where it can and inside a word where it must.
 /// Styling isn't handled: wrap first, colour after.
-// @compiler blocked: missing-implementation
 let wrapAtWords (text: String) (width: Int) : List<String> =
   let w = Stdlib.max 1 width
 

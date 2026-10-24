@@ -3,31 +3,31 @@
 /// Part of `Darklang.Cli.Workbench`.
 module Darklang.Cli.Workbench
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderErrors (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   splitListPreview state region "Errors" "error" "Detail" (Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.green "✓ all clear - no errors")
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let errorHints (state: State) : List<(String * String)> =
   [ ("↑↓", "move"), ("f", "filter") ]
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderBuiltins (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   splitListPreview state region "Builtins" "builtin" "Signature" (Stdlib.Cli.UI.Colors.dimText "(no builtins)")
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let builtinHints (state: State) : List<(String * String)> =
   [ ("↑↓", "move"), ("f", "filter") ]
 
 /// The Builtins view: every F# builtin, with its signature.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.loadBuiltinItems: Unknown function or value 'LanguageTools.allBuiltinFns'"
 let loadBuiltinItems () : List<BodyItem> =
   LanguageTools.allBuiltinFns ()
   |> Stdlib.List.map (fun fn -> fn.name.name)
   |> Stdlib.List.sort
   |> Stdlib.List.map (fun n -> BodyItem { name = n, kind = "builtin", isModule = false, desc = "" })
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let builtinDetailLines (state: State) : List<String> =
   match Stdlib.List.getAt state.items state.selected with
   | None -> [ Stdlib.Cli.UI.Colors.dimText "(nothing selected)" ]
@@ -60,7 +60,7 @@ let builtinDetailLines (state: State) : List<String> =
 /// One item per row of the tree, in the tree's order, so the highlighted row and the stack on
 /// the right are the same process. The one read of the table: the row's cells ride in `desc`,
 /// tab-separated, so `render` draws what the loader saw and reads nothing.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.loadProcessItems: Unknown function or value 'Cli.Ps.treeRowsWithIds'"
 let loadProcessItems () : List<BodyItem> =
   Cli.Ps.treeRowsWithIds (SCM.PackageOps.currentBranch ()) (Stdlib.Exec.list ())
   |> Stdlib.List.map (fun (id, cells) ->
@@ -71,7 +71,7 @@ let loadProcessItems () : List<BodyItem> =
         desc = Stdlib.String.join cells "\t" })
 
 /// The table as a tree, from the rows the loader read.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let processTree (state: State) : Stdlib.Cli.UI.Node.Node<Unit> =
   let rows = state.items |> Stdlib.List.map (fun item -> Stdlib.String.split item.desc "\t")
 
@@ -96,7 +96,7 @@ let processTree (state: State) : Stdlib.Cli.UI.Node.Node<Unit> =
         others)
 
 /// The table on the left, the selected process's stack on the right.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderProcesses (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let listFocused = state.focus == Stdlib.Cli.UI.SplitPane.Focus.First
   let detailFocused = state.focus == Stdlib.Cli.UI.SplitPane.Focus.Second
@@ -127,7 +127,7 @@ let renderProcesses (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<
     (paneTitle "Stack" [] detailFocused)
     (fun r -> renderPreview state r)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let processDetailLines (state: State) : List<String> =
   match Stdlib.List.getAt state.items state.selected with
   | None -> []
@@ -142,6 +142,6 @@ let processDetailLines (state: State) : List<String> =
           [ Cli.Ps.statusText state.branchId d.summary.status, "" ]
           (d.frames |> Stdlib.List.map (fun ep -> Cli.Ps.executionPointText state.branchId ep))
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let processHints (state: State) : List<(String * String)> =
   [ ("↑↓", "select"), ("5", "back to Traces"), ("", "`dark ps cancel <id>` stops one; `dark ps --watch` for the live view") ]

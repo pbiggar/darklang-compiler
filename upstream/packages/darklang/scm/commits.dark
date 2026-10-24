@@ -11,7 +11,6 @@ module Darklang.SCM.Commits
 // `package_ops` side of it (the draft query, the stamping) belongs to `SCM.PackageOps`.
 
 
-// @compiler blocked: missing-implementation
 type Commit =
   { hash: String
     message: String
@@ -24,7 +23,7 @@ type Commit =
 /// The next portable stamp: MAX(origin_ts) + 1s over the log, not wall-clock. Authoring stamps from a
 /// monotonic counter that can run ahead of the clock, so `now` isn't reliably "after" the ops being
 /// committed -- and this way it needs no clock capability.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.nextStamp: Unknown function or value 'Stdlib.Sqlite.scalarTextP'"
 let nextStamp () : String =
   Stdlib.Sqlite.scalarTextP
     (localDb ())
@@ -40,7 +39,6 @@ let nextStamp () : String =
 /// Op ids and parent are IN the material, so the id says what the commit holds and where it sits:
 /// identical ops committed onto different histories get different ids. Ops arrive sorted (see
 /// `draftOpIdsFor`).
-// @compiler blocked: missing-implementation
 let mintHash
   (message: String)
   (stamp: String)
@@ -53,7 +51,7 @@ let mintHash
   Stdlib.String.toLowercase (Stdlib.String.first digest 16)
 
 /// Write a commit ROW (it commits nothing by itself -- the caller stamps the ops). Returns its hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.create: Unknown function or value 'nextStamp'"
 let create (message: String) (opIds: List<String>) (parent: String) : String =
   let stamp = nextStamp ()
   let hash = mintHash message stamp opIds parent
@@ -67,7 +65,6 @@ let create (message: String) (opIds: List<String>) (parent: String) : String =
 
   hash
 
-// @compiler blocked: missing-implementation
 let commitFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Option<Commit> =
   match Stdlib.Sqlite.textField row "hash" with
   | Some hash ->
@@ -81,13 +78,13 @@ let commitFromRow (row: Dict<String, Stdlib.Sqlite.Value>) : Stdlib.Option.Optio
   | None -> Stdlib.Option.Option.None
 
 /// Number of commits across the store, matching the unfiltered recent listing.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.count: Unknown function or value 'Stdlib.Sqlite.scalarIntP'"
 let count () : Int64 =
   Stdlib.Sqlite.scalarIntP (localDb ()) "SELECT count(*) AS n FROM commits" [] "n"
   |> Stdlib.Option.withDefault 0L
 
 /// The most recent commits, newest first.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.recent: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let recent (limit: Int64) : List<Commit> =
   Stdlib.Sqlite.rowsP
     (localDb ())
@@ -99,7 +96,7 @@ let recent (limit: Int64) : List<Commit> =
 /// Remove a commit row. For a commit that turned out to name no ops -- an import where everything deduped,
 /// which is what a routine re-sync is. The ops side of "did it commit anything" is `PackageOps.opCountIn`;
 /// this owns the table.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.delete: Unknown function or value 'Stdlib.Sqlite.mustExec'"
 let delete (hash: String) : Unit =
   let _ =
     Stdlib.Sqlite.mustExec (localDb ()) "DELETE FROM commits WHERE hash = @p0" [ hash ]
@@ -108,7 +105,7 @@ let delete (hash: String) : Unit =
 
 /// The commit whose hash starts with <param prefix>. Newest wins if a short prefix matches more than one,
 /// which is the same rule `dark ops show` uses for op ids.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.byHashPrefix: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let byHashPrefix (prefix: String) : Stdlib.Option.Option<Commit> =
   match
     Stdlib.Sqlite.queryOneP
@@ -123,7 +120,7 @@ let byHashPrefix (prefix: String) : Stdlib.Option.Option<Commit> =
 
 /// The commits that follow <param hash> on some line. Empty when nothing does, which is what makes a
 /// commit the tip of its own chain.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.children: Unknown function or value 'Stdlib.Sqlite.rowsOrEmptyP'"
 let children (hash: String) : List<String> =
   Stdlib.Sqlite.rowsOrEmptyP
     (localDb ())
@@ -135,7 +132,7 @@ let children (hash: String) : List<String> =
     | _ -> Stdlib.Option.Option.None)
 
 /// The op ids a commit holds.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Commits.opIdsIn: Unknown function or value 'Stdlib.Sqlite.rowsOrEmptyP'"
 let opIdsIn (hash: String) : List<String> =
   Stdlib.Sqlite.rowsOrEmptyP
     (localDb ())

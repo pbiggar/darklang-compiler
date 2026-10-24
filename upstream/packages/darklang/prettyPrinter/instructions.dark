@@ -9,15 +9,12 @@
 /// wants the text.
 module Darklang.PrettyPrinter.RuntimeTypes.Instructions
 
-// @compiler blocked: missing-implementation
 let register (r: LanguageTools.RuntimeTypes.Register) : String =
   "r" + (Stdlib.toString r)
 
-// @compiler blocked: missing-implementation
 let registers (rs: List<LanguageTools.RuntimeTypes.Register>) : String =
   (Stdlib.List.map rs (fun r -> register r)) |> Stdlib.String.join ", "
 
-// @compiler blocked: missing-implementation
 let namedRegisters (prs: List<(String * LanguageTools.RuntimeTypes.Register)>) : String =
   prs
   |> Stdlib.List.map (fun pair ->
@@ -26,7 +23,6 @@ let namedRegisters (prs: List<(String * LanguageTools.RuntimeTypes.Register)>) :
   |> Stdlib.String.join ", "
 
 
-// @compiler blocked: missing-implementation
 let registerPairs
   (prs: List<(LanguageTools.RuntimeTypes.Register * LanguageTools.RuntimeTypes.Register)>)
   : String =
@@ -39,7 +35,6 @@ let registerPairs
 
 /// Register-aware pattern rendering. `PrettyPrinter.RuntimeTypes.letPattern` prints `LPVariable` as
 /// "[variable]" because it has no register vocabulary; in a listing the register is the whole point.
-// @compiler blocked: missing-implementation
 let letPattern (pat: LanguageTools.RuntimeTypes.LetPattern) : String =
   match pat with
   | LPVariable reg -> register reg
@@ -53,7 +48,7 @@ let letPattern (pat: LanguageTools.RuntimeTypes.LetPattern) : String =
     $"({parts})"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.MatchPattern'"
 let matchPattern (pat: LanguageTools.RuntimeTypes.MatchPattern) : String =
   match pat with
   | MPVariable reg -> register reg
@@ -95,7 +90,6 @@ let matchPattern (pat: LanguageTools.RuntimeTypes.MatchPattern) : String =
     (Stdlib.List.map pats (fun p -> matchPattern p)) |> Stdlib.String.join " | "
 
 
-// @compiler blocked: missing-implementation
 let segment (branchId: Uuid) (s: LanguageTools.RuntimeTypes.StringSegment) : String =
   match s with
   | Text t -> "\"" + (Stdlib.String.replaceAll t "\n" "\\n") + "\""
@@ -104,7 +98,7 @@ let segment (branchId: Uuid) (s: LanguageTools.RuntimeTypes.StringSegment) : Str
 
 /// Values baked into the instruction stream, rendered short. A listing is for reading, and one 4 KB
 /// docstring pushes everything else off the page, so anything long is summarised by shape instead.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let inlineDval (branchId: Uuid) (dv: LanguageTools.RuntimeTypes.Dval) : String =
   let clip (s: String) : String =
     if (Stdlib.String.length s) <= 40 then
@@ -143,7 +137,7 @@ let inlineDval (branchId: Uuid) (dv: LanguageTools.RuntimeTypes.Dval) : String =
 
 
 /// The opcode name on its own, so callers can color or align it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.Instruction'"
 let opcode (i: LanguageTools.RuntimeTypes.Instruction) : String =
   match i with
   | LoadVal(_, _) -> "LoadVal"
@@ -175,7 +169,7 @@ let opcode (i: LanguageTools.RuntimeTypes.Instruction) : String =
 
 /// Everything after the opcode. <param index> is the instruction's own position: jump offsets are stored
 /// relative, and a relative jump is unreadable in a listing, so they're shown both ways.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.Instruction'"
 let operands (branchId: Uuid) (index: Int) (i: LanguageTools.RuntimeTypes.Instruction) : String =
   match i with
   | LoadVal(r, v) -> $"{register r} <- {inlineDval branchId v}"
@@ -230,7 +224,7 @@ let operands (branchId: Uuid) (index: Int) (i: LanguageTools.RuntimeTypes.Instru
 
 /// Every lambda defined inside these instructions, flattened, so a listing isn't a dead end at
 /// `CreateLambda`. A lambda inside a lambda gets its own entry rather than nesting.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.Instructions'"
 let lambdas (instrs: LanguageTools.RuntimeTypes.Instructions) : List<LanguageTools.RuntimeTypes.LambdaImpl> =
   instrs.instructions
   |> Stdlib.List.filterMap (fun i ->
@@ -241,7 +235,7 @@ let lambdas (instrs: LanguageTools.RuntimeTypes.Instructions) : List<LanguageToo
   |> Stdlib.List.flatten
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.Instructions'"
 let header (instrs: LanguageTools.RuntimeTypes.Instructions) : String =
   let n = Stdlib.toString (Stdlib.List.length instrs.instructions)
   let regs = Stdlib.toString instrs.registerCount
@@ -249,7 +243,7 @@ let header (instrs: LanguageTools.RuntimeTypes.Instructions) : String =
 
 
 /// Plain-text listing, for callers that don't want to lay it out themselves.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.RuntimeTypes.Instructions'"
 let listing (branchId: Uuid) (instrs: LanguageTools.RuntimeTypes.Instructions) : String =
   let body =
     instrs.instructions

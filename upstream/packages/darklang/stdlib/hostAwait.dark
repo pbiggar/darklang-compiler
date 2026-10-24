@@ -12,7 +12,6 @@ module Darklang.Stdlib.Host
 
 /// What a process can wait for. `Host.await` takes a list of these and parks the calling
 /// process until the first of them happens.
-// @compiler blocked: missing-implementation
 type EventSpec =
   /// The next key press.
   | Key
@@ -32,7 +31,6 @@ type EventSpec =
 
 /// What the runtime delivers: the first of the requested specs to happen, before `await` has
 /// described a store change. `Builtin.hostAwait` returns this; loops see `Event`.
-// @compiler blocked: missing-implementation
 type RawEvent =
   | Key of Stdlib.Cli.Stdin.KeyRead.KeyRead
   | StoreChanged
@@ -43,7 +41,7 @@ type RawEvent =
 
 
 /// What `Host.await` came back with: the first of the requested specs to happen.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Host.Event: Unknown type 'Stdlib.Live.Change'"
 type Event =
   /// One read of the keyboard, as the runtime reads it: a key, a paste, or a coalesced burst with
   /// its repeat count. `Stdlib.Cli.UI.Widget.press` narrows it to a `KeyPress` for a widget.
@@ -65,12 +63,12 @@ type Event =
 /// Dark's question, answered by `Stdlib.Live.poll` from here. The watch lives in a slot the runtime
 /// keeps for this process (`Builtin.hostWatchGet`), because `await` takes no state and a Dark value
 /// does not outlive the call that made it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Host.remember: Unknown function or value 'Builtin.hostWatchSet'"
 let remember (watch: Stdlib.Live.Watch) : Stdlib.Live.Watch =
   Builtin.hostWatchSet watch
   watch
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Host.currentWatch: Unknown function or value 'Builtin.hostWatchGet'"
 let currentWatch () : Stdlib.Live.Watch =
   match Builtin.hostWatchGet () with
   | Some w -> w
@@ -78,7 +76,7 @@ let currentWatch () : Stdlib.Live.Watch =
 
 /// What landed since the last look. `None` when the store moved for a reason that is not an op (a
 /// config write, a trace).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Stdlib.Live.Change'"
 let describeChange () : Stdlib.Option.Option<Stdlib.Live.Change> =
   let (next, change) = Stdlib.Live.poll (currentWatch ())
   let _ = remember next
@@ -87,7 +85,7 @@ let describeChange () : Stdlib.Option.Option<Stdlib.Live.Change> =
 /// Say that a loop is about to start: the watch starts here, so an edit that lands between now
 /// and the loop's first `await` (while its entries are being resolved, say) is reported by it.
 /// Call it once, before resolving what the loop will show.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Host.begin: Unknown function or value 'currentWatch'"
 let begin () : Unit =
   let _ = currentWatch ()
   ()
@@ -96,7 +94,7 @@ let begin () : Unit =
 ///
 /// A store change the runtime reports is described before it is handed back; one that turns out
 /// to carry no op (the counter moves for a config write too) is not an event, and the wait goes on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Event'"
 let await (specs: List<EventSpec>) : Event =
   match Builtin.hostAwait specs with
   | Key k -> Event.Key k

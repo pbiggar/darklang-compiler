@@ -4,7 +4,7 @@
 module Darklang.LanguageTools.AtRestTypeChecker.Items
 
 /// The verdict and reported issues for one declaration.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Items.Outcome: Unknown type 'Verdict'"
 type Outcome =
   { verdict: Verdict
     diagnostics: List<Issue>
@@ -25,13 +25,13 @@ type Outcome =
 
 /// Wrap a type in a scheme without making any of its unknowns generic.
 /// Those unknowns must be resolved before the declaration can be Checked.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let monomorphic (t: Model.Ty) : Model.Scheme =
   Model.Scheme { quantified = [], typ = t, constraints = [] }
 
 /// Report an error encountered while running the checker as an Incomplete result.
 /// Attach the warning to at when a source node is available, and return no scheme.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Outcome'"
 let checkerFailureOutcome
   (at: Stdlib.Option.Option<Int64>)
   (failure: CheckFailure)
@@ -46,7 +46,7 @@ let checkerFailureOutcome
 
 /// Catch errors from checking one declaration so the rest of the batch can continue.
 /// On failure, return Incomplete and keep the environment from before this check.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let guardItem
   (at: Stdlib.Option.Option<Int64>)
   (env: Model.Environment)
@@ -63,7 +63,6 @@ let guardItem
 
 /// Convert the checker's signed node ID to the report's UInt64 representation.
 /// For negative IDs, add 2^64 to preserve the original 64-bit identifier.
-// @compiler blocked: missing-implementation
 let toUInt64 (id: Int64) : UInt64 =
   let n = Stdlib.Int.fromInt64 id
   let unsigned = if n < 0 then n + 18446744073709551616 else n
@@ -71,7 +70,7 @@ let toUInt64 (id: Int64) : UInt64 =
 
 /// Convert a finding to the public report format, replacing type unknowns with
 /// any types the solver determined before formatting expected and actual types.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Solve.State'"
 let toIssue (s: Solve.State) (finding: Model.Finding) : Issue =
   let staticType (t: Model.Ty) : StaticType = Types.toStatic (Solve.zonk s t)
 
@@ -85,7 +84,7 @@ let toIssue (s: Solve.State) (finding: Model.Finding) : Issue =
 /// Check match coverage after type inference and report gaps as warnings.
 /// Skip a match if its input type contains an error or its patterns already have
 /// findings, since those problems can make coverage warnings misleading.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Solve.State'"
 let checkCoverage (s: Solve.State) : Solve.State =
   let nodesWithFindings =
     Stdlib.List.fold s.findings Dict {} (fun ids finding ->
@@ -127,7 +126,7 @@ let checkCoverage (s: Solve.State) : Solve.State =
 /// Finish deferred checks, classify findings, and decide the declaration's verdict.
 /// Generic variables saved in the scheme may remain unknown. Other unknowns in
 /// the declaration's type or an error's evidence prevent a complete check.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Solve.State'"
 let finish
   (s: Solve.State)
   (itemAt: Stdlib.Option.Option<Int64>)
@@ -223,7 +222,7 @@ let finish
 
 /// Produce a declaration-wide error for each repeated name, using the supplied
 /// issue code and context to distinguish type parameters from type members.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Constraint'"
 let duplicateProblems
   (names: List<String>)
   (site: DuplicateSite)
@@ -243,7 +242,7 @@ let duplicateProblems
 
 /// Check a function's declared signature and require its body to return that type.
 /// Return any environment caches populated during the check for later declarations.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkFunction
   (env: Model.Environment)
   (fn: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -252,7 +251,7 @@ let checkFunction
 
 /// `checkFunction`, given what `NodeIds.problem` says about the body, for a caller that has
 /// already walked it (`NodeIds.inspect`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkFunctionKnowing
   (env: Model.Environment)
   (fn: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -313,7 +312,7 @@ let checkFunctionKnowing
 /// Solve the requirements prepared for a package value and infer its type.
 /// Allow a reusable generic type only for bodies accepted by isNonExpansive,
 /// such as literals and lambdas. Results of calls must have one resolved type.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkValue
   (env: Model.Environment)
   (value: LanguageTools.ProgramTypes.PackageValue.PackageValue)
@@ -333,7 +332,7 @@ let checkValue
 
 /// Check duplicate type parameters and member names, then include validation
 /// problems from this type declaration and the declarations it depends on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkType (env: Model.Environment) (packageType: LanguageTools.ProgramTypes.PackageType.PackageType) : Outcome =
   let none = Stdlib.Option.Option.None
   let decl = packageType.declaration
@@ -370,14 +369,14 @@ let checkType (env: Model.Environment) (packageType: LanguageTools.ProgramTypes.
 // --------------------
 
 /// Make a type declaration available by hash before checking references to it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let addType (env: Model.Environment) (t: LanguageTools.ProgramTypes.PackageType.PackageType) : Model.Environment =
   { env with
       types = Stdlib.Dict.setOverridingDuplicates env.types t.hash t.declaration }
 
 /// Make the declared signature available before checking function bodies, so
 /// callers and recursive functions can be checked regardless of their list order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let addFunctionSignature
   (env: Model.Environment)
   (fn: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -399,7 +398,7 @@ let addFunctionSignature
 
 /// Collect package-value references recorded in these requirements, including
 /// nested All groups. Builtin values do not need to be scheduled with the batch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Constraint'"
 let valueDependencies (c: Model.Constraint) : List<LanguageTools.ProgramTypes.Hash> =
   match c with
   | All constraints ->
@@ -413,7 +412,7 @@ let valueDependencies (c: Model.Constraint) : List<LanguageTools.ProgramTypes.Ha
 /// A value whose body has been inspected but whose type requirements still need
 /// solving. Save those requirements so waiting for dependencies does not repeat
 /// the syntax walk.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Items.PendingValue: Unknown type 'Model.Ty'"
 type PendingValue =
   { value: LanguageTools.ProgramTypes.PackageValue.PackageValue
     typ: Model.Ty
@@ -423,7 +422,7 @@ type PendingValue =
 
 /// Use the body's root node as the location for findings about the whole value
 /// or function, including errors encountered while running the checker.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let bodyNodeId
   (body: LanguageTools.ProgramTypes.Expr)
   : Stdlib.Option.Option<Int64> =
@@ -431,7 +430,7 @@ let bodyNodeId
 
 /// Infer an initial type and requirements from a value's syntax without solving
 /// them yet. If inference IDs are duplicated, record that problem and skip inference.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageValue.PackageValue'"
 let prepareValue
   (value: LanguageTools.ProgramTypes.PackageValue.PackageValue)
   : PendingValue =
@@ -454,7 +453,7 @@ let prepareValue
 
 /// Prepare each value, then check dependencies before values that use them.
 /// Check dependency cycles last; missing inferred types prevent a Checked verdict.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkValues
   (env: Model.Environment)
   (values: List<LanguageTools.ProgramTypes.PackageValue.PackageValue>)
@@ -473,7 +472,7 @@ let checkValues
 
 /// Check values whose dependencies are no longer pending and save successful
 /// type schemes for later values. Continue until every pending value has an outcome.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkPendingValues
   (env: Model.Environment)
   (outcomes: Dict<LanguageTools.ProgramTypes.Hash, Outcome>)
@@ -524,7 +523,7 @@ let checkPendingValues
 /// Register all types and function signatures first, then infer package values
 /// before checking function bodies that may reference them. Return results grouped
 /// as types, values, and functions, preserving the supplied order within each group.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkBatch
   (env: Model.Environment)
   (types: List<LanguageTools.ProgramTypes.PackageType.PackageType>)
@@ -536,7 +535,7 @@ let checkBatch
 
 /// checkBatch, also returning the environment it ended with, which holds the
 /// schemes of the values that Checked. Tests are checked against it afterwards.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkBatchWithEnv
   (env: Model.Environment)
   (types: List<LanguageTools.ProgramTypes.PackageType.PackageType>)
@@ -606,7 +605,7 @@ let checkBatchWithEnv
 /// Check a package test's body. An ordinary test must return <param testResult>
 /// (`Stdlib.Test.Result`). A test that declares an expected runtime error may
 /// return any type, because only the error it raises is observed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkTest
   (env: Model.Environment)
   (testResult: LanguageTools.ProgramTypes.Hash)
@@ -634,7 +633,7 @@ let checkTest
 
 /// Check each test against env. Nothing can reference a test, so no test's
 /// result feeds another declaration's check.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let checkTests
   (env: Model.Environment)
   (testResult: LanguageTools.ProgramTypes.Hash)

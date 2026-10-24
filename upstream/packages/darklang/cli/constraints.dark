@@ -24,7 +24,6 @@ module Darklang.Cli.ConstraintsCmd
 /// A kind change reads differently on purpose: the usage is not behind, it points at a different KIND
 /// of thing that happened to hold the name, and it still works. That is "know about this" rather than
 /// "go fix this".
-// @compiler blocked: missing-implementation
 let line (f: SCM.Constraints.Finding) : String =
   let u = SCM.Constraints.fqnOf f.usage
   let d = SCM.Constraints.fqnOf f.dependency
@@ -56,7 +55,6 @@ let line (f: SCM.Constraints.Finding) : String =
 
 /// The same data the human view renders, not a subset. If an agent ever has to fall back to parsing the
 /// pretty output for one field, this is incomplete and that's a bug, not a workaround.
-// @compiler blocked: missing-implementation
 let toJson (f: SCM.Constraints.Finding) : String =
   let k = Cli.jsonStr (SCM.Constraints.kindToString f.kind)
   let u = Cli.jsonStr (SCM.Constraints.fqnOf f.usage)
@@ -84,7 +82,6 @@ let toJson (f: SCM.Constraints.Finding) : String =
   $"{{\"id\":{Cli.jsonStr f.id},\"kind\":{k},\"usage\":{u},\"usageKind\":{uk},\"dependency\":{d},\"dependencyKind\":{dk},{detail}}}"
 
 
-// @compiler blocked: missing-implementation
 let selectKind
   (findings: List<SCM.Constraints.Finding>)
   (args: List<String>)
@@ -102,7 +99,6 @@ let selectKind
 
 /// The `--kind` value, checked: `Error` explains rather than silently filtering to nothing on a typo,
 /// and a bare `--kind` is a missing value, not an unknown flag.
-// @compiler blocked: missing-implementation
 let kindArgChecked (args: List<String>) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.List.findFirstIndex args (fun a -> a == "--kind") with
   | None -> Stdlib.Result.Result.Ok()
@@ -119,7 +115,7 @@ let kindArgChecked (args: List<String>) : Stdlib.Result.Result<Unit, String> =
           $"\"{wanted}\" isn't a kind -- stale-usage, kind-changed, decision-superseded, or rival-implementations."
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeJson (state: AppState) (args: List<String>) : AppState =
   let detected = SCM.Constraints.pending ()
   let findings = selectKind detected.findings args
@@ -135,7 +131,7 @@ let executeJson (state: AppState) (args: List<String>) : AppState =
   state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeList (state: AppState) (args: List<String>) : AppState =
   let detected = SCM.Constraints.pending ()
 
@@ -175,7 +171,7 @@ let executeList (state: AppState) (args: List<String>) : AppState =
 ///
 /// Unknown ids are REPORTED and skipped rather than aborting the batch. An agent that has to bisect a failed
 /// batch to find the one bad target is worse off than one that made N calls in the first place.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.ConstraintsCmd.selectTargets: Unknown function or value 'SCM.Constraints.pending'"
 let selectTargets
   (ids: List<String>)
   : (List<SCM.Constraints.Finding> * List<String>) =
@@ -229,7 +225,6 @@ let selectTargets
 
 
 /// `--why <text>`, or everything after `--why` when it wasn't quoted.
-// @compiler blocked: missing-implementation
 let whyFrom (args: List<String>) : String =
   match Stdlib.List.findFirstIndex args (fun a -> a == "--why") with
   | Some i ->
@@ -244,12 +239,12 @@ let whyFrom (args: List<String>) : String =
 /// Propagation choices are different: they genuinely differ per branch (a branch may want a different
 /// pin), so they're scoped by `branch_id`. An ack isn't like that -- if the finding is real it's real
 /// everywhere, and one answer is the right number of answers.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.ConstraintsCmd.onBranch: Unknown function or value 'SCM.PackageOps.currentBranch'"
 let onBranch () : Bool =
   Stdlib.Bool.not (SCM.Branch.isMain (SCM.PackageOps.currentBranch ()))
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeAck (state: AppState) (args: List<String>) : AppState =
   if onBranch () then
     Cli.printErr "constraints are a property of the store, not of a branch -- switch to main to ack."
@@ -290,14 +285,12 @@ let executeAck (state: AppState) (args: List<String>) : AppState =
 
 
 /// `--as <choice>`, naming which resolution to apply.
-// @compiler blocked: missing-implementation
 let chosenResolution (args: List<String>) : String =
   match Stdlib.List.findFirstIndex args (fun a -> a == "--as") with
   | Some i -> Stdlib.List.getAt args (i + 1) |> Stdlib.Option.withDefault ""
   | None -> ""
 
 /// Every resolution a set of targets could take, deduped, in the order the kinds offer them.
-// @compiler blocked: missing-implementation
 let resolutionsAcross
   (targets: List<SCM.Constraints.Finding>)
   : List<String> =
@@ -312,7 +305,6 @@ let resolutionsAcross
 /// it" means one thing everywhere; RESOLVING in bulk is only fine when there is nothing to choose. As soon
 /// as a kind offers two, or a batch spans kinds that resolve differently, the caller has to say what it
 /// means -- otherwise the command picks on its behalf and calls that a resolution.
-// @compiler blocked: missing-implementation
 let resolutionFor
   (targets: List<SCM.Constraints.Finding>)
   (args: List<String>)
@@ -368,7 +360,7 @@ let resolutionFor
 /// Gated on main like `ack`, for the same reason: detection runs over MAIN's bindings, so a resolution
 /// authored from a branch would repoint main's caller onto the branch's overlay, where main cannot see it,
 /// while the finding it answers stays open on main.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeResolve (state: AppState) (args: List<String>) : AppState =
   if onBranch () then
     Cli.printErr "constraints are a property of the store, not of a branch -- switch to main to resolve."
@@ -417,7 +409,7 @@ let executeResolve (state: AppState) (args: List<String>) : AppState =
 
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ ""
     "  Checks you RUN, not warnings at commit. Four kinds today:"
@@ -457,7 +449,7 @@ let help (_state: AppState) : String =
 
 /// `dark ack` -- the bulk verb at the root, because acking is the boring high-volume case and burying it
 /// under a noun makes an agent type a subcommand to say "seen it".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeAckCmd (state: AppState) (args: List<String>) : AppState =
   match args with
   | [] ->
@@ -468,7 +460,6 @@ let executeAckCmd (state: AppState) (args: List<String>) : AppState =
 
 /// The arguments the listing understands. Anything else is refused rather than listed past: `dark
 /// constraints zzznope` would otherwise answer with the whole list as though nothing had been asked.
-// @compiler blocked: missing-implementation
 let listingUnderstands (args: List<String>) : Bool =
   let understands (rest: List<String>) : Bool =
     match rest with
@@ -480,7 +471,7 @@ let listingUnderstands (args: List<String>) : Bool =
 
   understands args
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   match args with
   | "resolve" :: rest -> executeResolve state rest
@@ -504,7 +495,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
       executeList state args
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete
   (_state: AppState)
   (_args: List<String>)

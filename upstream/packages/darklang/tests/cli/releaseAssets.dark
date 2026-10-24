@@ -7,7 +7,6 @@ module Darklang.Cli.Tests.ReleaseAssets
 // for this reason; these assert that the updater does the same.
 
 module AssetForPlatform =
-  // @compiler blocked: upstream-dependency
   let asset (name: String) : Darklang.GitHub.Releases.Asset =
     Darklang.GitHub.Releases.Asset
       { name = name
@@ -20,7 +19,6 @@ module AssetForPlatform =
   // A function, not a `val`: a `val` holding a custom type carries the type identity it was built
   // against, and the testfile harness rebuilds the package set underneath it.
 
-  // @compiler blocked: upstream-dependency
   let assets () : List<Darklang.GitHub.Releases.Asset> =
     [ asset "darklang-alpha-abc1234-linux-arm64.gz"
       asset "darklang-alpha-abc1234-linux-arm.gz"
@@ -30,7 +28,6 @@ module AssetForPlatform =
 
   // The one that was wrong: arm64 must not be served the 32-bit build, and arm must not be
   // served the 64-bit one.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" class=missing-support reason=upstream-dependency
   test armBuilds =
     Stdlib.Test.all
       [ Darklang.GitHub.Releases.assetUrlFor (assets ()) "linux-arm64"
@@ -43,7 +40,6 @@ module AssetForPlatform =
              "https://example.com/darklang-alpha-abc1234-linux-arm.gz") ]
 
   // `linux-x64` is also a suffix of `linux-musl-x64`, the same trap one letter along.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" class=missing-support reason=upstream-dependency
   test muslSuffix =
     Stdlib.Test.all
       [ Darklang.GitHub.Releases.assetUrlFor (assets ()) "linux-x64"
@@ -62,13 +58,11 @@ module AssetForPlatform =
   // A platform this release has no build for is None, not the first thing that looks close.
   // `osx-x64` is a real runtime we publish, so this is the "a tag is missing one asset" case
   // rather than "we do not build that at all".
-  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" class=missing-support reason=upstream-dependency
   test missingPlatform =
     Darklang.GitHub.Releases.assetUrlFor (assets ()) "osx-x64"
     |> Stdlib.Test.equal Stdlib.Option.Option.None
 
   // An empty list, and an asset list that carries something other than a `.gz`.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.GitHub.Releases.assetUrlFor'" class=missing-support reason=upstream-dependency
   test emptyAndNonGzAssets =
     Stdlib.Test.all
       [ Darklang.GitHub.Releases.assetUrlFor [] "linux-x64"
@@ -92,14 +86,12 @@ module PlatformForHost =
         arch = arch
         defaultShell = Stdlib.Cli.Shell.Shell.Bash }
 
-  // @compiler blocked: upstream-dependency
   let idFor
     (os: Stdlib.Cli.OS.OS)
     (arch: Stdlib.Cli.Architecture.Architecture)
     : Stdlib.Result.Result<String, String> =
     Darklang.GitHub.Releases.platformId (PlatformForHost.host os arch)
 
-  // @compiler xfail compile: "Unknown function or value 'PlatformForHost.idFor'" class=missing-support reason=upstream-dependency
   test everySupportedHost =
     Stdlib.Test.all
       [ PlatformForHost.idFor
@@ -123,7 +115,6 @@ module PlatformForHost =
           Stdlib.Cli.Architecture.Architecture.X86_64
         |> Stdlib.Test.equal (Stdlib.Result.Result.Ok "osx-x64") ]
 
-  // @compiler xfail compile: "Unknown function or value 'PlatformForHost.idFor'" class=missing-support reason=upstream-dependency
   test unsupportedCombination =
     PlatformForHost.idFor
       Stdlib.Cli.OS.OS.MacOS

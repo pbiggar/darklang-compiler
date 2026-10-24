@@ -7,7 +7,7 @@ type failureClass = AotRejection | MissingSupport | UpstreamBug
 type disposition =
   | Run
   | ErrorMessage of { phase : phase; diagnostic : string; reason : string }
-  | Blocked of string
+  | Blocked of { reason : string; diagnostic : string option }
   | Excluded of string
   | Replace of { target : string; reason : string }
   | Xfail of {
@@ -72,7 +72,33 @@ let parse reasons text =
       | _ -> Error "Expected a nonempty quoted diagnostic"
     with Yojson.Json_error _ -> Error "Invalid quoted diagnostic"
   else if String.starts_with ~prefix:"blocked:" text then
-    Result.map (fun tag -> Blocked tag) (tagged reasons (after "blocked:"))
+    let rest = after "blocked:" in
+    let* reason, diagnostic =
+      match String.index_opt rest ' ' with
+      | None ->
+          let* reason = tagged reasons rest in
+          Ok (reason, None)
+      | Some index -> (
+          let* reason = tagged reasons (String.sub rest 0 index) in
+          let field =
+            String.sub rest (index + 1) (String.length rest - index - 1)
+            |> String.trim
+          in
+          if not (String.starts_with ~prefix:"diagnostic=" field) then
+            Error "Expected diagnostic= followed by a nonempty JSON string"
+          else
+            try
+              match
+                Yojson.Basic.from_string
+                  (String.sub field 11 (String.length field - 11))
+              with
+              | `String diagnostic when String.trim diagnostic <> "" ->
+                  Ok (reason, Some diagnostic)
+              | _ -> Error "Expected a nonempty quoted blocked diagnostic"
+            with Yojson.Json_error _ ->
+              Error "Invalid quoted blocked diagnostic")
+    in
+    Ok (Blocked { reason; diagnostic })
   else if String.starts_with ~prefix:"excluded:" text then
     Result.map (fun tag -> Excluded tag) (tagged reasons (after "excluded:"))
   else if String.starts_with ~prefix:"replace:" text then

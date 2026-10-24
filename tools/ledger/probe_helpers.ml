@@ -1,4 +1,4 @@
-(* probe_helpers.ml - Check imported test helper bodies against the selected compiler library. *)
+(* probe_helpers.ml - Probe blocked imported declarations against the selected compiler library. *)
 open Dark_compiler
 module W = WrittenTypes
 module S = SourceSelection
@@ -23,7 +23,7 @@ let unitFor (node : S.node) =
     { W.range = W.synthRange; declarations = [ declaration ]; exprsToEval = [] }
   |> Result.map_error (fun _ -> "Invalid helper declaration")
 
-let main root manifest output =
+let main includePackages allBlocked root manifest output =
   let reasons =
     CompilerAnnotations.readReasons
       (Filename.concat root "porting/compiler-reasons.json")
@@ -34,7 +34,7 @@ let main root manifest output =
   in
   let candidates =
     paths
-    |> List.filter (fun file -> Text.contains file "/tests/")
+    |> List.filter (fun file -> includePackages || Text.contains file "/tests/")
     |> List.concat_map (fun file ->
         let text =
           In_channel.with_open_bin
@@ -45,31 +45,176 @@ let main root manifest output =
         S.nodes file source
         |> List.filter (fun node ->
             match node.S.declaration with
-            | W.DFunction _ | W.DType _ | W.DValue _ -> (
+            | W.DExpr _ when not includePackages -> false
+            | (W.DTrait _ | W.DImpl _) when not allBlocked -> false
+            | W.DFunction _ | W.DType _ | W.DValue _ | W.DExpr _ | W.DTrait _
+            | W.DImpl _ -> (
                 match node.S.disposition with
-                | CompilerAnnotations.Blocked reason ->
-                    List.mem reason
-                      [
-                        "missing-implementation";
-                        "upstream-dependency";
-                        "compiler-gap";
-                        "missing-intrinsic";
-                        "test-counter";
-                      ]
+                | CompilerAnnotations.Blocked { reason; _ } ->
+                    allBlocked
+                    || List.mem reason
+                         (if includePackages then
+                            [ "missing-implementation"; "upstream-dependency" ]
+                          else
+                            [
+                              "missing-implementation";
+                              "upstream-dependency";
+                              "compiler-gap";
+                              "missing-intrinsic";
+                              "test-counter";
+                            ])
                 | CompilerAnnotations.Run | CompilerAnnotations.ErrorMessage _
                 | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
                 | CompilerAnnotations.Xfail _ ->
                     false)
-            | W.DTrait _ | W.DImpl _ | W.DModule _ | W.DTest _ | W.DAssertion _
-            | W.DExpr _ ->
-                false))
+            | W.DModule _ | W.DTest _ | W.DAssertion _ -> false))
   in
-  let target = Platform.detectHostTarget () |> require in
-  let stdlib =
-    StdlibCompilation.buildImportedTestStdlibWithTrace target None |> require
+  let readLines path =
+    In_channel.with_open_bin (Filename.concat root path) In_channel.input_all
+    |> String.split_on_char '\n'
+    |> List.filter (fun line ->
+        line <> "" && not (String.starts_with ~prefix:"#" line))
   in
+  let roots =
+    readLines "upstream/sources.list"
+    |> List.filter (String.starts_with ~prefix:"packages/")
+    |> List.map (( ^ ) "upstream/")
+  in
+  let supplements = readLines "library-sources.list" in
+  let sources =
+    roots @ supplements
+    |> List.map (fun file ->
+        let text =
+          In_channel.with_open_bin
+            (Filename.concat root file)
+            In_channel.input_all
+        in
+        (file, I.parse ~reasons text |> require))
+  in
+  let selected =
+    S.select ~context:SourceContracts.emptyContext ~roots ~supplements ~sources
+    |> require
+  in
+  let sourceNodes =
+    List.concat_map (fun (file, source) -> S.nodes file source) sources
+  in
+  let selectedNodes =
+    let rec collect path declarations =
+      List.concat_map
+        (function
+          | W.DModule modul ->
+              collect (path @ W.moduleNameParts modul) modul.W.declarations
+          | ( W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _
+            | W.DTest _ | W.DAssertion _ | W.DExpr _ ) as declaration -> (
+              match
+                List.find_opt
+                  (fun (node : S.node) ->
+                    node.S.path = path && node.S.declaration = declaration)
+                  sourceNodes
+              with
+              | Some node -> [ node ]
+              | None ->
+                  Crash.crash "Selected declaration absent from probe sources"))
+        declarations
+    in
+    List.concat_map
+      (fun (_, unit_) ->
+        let tree = Validation.ValidatedSourceFile.toWrittenTypes unit_ in
+        collect [] tree.W.declarations
+        @ collect [] (List.map (fun expr -> W.DExpr expr) tree.W.exprsToEval))
+      selected.S.units
+  in
+  let implementationKey (node : S.node) (impl : W.implDecl) =
+    let spelling =
+      List.map
+        (fun ((part : W.identifier), _) -> part.W.name)
+        impl.W.trait_.W.modules
+      @ [ impl.W.trait_.W.typ.W.name ]
+      |> String.concat "."
+    in
+    let candidates =
+      NameResolution.candidateSpellings NameResolution.Type node.S.path spelling
+      @
+      if String.contains spelling '.' then []
+      else [ "Darklang.Stdlib." ^ spelling ]
+    in
+    let identity =
+      List.find_opt
+        (fun name ->
+          List.exists
+            (fun (other : S.node) ->
+              S.kind other.S.declaration = "trait" && other.S.name = name)
+            selectedNodes)
+        candidates
+    in
+    Option.map
+      (fun identity ->
+        let trait_ =
+          {
+            impl.W.trait_ with
+            W.modules = [];
+            typ = { impl.W.trait_.W.typ with W.name = identity };
+          }
+        in
+        let declaration =
+          W.DImpl { impl with W.trait_; members = []; description = "" }
+        in
+        WrittenFormatter.syntaxKey
+          {
+            W.range = W.synthRange;
+            declarations = [ declaration ];
+            exprsToEval = [];
+          })
+      identity
+  in
+  let sameSelection (node : S.node) (other : S.node) =
+    node.S.name = other.S.name
+    && S.kind node.S.declaration = S.kind other.S.declaration
+    ||
+    match node.S.declaration with
+    | W.DImpl left -> (
+        match other.S.declaration with
+        | W.DImpl right when node.S.path = other.S.path -> (
+            match
+              (implementationKey node left, implementationKey other right)
+            with
+            | Some left, Some right -> left = right
+            | None, _ | Some _, None -> false)
+        | W.DImpl _ | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _
+        | W.DModule _ | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+            false)
+    | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DModule _
+    | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+        false
+  in
+  let candidates, duplicateSelections =
+    List.fold_right
+      (fun (node : S.node) (pending, duplicates) ->
+        let existing =
+          if not allBlocked then None
+          else
+            List.find_opt
+              (fun (other : S.node) ->
+                other.S.file <> node.S.file && sameSelection node other)
+              selectedNodes
+        in
+        match existing with
+        | None -> (node :: pending, duplicates)
+        | Some other ->
+            ( pending,
+              ( node,
+                "Already selected from " ^ other.S.file
+                ^ "; importing another declaration of " ^ node.S.name
+                ^ " requires an explicit replacement contract" )
+              :: duplicates ))
+      candidates ([], [])
+  in
+  let units = List.map snd selected.S.units in
   let base =
-    stdlib.CompilationContexts.context.CompilationContexts.writtenEnvironment
+    let _, _, environment =
+      WrittenChecking.checkSourceUnitsWithBase None true false units |> require
+    in
+    Some environment
   in
   let rec pass environment accepted candidates =
     let environment, accepted, remaining, changed =
@@ -87,11 +232,186 @@ let main root manifest output =
         (environment, accepted, [], false)
         candidates
     in
+    Printf.eprintf "Probe: %d checked, %d remaining\n%!" (List.length accepted)
+      (List.length remaining);
     if changed then pass environment accepted (List.rev remaining)
     else (List.rev accepted, List.rev remaining)
   in
+  let sameNode (left : S.node) (right : S.node) =
+    left.S.file = right.S.file && left.S.name = right.S.name
+    && S.kind left.S.declaration = S.kind right.S.declaration
+  in
+  let responsible accepted diagnostic =
+    if
+      String.starts_with
+        ~prefix:"Declaration-only program must not contain entry expressions"
+        diagnostic
+    then
+      List.find_opt
+        (fun (node : S.node) ->
+          match node.S.declaration with
+          | W.DExpr _ -> true
+          | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _
+          | W.DModule _ | W.DTest _ | W.DAssertion _ ->
+              false)
+        accepted
+    else if
+      String.starts_with ~prefix:"Constructor identity collision " diagnostic
+    then
+      let direct =
+        List.find_opt
+          (fun node ->
+            S.kind node.S.declaration = "type"
+            && Text.contains diagnostic (node.S.name ^ "."))
+          accepted
+      in
+      match direct with
+      | Some _ -> direct
+      | None ->
+          (* A newly duplicated case name can change the identity of
+          an existing constructor, including two cases in one base type. *)
+          let identities = String.split_on_char ' ' diagnostic in
+          let names =
+            List.filter_map
+              (fun identity ->
+                match List.rev (String.split_on_char '.' identity) with
+                | name :: _ :: _ ->
+                    Some
+                      (String.trim
+                         (String.concat "" (String.split_on_char ',' name)))
+                | _ -> None)
+              identities
+          in
+          List.find_opt
+            (fun (node : S.node) ->
+              match node.S.declaration with
+              | W.DType { W.definition = W.TDEnum cases; _ } ->
+                  List.exists
+                    (fun (_, (case : W.enumCaseSyntax)) ->
+                      List.mem (snd case.W.name) names)
+                    cases
+              | W.DType { W.definition = W.TDAlias _ | W.TDRecord _; _ }
+              | W.DFunction _ | W.DValue _ | W.DTrait _ | W.DImpl _
+              | W.DModule _ | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+                  false)
+            accepted
+    else
+      List.find_opt
+        (fun (node : S.node) ->
+          String.starts_with ~prefix:(node.S.name ^ ":") diagnostic)
+        accepted
+  in
+  let rec prepareTypes nodes rejected =
+    if nodes = [] then (base, [], rejected)
+    else
+      match
+        WrittenChecking.checkSourceUnitsWithBase base true false
+          (List.map (fun node -> unitFor node |> require) nodes)
+      with
+      | Ok (_, _, environment) -> (Some environment, nodes, rejected)
+      | Error diagnostic -> (
+          match responsible nodes diagnostic with
+          | Some node ->
+              Printf.eprintf "Type batch rejection: %s: %s\n%!" node.S.name
+                diagnostic;
+              prepareTypes
+                (List.filter (fun other -> not (sameNode node other)) nodes)
+                ((node, diagnostic) :: rejected)
+          | None ->
+              failwith ("Cannot attribute type batch failure: " ^ diagnostic))
+  in
+  let rec combined rejected =
+    let available =
+      candidates
+      |> List.filter (fun node ->
+          not (List.exists (fun (other, _) -> sameNode node other) rejected))
+    in
+    let types, remaining =
+      List.partition (fun node -> S.kind node.S.declaration = "type") available
+    in
+    let environment, types, typeRejections = prepareTypes types [] in
+    let accepted, blocked =
+      pass environment types (List.map (fun node -> (node, "")) remaining)
+    in
+    let blocked = typeRejections @ blocked in
+    let initialRejections = List.length rejected in
+    let rec validate accepted rejected =
+      let combinedSources =
+        List.map
+          (fun (file, (source : I.source)) ->
+            let entries =
+              List.map
+                (fun (entry : I.entry) ->
+                  if
+                    List.exists
+                      (fun (node : S.node) ->
+                        node.S.file = file && node.S.name = entry.I.name
+                        && S.kind node.S.declaration = I.kindName entry.I.kind
+                        || allBlocked && node.S.file = file
+                           && (match entry.I.disposition with
+                             | CompilerAnnotations.Blocked _ -> true
+                             | CompilerAnnotations.Run
+                             | CompilerAnnotations.ErrorMessage _
+                             | CompilerAnnotations.Excluded _
+                             | CompilerAnnotations.Replace _
+                             | CompilerAnnotations.Xfail _ ->
+                                 false)
+                           && List.mem entry.I.position
+                                (match node.S.declaration with
+                                | W.DTrait trait_ ->
+                                    List.map
+                                      (fun (method_ : W.traitMethodDecl) ->
+                                        method_.W.keywordLet.Tokenizer.start)
+                                      trait_.W.methods
+                                | W.DImpl impl ->
+                                    List.map
+                                      (function
+                                        | W.IMethod fn ->
+                                            fn.W.keywordLet.Tokenizer.start
+                                        | W.IAlias value ->
+                                            value.W.keywordVal.Tokenizer.start)
+                                      impl.W.members
+                                | W.DFunction _ | W.DValue _ | W.DType _
+                                | W.DModule _ | W.DTest _ | W.DAssertion _
+                                | W.DExpr _ ->
+                                    []))
+                      accepted
+                  then { entry with I.disposition = CompilerAnnotations.Run }
+                  else entry)
+                source.I.entries
+            in
+            (file, { source with I.entries }))
+          sources
+      in
+      let result =
+        Result.bind
+          (S.select ~context:SourceContracts.emptyContext ~roots ~supplements
+             ~sources:combinedSources) (fun selected ->
+            WrittenChecking.checkSourceUnitsWithBase None true false
+              (List.map snd selected.S.units))
+      in
+      match result with
+      | Ok _ -> (accepted, rejected @ blocked)
+      | Error diagnostic -> (
+          let responsible = responsible accepted diagnostic in
+          match responsible with
+          | Some node ->
+              Printf.eprintf "Combined rejection: %s: %s\n%!" node.S.name
+                diagnostic;
+              validate
+                (List.filter (fun other -> not (sameNode node other)) accepted)
+                ((node, diagnostic) :: rejected)
+          | None ->
+              if List.length rejected > initialRejections then combined rejected
+              else
+                failwith
+                  ("Cannot attribute combined source failure: " ^ diagnostic))
+    in
+    validate accepted rejected
+  in
   let accepted, blocked =
-    pass base [] (List.map (fun node -> (node, "")) candidates)
+    if includePackages then combined []
+    else pass base [] (List.map (fun node -> (node, "")) candidates)
   in
   let row (node : S.node) status diagnostic =
     let line =
@@ -99,14 +419,19 @@ let main root manifest output =
       | W.DFunction fn -> fn.W.keywordLet.Tokenizer.start.Tokenizer.row + 1
       | W.DType typ -> typ.W.keywordType.Tokenizer.start.Tokenizer.row + 1
       | W.DValue value -> value.W.keywordVal.Tokenizer.start.Tokenizer.row + 1
-      | W.DTrait _ | W.DImpl _ | W.DModule _ | W.DTest _ | W.DAssertion _
-      | W.DExpr _ ->
+      | W.DExpr expression ->
+          (W.exprRange expression).Tokenizer.start.Tokenizer.row + 1
+      | W.DTrait trait_ ->
+          trait_.W.keywordTrait.Tokenizer.start.Tokenizer.row + 1
+      | W.DImpl impl -> impl.W.keywordImpl.Tokenizer.start.Tokenizer.row + 1
+      | W.DModule _ | W.DTest _ | W.DAssertion _ ->
           Crash.crash "Non-helper candidate"
     in
     `Assoc
       [
         ("source", `String node.S.file);
         ("name", `String node.S.name);
+        ("kind", `String (S.kind node.S.declaration));
         ("line", `Int line);
         ("status", `String status);
         ("diagnostic", `String diagnostic);
@@ -115,13 +440,21 @@ let main root manifest output =
   Yojson.Basic.to_file output
     (`List
        (List.map (fun node -> row node "checked" "") accepted
-       @ List.map (fun (node, message) -> row node "blocked" message) blocked));
-  Printf.printf "Imported test helpers: %d checked, %d blocked\n"
-    (List.length accepted) (List.length blocked)
+       @ List.map
+           (fun (node, message) -> row node "blocked" message)
+           (blocked @ duplicateSelections)));
+  Printf.printf "Imported declarations: %d checked, %d blocked\n"
+    (List.length accepted)
+    (List.length blocked + List.length duplicateSelections)
 
 let () =
   match Array.to_list Sys.argv with
-  | [ _; root; manifest; output ] -> main root manifest output
+  | [ _; root; manifest; output ] -> main false false root manifest output
+  | [ _; "--packages"; root; manifest; output ] ->
+      main true false root manifest output
+  | [ _; "--all-blocked"; root; manifest; output ] ->
+      main true true root manifest output
   | _ ->
-      prerr_endline "Usage: probe_helpers ROOT MANIFEST REPORT";
+      prerr_endline
+        "Usage: probe_helpers [--packages|--all-blocked] ROOT MANIFEST REPORT";
       exit 1

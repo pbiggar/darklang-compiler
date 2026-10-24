@@ -5,17 +5,17 @@ test stdinIsNonInteractive =
   Stdlib.Cli.Stdin.isInteractive () |> Stdlib.Test.equal false
 
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Isolation.writeConfig: Unknown function or value 'Stdlib.LocalStore.configSet'"
 let writeConfig (key: String) : String =
   Stdlib.LocalStore.configSet key "child"
   Stdlib.LocalStore.path ()
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Isolation.cleanConfig: Unknown function or value 'Stdlib.LocalStore.configGet'"
 let cleanConfig (key: String) : Bool =
   Stdlib.LocalStore.configGet key == ""
     && Stdlib.Env.get "DARK_MATTER_WRITE_SECRET" == None
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Isolation.readConfig: Unknown function or value 'Stdlib.LocalStore.configGet'"
 let readConfig (key: String) : String =
   Stdlib.LocalStore.configGet key
 
@@ -61,7 +61,7 @@ test stateAndEnvironmentAreIsolated =
           | Error message -> Stdlib.Test.fail message
           | Ok checked -> checked.result |> Stdlib.Test.equal (Ok true) ]
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Isolation.runtimeFailure: Unknown function or value 'Stdlib.LocalStore.path'"
 let runtimeFailure () : Int =
   Stdlib.printLine (Stdlib.LocalStore.path ())
   1 / 0
@@ -93,7 +93,6 @@ test assertionFailureIsPreserved =
       [ output.result |> Stdlib.Test.equal (Ok (Stdlib.Test.Result.Fail [ "intentional isolation failure" ]))
         output.exitCode |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: upstream-dependency
 let createBranch () : String =
   Darklang.Cli.Tests.TestSuite.runWithCommand [ "branch", "create", "isolated-child-branch" ]
 
@@ -107,7 +106,7 @@ test branchChangesStayIsolated =
       [ output.exitCode |> Stdlib.Test.equal 0
         Darklang.SCM.PackageOps.currentBranch () |> Stdlib.Test.equal parentBranch ]
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Isolation.currentBranch: Unknown function or value 'Darklang.SCM.PackageOps.currentBranch'"
 let currentBranch () : Uuid = Darklang.SCM.PackageOps.currentBranch ()
 
 // @compiler xfail compile: "Unknown function or value 'currentBranch'" class=missing-support reason=upstream-dependency
@@ -117,14 +116,14 @@ test runsOnTheCallersBranch =
   | Error message -> Stdlib.Test.fail message
   | Ok output -> output.result |> Stdlib.Test.equal (Ok here)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.Isolation.checkInheritedBranch: Unknown function or value 'Stdlib.Test.Process.run'"
 let checkInheritedBranch (expected: Uuid) : Stdlib.Test.Result =
   match Stdlib.Test.Process.run (Stdlib.Test.Process.defaults ()) currentBranch () with
   | Error message -> Stdlib.Test.fail message
   | Ok output -> output.result |> Stdlib.Test.equal (Ok expected)
 
 // Uses an actual non-main branch, then a nested worker with default options.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tests.TestSuite.runWithCommand'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Branch.lookupRef'" class=missing-support reason=upstream-dependency
 test explicitBranchBecomesTheNestedWorkersDefault =
   let name = "isolated-selection-" + Stdlib.toString (Stdlib.Uuid.generate ())
   let _ = Darklang.Cli.Tests.TestSuite.runWithCommand [ "branch", "create", name ]
@@ -155,7 +154,7 @@ test resultIsSeparateFromOutput =
 
 let waitsTooLong () : Unit = Stdlib.Cli.Posix.sleep 10000.0
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.defaults'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.run'" class=missing-support reason=upstream-dependency
 test timeoutIsReported =
   let defaults = Stdlib.Test.Process.defaults ()
   match Stdlib.Test.Process.run { defaults with timeoutMs = 1000 } waitsTooLong () with

@@ -11,7 +11,6 @@ module Darklang.SCM.Draft
 // pass `AppState.currentBranchId`, which is a DIFFERENT value.
 
 /// The current draft, as anything describing it needs to see it.
-// @compiler blocked: missing-implementation
 type Picture =
   { /// Every name the draft touches, in authoring order.
     bindings: List<SCM.Conflicts.Binding>
@@ -29,7 +28,7 @@ type Picture =
     ops: Int64 }
 
 /// Read the whole picture. One call, five reads, and the only place they happen.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.read: Unknown function or value 'SCM.PackageOps.draftBindings'"
 let read (unit: Unit) : Picture =
   let bindings = SCM.PackageOps.draftBindings ()
 
@@ -46,7 +45,6 @@ let read (unit: Unit) : Picture =
 ///
 /// `dark status` runs on every invocation, so it deliberately does NOT build a `Picture`: it asks for a
 /// count where a count will do, and skips dependency details.
-// @compiler blocked: missing-implementation
 type Counts =
   { changed: Int
     followed: Int
@@ -60,7 +58,7 @@ type Counts =
     constraintsFromDraft: Int
     ops: Int64 }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Draft.counts: Unknown function or value 'SCM.PackageOps.draftBindings'"
 let counts (unit: Unit) : Counts =
   let bindings = SCM.PackageOps.draftBindings ()
   let propagated = SCM.PackageOps.propagatedNames ()
@@ -91,22 +89,18 @@ let counts (unit: Unit) : Counts =
 ///
 /// The split the whole draft view turns on: an entry that followed your edit is otherwise indistinguishable
 /// from one you made.
-// @compiler blocked: missing-implementation
 let followed (p: Picture) (b: SCM.Conflicts.Binding) : Bool =
   Stdlib.List.contains p.propagated (SCM.Conflicts.fqn b.owner b.modules b.name)
 
 /// How many of the changed names followed something rather than being edited by you.
-// @compiler blocked: missing-implementation
 let followedCount (p: Picture) : Int =
   p.bindings |> Stdlib.List.filter (fun b -> followed p b) |> Stdlib.List.length
 
 /// How many you actually authored.
-// @compiler blocked: missing-implementation
 let authoredCount (p: Picture) : Int =
   (Stdlib.List.length p.bindings) - (followedCount p)
 
 /// Everything waiting on a person right now: divergences the fold settled and standing findings. One
 /// number, because they're one question ("is anything waiting on me?").
-// @compiler blocked: missing-implementation
 let needsYouCount (p: Picture) : Int =
   (Stdlib.List.length p.conflicts) + p.constraints

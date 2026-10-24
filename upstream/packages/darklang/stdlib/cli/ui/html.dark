@@ -6,7 +6,7 @@
 /// Text is escaped, always: a view renders values it did not choose.
 module Darklang.Stdlib.Cli.UI.Html
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Style'"
 let className (style: Node.Style) : String =
   match style with
   | Bold -> "dark-bold"
@@ -20,19 +20,18 @@ let className (style: Node.Style) : String =
   | Muted -> "dark-muted"
   | Highlight -> "dark-highlight"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Severity'"
 let severityClass (severity: Node.Severity) : String =
   match severity with
   | Info -> "dark-band dark-band-info"
   | Warning -> "dark-band dark-band-warning"
   | Error -> "dark-band dark-band-error"
 
-// @compiler blocked: missing-implementation
 let escape (s: String) : String = Stdlib.Html.escapeHtml s
 
 /// <param node> as markup. <param toJson> says how a message posts: the `Button`'s payload, and the
 /// name an `Input` posts its text under.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Node'"
 let render (node: Node.Node<'msg>) (toJson: 'msg -> String) : String =
   match node with
   | Empty -> ""
@@ -92,11 +91,11 @@ let render (node: Node.Node<'msg>) (toJson: 'msg -> String) : String =
     $"<div class=\"{severityClass severity}\">{escape message}</div>"
 
 /// `render` for a view whose messages never post: buttons carry an empty payload.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Node'"
 let renderStatic (node: Node.Node<'msg>) : String = render node (fun _ -> "")
 
 /// A whole page: the tree in a body, with the stylesheet that gives the classes a look.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node.Node'"
 let page (title: String) (node: Node.Node<'msg>) (toJson: 'msg -> String) : String =
   let css =
     "body{font-family:ui-monospace,monospace;margin:1.5rem;background:#fff;color:#111}"
