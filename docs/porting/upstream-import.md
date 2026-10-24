@@ -147,6 +147,9 @@ removing attributable combined failures and retrying their dependents. This is
 a type-checking probe; promoting declarations still requires checking the real
 source selection, native compilation and the test suite. The default invocation
 without `--packages` retains the test-helper probe.
+`--all-blocked` inspects every blocked declaration reason and includes traits
+and implementations. Its report records source checking only; a checked row
+does not authorize promoting a known native compilation or execution failure.
 
 `check_sources --native ROOT` runs the selected on-disk declarations through
 the host native library pipeline, including specialization and allocation,

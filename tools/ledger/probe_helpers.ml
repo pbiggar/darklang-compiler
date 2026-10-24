@@ -23,7 +23,7 @@ let unitFor (node : S.node) =
     { W.range = W.synthRange; declarations = [ declaration ]; exprsToEval = [] }
   |> Result.map_error (fun _ -> "Invalid helper declaration")
 
-let main includePackages root manifest output =
+let main includePackages allBlocked root manifest output =
   let reasons =
     CompilerAnnotations.readReasons
       (Filename.concat root "porting/compiler-reasons.json")
@@ -46,10 +46,12 @@ let main includePackages root manifest output =
         |> List.filter (fun node ->
             match node.S.declaration with
             | W.DExpr _ when not includePackages -> false
-            | W.DFunction _ | W.DType _ | W.DValue _ | W.DExpr _ -> (
+            | W.DTrait _ | W.DImpl _ when not allBlocked -> false
+            | W.DFunction _ | W.DType _ | W.DValue _ | W.DExpr _
+            | W.DTrait _ | W.DImpl _ -> (
                 match node.S.disposition with
                 | CompilerAnnotations.Blocked { reason; _ } ->
-                    List.mem reason
+                    allBlocked || List.mem reason
                       (if includePackages then
                          [ "missing-implementation"; "upstream-dependency" ]
                        else
@@ -63,8 +65,7 @@ let main includePackages root manifest output =
                 | CompilerAnnotations.Run | CompilerAnnotations.Excluded _
                 | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ ->
                     false)
-            | W.DTrait _ | W.DImpl _ | W.DModule _ | W.DTest _ | W.DAssertion _
-              ->
+            | W.DModule _ | W.DTest _ | W.DAssertion _ ->
                 false))
   in
   let readLines path =
@@ -263,7 +264,9 @@ let main includePackages root manifest output =
       | W.DValue value -> value.W.keywordVal.Tokenizer.start.Tokenizer.row + 1
       | W.DExpr expression ->
           (W.exprRange expression).Tokenizer.start.Tokenizer.row + 1
-      | W.DTrait _ | W.DImpl _ | W.DModule _ | W.DTest _ | W.DAssertion _ ->
+      | W.DTrait trait_ -> trait_.W.keywordTrait.Tokenizer.start.Tokenizer.row + 1
+      | W.DImpl impl -> impl.W.keywordImpl.Tokenizer.start.Tokenizer.row + 1
+      | W.DModule _ | W.DTest _ | W.DAssertion _ ->
           Crash.crash "Non-helper candidate"
     in
     `Assoc
@@ -285,9 +288,11 @@ let main includePackages root manifest output =
 
 let () =
   match Array.to_list Sys.argv with
-  | [ _; root; manifest; output ] -> main false root manifest output
+  | [ _; root; manifest; output ] -> main false false root manifest output
   | [ _; "--packages"; root; manifest; output ] ->
-      main true root manifest output
+      main true false root manifest output
+  | [ _; "--all-blocked"; root; manifest; output ] ->
+      main true true root manifest output
   | _ ->
-      prerr_endline "Usage: probe_helpers [--packages] ROOT MANIFEST REPORT";
+      prerr_endline "Usage: probe_helpers [--packages|--all-blocked] ROOT MANIFEST REPORT";
       exit 1
