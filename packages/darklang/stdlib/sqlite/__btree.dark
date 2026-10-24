@@ -58,7 +58,7 @@ let __node (size: Int) (page: Int) (b: Blob) : Stdlib.Result.Result<__Node, Stri
 let __pack (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (kind: Int) (right: Int) (cells: List<Blob>)
   : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
   let start = __offset page
-  let header = if kind == 5 then 12 else 8
+  let header = if kind == 5 || kind == 2 then 12 else 8
   let count = Stdlib.List.length cells
   let bytes = Stdlib.List.fold cells 0 (fun n b -> n + Stdlib.Blob.length b)
   if start + header + count * 2 + bytes > s.size then Error "SQLite: page is full"
@@ -67,7 +67,7 @@ let __pack (s: Stdlib.Sqlite.__Pager.__State) (page: Int) (kind: Int) (right: In
     let base = Stdlib.Sqlite.__Codec.__put base start 1 kind
     let base = Stdlib.Sqlite.__Codec.__put base (start + 3) 2 count
     let base = Stdlib.Sqlite.__Codec.__put base (start + 5) 2 ((s.size - bytes) % 65536)
-    let base = if kind == 5 then Stdlib.Sqlite.__Codec.__put base (start + 8) 4 right else base
+    let base = if kind == 5 || kind == 2 then Stdlib.Sqlite.__Codec.__put base (start + 8) 4 right else base
     let (_, pointers) = Stdlib.List.fold cells (s.size, []) (fun (end_, pointers) b ->
       let o = end_ - Stdlib.Blob.length b in (o, pointers @ [__be o 2]))
     let base = Stdlib.Sqlite.__Codec.__replace base (start + header) (Stdlib.Blob.concat pointers)

@@ -1,0 +1,116 @@
+// Catalog declarations for the interpreter's rowid tables and index constraints.
+// Keep the SQL text in SQLite's schema so native clients can reopen the same file.
+module Darklang.Stdlib.Sqlite.__Schema
+
+type __Key = { fields: List<Stdlib.Sqlite.__Sql.__Expr>, primary: Bool }
+type __Definition = { name: String, ignore: Bool, columns: List<Stdlib.Sqlite.__Sql.__Column>, keys: List<__Key>, sql: String }
+type __Index = { name: String, table: String, ignore: Bool, unique: Bool, fields: List<Stdlib.Sqlite.__Sql.__Expr>,
+  predicate: Stdlib.Option.Option<Stdlib.Sqlite.__Sql.__Expr>, sql: String }
+
+let __lower (s: String) : String = Stdlib.String.toLowercase s
+let __quote (text: String) (quote: Int64) : String =
+  let points = Stdlib.String.__toCodepoints text
+  Stdlib.String.__fromCodepointsRaw ([quote] @ Stdlib.List.fold points [] (fun acc point ->
+    acc @ (if point == quote then [point,point] else [point])) @ [quote])
+let __render (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : String =
+  let strings = Stdlib.List.map tokens (fun token -> match token with
+    | Word s -> s
+    | Quoted s -> __quote s 34L
+    | Symbol s -> s
+    | Param s -> s
+    | Atom v -> match v with
+      | Null -> "NULL"
+      | Int n -> Stdlib.Int64.toString n
+      | Real f -> Stdlib.Float.toString f
+      | Text s -> __quote s 39L
+      | Bytes b -> "X'" + Stdlib.Blob.toHex b + "'")
+  let blobs = Stdlib.List.fold strings [] (fun blobs text ->
+    if Stdlib.List.isEmpty blobs then [Stdlib.Blob.fromString text] else blobs @ [Stdlib.Blob.fromString " ",Stdlib.Blob.fromString text])
+  Stdlib.Blob.__copyToString (Stdlib.Blob.concat blobs)
+let __optional (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<(Bool * List<Stdlib.Sqlite.__Sql.__Token>),String> =
+  match tokens with
+  | Word word :: rest ->
+    if __lower word != "if" then Ok ((false,tokens))
+    else Stdlib.Sqlite.__Sql.__eat rest "not" |> Stdlib.Result.andThen (fun rest -> Stdlib.Sqlite.__Sql.__eat rest "exists") |> Stdlib.Result.map (fun rest -> (true,rest))
+  | _ -> Ok ((false,tokens))
+let __end (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<Unit,String> =
+  if tokens == [] || tokens == [Stdlib.Sqlite.__Sql.__Token.Symbol ";"] then Ok () else Error "SQLite: unsupported schema declaration suffix"
+
+let __columnKeys (column: Stdlib.Sqlite.__Sql.__Column) (tokens: List<Stdlib.Sqlite.__Sql.__Token>)
+  : Stdlib.Result.Result<List<__Key>,String> =
+  match tokens with
+  | [] -> Ok []
+  | Word word :: rest ->
+    let word = __lower word
+    if word == "primary" then Stdlib.Sqlite.__Sql.__eat rest "key" |> Stdlib.Result.andThen (fun rest ->
+      let rest = match rest with | Word direction :: tail -> if __lower direction == "asc" || __lower direction == "desc" then tail else rest | _ -> rest
+      __columnKeys column rest |> Stdlib.Result.map (fun keys ->
+        if column.primary then keys else [__Key { fields = [Stdlib.Sqlite.__Sql.__Expr.Column column.name], primary = true }] @ keys))
+    else if word == "unique" then __columnKeys column rest |> Stdlib.Result.map (fun keys ->
+      [__Key { fields = [Stdlib.Sqlite.__Sql.__Expr.Column column.name], primary = false }] @ keys)
+    else if word == "not" then Stdlib.Sqlite.__Sql.__eat rest "null" |> Stdlib.Result.andThen (fun rest -> __columnKeys column rest)
+    else if word == "null" then __columnKeys column rest
+    else if word == "default" then Stdlib.Sqlite.__Sql.__expression rest 1 |> Stdlib.Result.andThen (fun (_,rest) -> __columnKeys column rest)
+    else if word == "references" then
+      Stdlib.Sqlite.__Sql.__name rest |> Stdlib.Result.andThen (fun (_,rest) ->
+        Stdlib.Sqlite.__Sql.__eat rest "(" |> Stdlib.Result.andThen Stdlib.Sqlite.__Sql.__names
+        |> Stdlib.Result.andThen (fun (_,rest) -> Stdlib.Sqlite.__Sql.__eat rest ")")
+        |> Stdlib.Result.andThen (fun rest -> __columnKeys column rest))
+    else if word == "collate" then Stdlib.Sqlite.__Sql.__name rest |> Stdlib.Result.andThen (fun (name,rest) ->
+      if __lower name == "binary" then __columnKeys column rest else Error "SQLite: unsupported index collation")
+    else Error ("SQLite: unsupported column constraint " + word)
+  | _ -> Error "SQLite: unsupported column declaration"
+
+let __partKeys (columns: List<Stdlib.Sqlite.__Sql.__Column>) (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<List<__Key>,String> =
+  match tokens with
+  | Word word :: rest when __lower word == "constraint" ->
+    Stdlib.Sqlite.__Sql.__name rest |> Stdlib.Result.andThen (fun (_,rest) -> __partKeys columns rest)
+  | Word word :: rest when __lower word == "primary" || __lower word == "unique" ->
+    let primary = __lower word == "primary"
+    (if primary then Stdlib.Sqlite.__Sql.__eat rest "key" else Ok rest)
+    |> Stdlib.Result.andThen (fun rest -> Stdlib.Sqlite.__Sql.__eat rest "(" |> Stdlib.Result.andThen Stdlib.Sqlite.__Sql.__names)
+    |> Stdlib.Result.andThen (fun (names,rest) -> Stdlib.Sqlite.__Sql.__eat rest ")" |> Stdlib.Result.andThen __end
+      |> Stdlib.Result.map (fun _ ->
+        let alias = primary && Stdlib.List.length names == 1 && Stdlib.List.any columns (fun column -> column.primary && Stdlib.List.contains names column.name)
+        if alias then [] else [__Key { fields = Stdlib.List.map names (fun name -> Stdlib.Sqlite.__Sql.__Expr.Column name), primary = primary }]))
+  | _ -> Stdlib.Sqlite.__Sql.__name tokens |> Stdlib.Result.andThen (fun (name,rest) ->
+    match Stdlib.List.findFirst columns (fun c -> __lower c.name == __lower name) with
+    | None -> Error "SQLite: unknown table constraint"
+    | Some column ->
+      let rest = match rest with
+        | Word word :: tail -> if Stdlib.List.contains ["primary","not","null","unique","default","references","collate"] (__lower word) then rest else tail
+        | _ -> rest
+      __columnKeys column rest)
+
+let __appendKey (keys: List<__Key>) (key: __Key) : List<__Key> =
+  if Stdlib.List.any keys (fun old -> old.fields == key.fields) then keys else keys @ [key]
+
+let __table (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<__Definition,String> =
+  Stdlib.Sqlite.__Sql.__eat tokens "create" |> Stdlib.Result.andThen (fun tokens -> Stdlib.Sqlite.__Sql.__eat tokens "table")
+  |> Stdlib.Result.andThen __optional |> Stdlib.Result.andThen (fun (ignore,rest) ->
+    Stdlib.Sqlite.__Sql.__name rest |> Stdlib.Result.andThen (fun (name,rest) ->
+      Stdlib.Sqlite.__Sql.__eat rest "(" |> Stdlib.Result.andThen (fun rest -> Stdlib.Sqlite.__Sql.__catalogParts rest 0 [] [])
+      |> Stdlib.Result.andThen (fun (parts,rest) -> __end rest |> Stdlib.Result.andThen (fun _ ->
+        let sql = __render tokens
+        Stdlib.Sqlite.__Sql.__catalogColumns sql |> Stdlib.Result.andThen (fun columns ->
+          Stdlib.List.fold parts (Ok []) (fun result part -> result |> Stdlib.Result.andThen (fun keys ->
+            __partKeys columns part |> Stdlib.Result.map (fun more -> keys @ more)))
+          |> Stdlib.Result.map (fun keys ->
+            let keys = Stdlib.List.fold keys [] __appendKey
+            __Definition { name = name, ignore = ignore, columns = columns, keys = keys, sql = sql }))))))
+
+let __index (tokens: List<Stdlib.Sqlite.__Sql.__Token>) : Stdlib.Result.Result<__Index,String> =
+  Stdlib.Sqlite.__Sql.__eat tokens "create" |> Stdlib.Result.andThen (fun rest ->
+    let (unique,rest) = match rest with | Word word :: rest when __lower word == "unique" -> (true,rest) | _ -> (false,rest)
+    Stdlib.Sqlite.__Sql.__eat rest "index" |> Stdlib.Result.andThen __optional |> Stdlib.Result.andThen (fun (ignore,rest) ->
+      Stdlib.Sqlite.__Sql.__name rest |> Stdlib.Result.andThen (fun (name,rest) ->
+        Stdlib.Sqlite.__Sql.__eat rest "on" |> Stdlib.Result.andThen Stdlib.Sqlite.__Sql.__name |> Stdlib.Result.andThen (fun (table,rest) ->
+          Stdlib.Sqlite.__Sql.__eat rest "(" |> Stdlib.Result.andThen Stdlib.Sqlite.__Sql.__expressions
+          |> Stdlib.Result.andThen (fun (fields,rest) -> Stdlib.Sqlite.__Sql.__eat rest ")" |> Stdlib.Result.andThen Stdlib.Sqlite.__Sql.__predicate
+            |> Stdlib.Result.andThen (fun (predicate,rest) -> __end rest |> Stdlib.Result.map (fun _ ->
+              __Index { name = name, table = table, ignore = ignore, unique = unique, fields = fields, predicate = predicate, sql = __render tokens })))))))
+
+let __auto (table: __Definition) (index: Int) : Stdlib.Option.Option<__Index> =
+  Stdlib.List.getAt table.keys (index - 1) |> Stdlib.Option.map (fun key ->
+    __Index { name = "sqlite_autoindex_" + table.name + "_" + Stdlib.Int.toString index, table = table.name, ignore = false,
+      unique = true, fields = key.fields, predicate = None, sql = "" })

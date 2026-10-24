@@ -12,7 +12,7 @@
 
 (let db = "/tmp/dark-sqlite-ignore.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT NOT NULL)" in Stdlib.Sqlite.execBatch db [("INSERT OR IGNORE INTO t VALUES (@p0,@p1)", [["1","first"],["1","second"]])]) = Ok [1,0]
 
-(let db = "/tmp/dark-sqlite-errors.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)" in (Stdlib.Result.isError (Stdlib.Sqlite.query db "SELECT missing FROM t"), Stdlib.Result.isError (Stdlib.Sqlite.queryP db "SELECT id FROM t WHERE id=@p0" []), Stdlib.Result.isError (Stdlib.Sqlite.exec db "INSERT INTO t VALUES (1,'x'); DELETE FROM t"), Stdlib.Sqlite.scalarInt db "SELECT count(*) AS n FROM t" "n")) = (true,true,true,Some 0L)
+(let db = "/tmp/dark-sqlite-errors.db" in let _ = Stdlib.Cli.File.delete db in let _ = Stdlib.Sqlite.exec db "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)" in (Stdlib.Result.isError (Stdlib.Sqlite.query db "SELECT missing FROM t"), Stdlib.Result.isError (Stdlib.Sqlite.queryP db "SELECT id FROM t WHERE id=@p0" []), Stdlib.Result.isError (Stdlib.Sqlite.exec db "INSERT INTO t VALUES (1,'x'); INSERT INTO t VALUES (1,'y')"), Stdlib.Sqlite.scalarInt db "SELECT count(*) AS n FROM t" "n")) = (true,true,true,Some 0L)
 
 (let db = "/tmp/dark-sqlite-ddl-rollback.db" in let _ = Stdlib.Cli.File.delete db in let result = Stdlib.Sqlite.execBatch db [("CREATE TABLE t (id INTEGER PRIMARY KEY)",[]),("INSERT INTO missing VALUES (1)",[])] in (Stdlib.Result.isError result, Stdlib.Result.isError (Stdlib.Sqlite.query db "SELECT * FROM t"))) = (true,true)
 

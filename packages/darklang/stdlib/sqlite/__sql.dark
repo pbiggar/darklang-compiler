@@ -9,9 +9,9 @@ type __Column = { name: String, affinity: String, primary: Bool, notNull: Bool, 
 type __Select = { fields: List<(__Expr * String)>, table: Stdlib.Option.Option<String>,
   predicate: Stdlib.Option.Option<__Expr>, order: List<(__Expr * Bool)>, limit: Stdlib.Option.Option<Int> }
 type __Statement = Create of String * Bool * List<__Column> | Drop of String * Bool
-  | Insert of String * List<String> * List<__Expr> * Bool
+  | Insert of String * List<String> * List<List<__Expr>> * Bool
   | Update of String * List<(String * __Expr)> * Stdlib.Option.Option<__Expr>
-  | Delete of String * Stdlib.Option.Option<__Expr> | Select of __Select
+  | Delete of String * Stdlib.Option.Option<__Expr> | Select of __Select | Catalog of List<__Token>
 
 let __lower (s: String) : String = Stdlib.String.toLowercase s
 let __char (s: String) (i: Int) : Int64 =
@@ -266,17 +266,24 @@ let __assignments (tokens: List<__Token>) : Stdlib.Result.Result<(List<(String *
       | Symbol "," :: tail -> __assignments tail |> Stdlib.Result.map (fun (assignments,rest) -> ([(name,expr)] @ assignments,rest))
       | _ -> Ok (([(name,expr)],rest))))
 
+let __catalogStatement (tokens: List<__Token>) (acc: List<__Token>) : Stdlib.Result.Result<(__Statement * List<__Token>),String> =
+  match tokens with
+  | [] -> Ok ((Catalog (Stdlib.List.reverse acc),[]))
+  | Symbol ";" :: _ -> Ok ((Catalog (Stdlib.List.reverse acc),tokens))
+  | first :: rest -> __catalogStatement rest ([first] @ acc)
+
+let __valueRows (tokens: List<__Token>) : Stdlib.Result.Result<(List<List<__Expr>> * List<__Token>),String> =
+  __eat tokens "(" |> Stdlib.Result.andThen __expressions |> Stdlib.Result.andThen (fun (values,rest) ->
+    __eat rest ")" |> Stdlib.Result.andThen (fun rest -> match rest with
+      | Symbol "," :: tail -> __valueRows tail |> Stdlib.Result.map (fun (rows,rest) -> ([values] @ rows,rest))
+      | _ -> Ok (([values],rest))))
+
 let __statement (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * List<__Token>), String> =
   match tokens with
   | Word command :: rest ->
     let command = __lower command
     if command == "select" then __select rest
-    else if command == "create" then __eat rest "table" |> Stdlib.Result.andThen (fun rest ->
-      (match rest with
-      | Word word :: tail -> if __lower word == "if" then __eat tail "not" |> Stdlib.Result.andThen (fun tail -> __eat tail "exists") |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok ((false,rest))
-      | _ -> Ok ((false,rest))) |> Stdlib.Result.andThen (fun (ignore,rest) ->
-        __name rest |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "(" |> Stdlib.Result.andThen __columns
-          |> Stdlib.Result.andThen (fun (columns,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (Create (name,ignore,columns),rest))))))
+    else if command == "create" then __catalogStatement ([Word command] @ rest) []
     else if command == "drop" then __eat rest "table" |> Stdlib.Result.andThen (fun rest ->
       (match rest with
       | Word word :: tail -> if __lower word == "if" then __eat tail "exists" |> Stdlib.Result.map (fun tail -> (true,tail)) else Ok ((false,rest))
@@ -289,8 +296,8 @@ let __statement (tokens: List<__Token>) : Stdlib.Result.Result<(__Statement * Li
           (match rest with
           | Symbol "(" :: tail -> __names tail |> Stdlib.Result.andThen (fun (names,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (names,rest)))
           | _ -> Ok (([],rest))) |> Stdlib.Result.andThen (fun (names,rest) ->
-            __eat rest "values" |> Stdlib.Result.andThen (fun rest -> __eat rest "(") |> Stdlib.Result.andThen __expressions
-            |> Stdlib.Result.andThen (fun (values,rest) -> __eat rest ")" |> Stdlib.Result.map (fun rest -> (Insert (name,names,values,ignore),rest))))))
+            __eat rest "values" |> Stdlib.Result.andThen __valueRows
+            |> Stdlib.Result.map (fun (rows,rest) -> (Insert (name,names,rows,ignore),rest)))))
     else if command == "update" then __name rest |> Stdlib.Result.andThen (fun (name,rest) -> __eat rest "set" |> Stdlib.Result.andThen __assignments
       |> Stdlib.Result.andThen (fun (assignments,rest) -> __predicate rest |> Stdlib.Result.map (fun (predicate,rest) -> (Update (name,assignments,predicate),rest))))
     else if command == "delete" then __eat rest "from" |> Stdlib.Result.andThen __name |> Stdlib.Result.andThen (fun (name,rest) ->

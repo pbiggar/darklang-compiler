@@ -2,7 +2,9 @@
 // Each call owns a descriptor; batches retain one pager until their final commit.
 module Darklang.Stdlib.Sqlite.__Engine
 
-type __Table = { name: String, root: Int, columns: List<Stdlib.Sqlite.__Sql.__Column>, schemaKey: Int }
+type __IndexInfo = { definition: Stdlib.Sqlite.__Schema.__Index, root: Int, schemaKey: Int }
+type __Table = { name: String, root: Int, columns: List<Stdlib.Sqlite.__Sql.__Column>, schemaKey: Int,
+  definition: Stdlib.Sqlite.__Schema.__Definition, indexes: List<__IndexInfo> }
 type __Row = { key: Int, values: Dict<String, Stdlib.Sqlite.Value> }
 type __Outcome = { state: Stdlib.Sqlite.__Pager.__State, affected: Int, rows: List<Dict<String, Stdlib.Sqlite.Value>> }
 
@@ -26,26 +28,54 @@ let __schemaEntry (entry: Stdlib.Sqlite.__Btree.__Entry) (readOnly: Bool) : Stdl
   Stdlib.Sqlite.__Codec.__decodeRecord entry.payload |> Stdlib.Result.andThen (fun values ->
     match values with
     | [Text kind,Text name,Text tableName,Int root,definition] ->
-      if kind == "index" || kind == "view" || kind == "trigger" then
-        if readOnly then Ok None else Error "SQLite: writing indexed tables, views and triggers is unsupported"
+      if kind == "index" then Ok None
+      else if kind == "view" || kind == "trigger" then
+        if readOnly then Ok None else Error "SQLite: writing stores with views and triggers is unsupported"
       else if kind != "table" || name != tableName || root <= 1L then Error "SQLite: malformed schema record"
       else match definition with
         | Text sql ->
-          (if readOnly then Stdlib.Sqlite.__Sql.__catalogColumns sql
-           else Stdlib.Sqlite.__Sql.__parse sql |> Stdlib.Result.andThen (fun statement ->
-             match statement with
-             | Create (_,_,columns) -> Ok columns
-             | _ -> Error "SQLite: unsupported schema declaration"))
-          |> Stdlib.Result.andThen (fun columns -> __columnsValid columns |> Stdlib.Result.map (fun _ ->
-            Some (__Table { name = name, root = Stdlib.Int.fromInt64 root, columns = columns, schemaKey = entry.key })))
+          Stdlib.Sqlite.__Sql.__lex sql 0 [] |> Stdlib.Result.andThen Stdlib.Sqlite.__Schema.__table
+          |> Stdlib.Result.andThen (fun definition ->
+            if __lower definition.name != __lower name then Error "SQLite: inconsistent schema name"
+            else __columnsValid definition.columns |> Stdlib.Result.map (fun _ ->
+              Some (__Table { name = name, root = Stdlib.Int.fromInt64 root, columns = definition.columns, schemaKey = entry.key,
+                definition = definition, indexes = [] })))
         | _ -> Error "SQLite: malformed table definition"
     | _ -> Error "SQLite: malformed schema record")
+
+let __schemaIndex (entry: Stdlib.Sqlite.__Btree.__Entry) (tables: List<__Table>) : Stdlib.Result.Result<Stdlib.Option.Option<__IndexInfo>,String> =
+  Stdlib.Sqlite.__Codec.__decodeRecord entry.payload |> Stdlib.Result.andThen (fun values ->
+    match values with
+    | [Text kind,Text name,Text tableName,Int root,sql] when kind == "index" ->
+      if root <= 1L then Error "SQLite: malformed index root"
+      else
+        (match sql with
+        | Text sql -> Stdlib.Sqlite.__Sql.__lex sql 0 [] |> Stdlib.Result.andThen Stdlib.Sqlite.__Schema.__index
+        | Null ->
+          match Stdlib.List.findFirst tables (fun t -> __lower t.name == __lower tableName) with
+          | None -> Error "SQLite: index refers to a missing table"
+          | Some table ->
+            let prefix = "sqlite_autoindex_" + table.name + "_"
+            if Stdlib.Bool.not (Stdlib.String.startsWith name prefix) then Error "SQLite: invalid automatic index name"
+            else Stdlib.Int.parse (Stdlib.Sqlite.__Sql.__slice name (Stdlib.Int.fromInt64 (Stdlib.String.__byteLength prefix)) (Stdlib.Int.fromInt64 (Stdlib.String.__byteLength name)))
+              |> Stdlib.Result.mapError (fun _ -> "SQLite: invalid automatic index number")
+              |> Stdlib.Result.andThen (fun n -> match Stdlib.Sqlite.__Schema.__auto table.definition n with
+                | Some definition -> Ok definition | None -> Error "SQLite: missing automatic index definition")
+        | _ -> Error "SQLite: malformed index definition")
+        |> Stdlib.Result.andThen (fun definition ->
+          if __lower definition.name != __lower name || __lower definition.table != __lower tableName then Error "SQLite: inconsistent index declaration"
+          else Ok (Some (__IndexInfo { definition = definition, root = Stdlib.Int.fromInt64 root, schemaKey = entry.key })))
+    | _ -> Ok None)
 
 let __schema (s: Stdlib.Sqlite.__Pager.__State) (readOnly: Bool) : Stdlib.Result.Result<(Stdlib.Sqlite.__Pager.__State * List<__Table>), String> =
   Stdlib.Sqlite.__Btree.__scan s 1 |> Stdlib.Result.andThen (fun (s,entries) ->
     Stdlib.List.fold entries (Ok []) (fun result entry -> result |> Stdlib.Result.andThen (fun tables ->
       __schemaEntry entry readOnly |> Stdlib.Result.map (fun table -> match table with | None -> tables | Some table -> tables @ [table])))
-    |> Stdlib.Result.map (fun tables -> (s,tables)))
+    |> Stdlib.Result.andThen (fun tables ->
+      Stdlib.List.fold entries (Ok []) (fun result entry -> result |> Stdlib.Result.andThen (fun indexes ->
+        __schemaIndex entry tables |> Stdlib.Result.map (fun index -> match index with | None -> indexes | Some index -> indexes @ [index])))
+      |> Stdlib.Result.map (fun indexes -> (s,Stdlib.List.map tables (fun table ->
+        { table with indexes = Stdlib.List.filter indexes (fun index -> __lower index.definition.table == __lower table.name) })))))
 
 let __find (tables: List<__Table>) (name: String) : Stdlib.Result.Result<__Table, String> =
   match Stdlib.List.findFirst tables (fun t -> __lower t.name == __lower name) with
@@ -116,9 +146,32 @@ let __input (table: __Table) (names: List<String>) (values: List<Stdlib.Sqlite.V
   else if Stdlib.List.any names (fun name -> Stdlib.Bool.not (Stdlib.List.any table.columns (fun c -> __lower c.name == __lower name))) then Error "SQLite: INSERT names an unknown column"
   else
     let supplied = Stdlib.List.fold (Stdlib.List.map2shortest names values (fun n v -> (n,v))) (Dict {}) (fun d (name,value) -> Stdlib.Dict.set d (__lower name) value)
-    Ok (Stdlib.List.fold table.columns (Dict {}) (fun row c ->
-      let value = match Stdlib.Dict.get supplied (__lower c.name) with | Some value -> value | None -> Stdlib.Sqlite.Value.Null
-      Stdlib.Dict.set row (__lower c.name) (Stdlib.Sqlite.__Eval.__coerce c.affinity value)))
+    Stdlib.List.fold table.columns (Ok (Dict {})) (fun result c -> result |> Stdlib.Result.andThen (fun row ->
+      (match Stdlib.Dict.get supplied (__lower c.name) with
+       | Some value -> Ok value
+       | None -> match c.fallback with | None -> Ok Stdlib.Sqlite.Value.Null | Some expr -> Stdlib.Sqlite.__Eval.__eval [] (Dict {}) (Dict {}) expr)
+      |> Stdlib.Result.map (fun value -> Stdlib.Dict.set row (__lower c.name) (Stdlib.Sqlite.__Eval.__coerce c.affinity value))))
+
+let __indexKeys (table: __Table) (index: Stdlib.Sqlite.__Schema.__Index) (rows: List<__Row>) : Stdlib.Result.Result<List<List<Stdlib.Sqlite.Value>>,String> =
+  __validatePredicate table.columns (Dict {}) index.predicate |> Stdlib.Result.andThen (fun _ ->
+    Stdlib.List.fold index.fields (Ok ()) (fun result expr -> result |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Eval.__validate table.columns (Dict {}) false expr)))
+  |> Stdlib.Result.andThen (fun _ -> __filtered table.columns rows (Dict {}) index.predicate)
+  |> Stdlib.Result.andThen (fun rows ->
+    Stdlib.List.fold rows (Ok []) (fun result row -> result |> Stdlib.Result.andThen (fun keys ->
+      __values table.columns row.values (Dict {}) index.fields |> Stdlib.Result.map (fun values ->
+        keys @ [values @ [Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 row.key)]]))))
+
+let __conflicts (table: __Table) (rows: List<__Row>) (row: __Row) : Stdlib.Result.Result<Bool,String> =
+  Stdlib.List.fold table.indexes (Ok false) (fun result index -> result |> Stdlib.Result.andThen (fun conflict ->
+    if conflict || Stdlib.Bool.not index.definition.unique then Ok conflict
+    else __indexKeys table index.definition [row] |> Stdlib.Result.andThen (fun keys ->
+      match keys with
+      | [] -> Ok false
+      | key :: _ ->
+        let fields = Stdlib.List.take key (Stdlib.List.length index.definition.fields)
+        if Stdlib.List.any fields (fun value -> Stdlib.Sqlite.__Eval.__rank value == 0) then Ok false
+        else __indexKeys table index.definition rows |> Stdlib.Result.map (fun keys ->
+          Stdlib.List.any keys (fun key -> Stdlib.Sqlite.__Index.__compare fields (Stdlib.List.take key (Stdlib.List.length fields)) == 0)))))
 
 let __insertRow (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<__Row>) (input: Dict<String, Stdlib.Sqlite.Value>) (ignore: Bool)
   : Stdlib.Result.Result<__Outcome, String> =
@@ -135,28 +188,69 @@ let __insertRow (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List<
     match __checkRow table key input with
     | Error e -> if ignore && Stdlib.String.startsWith e "SQLite: NOT NULL" then Ok (__Outcome { state = s, affected = 0, rows = [] }) else Error e
     | Ok values ->
-      if duplicate then if ignore then Ok (__Outcome { state = s, affected = 0, rows = [] }) else Error "SQLite: UNIQUE constraint failed: primary key"
-      else Stdlib.Sqlite.__Btree.__insert s table.root key (Stdlib.Sqlite.__Codec.__record values)
-        |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = 1, rows = [] }))
+      __conflicts table rows (__Row { key = key, values = input }) |> Stdlib.Result.andThen (fun conflict ->
+        if duplicate || conflict then if ignore then Ok (__Outcome { state = s, affected = 0, rows = [] }) else Error "SQLite: UNIQUE constraint failed"
+        else Stdlib.Sqlite.__Btree.__insert s table.root key (Stdlib.Sqlite.__Codec.__record values)
+          |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = 1, rows = [] })))
 
 let __bumpSchema (s: Stdlib.Sqlite.__Pager.__State) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State, String> =
   Stdlib.Sqlite.__Pager.__read s 1 |> Stdlib.Result.andThen (fun (s,header) ->
     let cookie = (Stdlib.Sqlite.__Codec.__beRead header 40 4 + 1) % 4294967296
     Stdlib.Sqlite.__Pager.__write s 1 (Stdlib.Sqlite.__Codec.__put header 40 4 cookie))
 
-let __create (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (name: String) (ignore: Bool) (columns: List<Stdlib.Sqlite.__Sql.__Column>)
-  : Stdlib.Result.Result<__Outcome, String> =
-  __columnsValid columns |> Stdlib.Result.andThen (fun _ ->
-    if Stdlib.String.startsWith (__lower name) "sqlite_" then Error "SQLite: reserved table name"
-    else if Stdlib.List.any tables (fun t -> __lower t.name == __lower name) then
-      if ignore then Ok (__Outcome { state = s, affected = -1, rows = [] }) else Error "SQLite: table already exists"
+let __catalogAdd (s: Stdlib.Sqlite.__Pager.__State) (kind: String) (name: String) (tableName: String) (root: Int) (sql: Stdlib.Sqlite.Value)
+  : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  Stdlib.Sqlite.__Btree.__scan s 1 |> Stdlib.Result.andThen (fun (s,entries) ->
+    let key = Stdlib.List.fold entries 0 (fun key entry -> Stdlib.Int.max key entry.key) + 1
+    let payload = Stdlib.Sqlite.__Codec.__record [Stdlib.Sqlite.Value.Text kind,Stdlib.Sqlite.Value.Text name,Stdlib.Sqlite.Value.Text tableName,
+      Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 root),sql]
+    Stdlib.Sqlite.__Btree.__insert s 1 key payload)
+
+let __createDefinition (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (definition: Stdlib.Sqlite.__Schema.__Definition)
+  : Stdlib.Result.Result<__Outcome,String> =
+  __columnsValid definition.columns |> Stdlib.Result.andThen (fun _ ->
+    Stdlib.List.fold definition.keys (Ok ()) (fun result key -> result |> Stdlib.Result.andThen (fun _ ->
+      Stdlib.List.fold key.fields (Ok ()) (fun result expr -> result |> Stdlib.Result.andThen (fun _ ->
+        Stdlib.Sqlite.__Eval.__validate definition.columns (Dict {}) false expr)))))
+  |> Stdlib.Result.andThen (fun _ ->
+    if Stdlib.String.startsWith (__lower definition.name) "sqlite_" then Error "SQLite: reserved table name"
+    else if Stdlib.List.any tables (fun t -> __lower t.name == __lower definition.name) then
+      if definition.ignore then Ok (__Outcome { state = s, affected = -1, rows = [] }) else Error "SQLite: table already exists"
     else Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s,root) ->
       Stdlib.Sqlite.__Btree.__writeLeaf s root [] |> Stdlib.Result.andThen (fun s ->
-        let key = Stdlib.List.fold tables 0 (fun key t -> Stdlib.Int.max key t.schemaKey) + 1
-        let payload = Stdlib.Sqlite.__Codec.__record [Stdlib.Sqlite.Value.Text "table", Stdlib.Sqlite.Value.Text name,
-          Stdlib.Sqlite.Value.Text name, Stdlib.Sqlite.Value.Int (Stdlib.Sqlite.__Codec.__i64 root), Stdlib.Sqlite.Value.Text (__schemaSql name columns)]
-        Stdlib.Sqlite.__Btree.__insert s 1 key payload |> Stdlib.Result.andThen __bumpSchema
-        |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] }))))
+        __catalogAdd s "table" definition.name definition.name root (Stdlib.Sqlite.Value.Text definition.sql))
+      |> Stdlib.Result.andThen (fun s ->
+        Stdlib.List.fold (Stdlib.List.range 1 (Stdlib.List.length definition.keys)) (Ok s) (fun result number -> result |> Stdlib.Result.andThen (fun s ->
+          match Stdlib.Sqlite.__Schema.__auto definition number with
+          | None -> Error "SQLite: missing automatic index"
+          | Some index -> Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s,root) ->
+            Stdlib.Sqlite.__Index.__empty s root |> Stdlib.Result.andThen (fun s -> __catalogAdd s "index" index.name index.table root Stdlib.Sqlite.Value.Null)))))
+      |> Stdlib.Result.andThen __bumpSchema |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] })))
+
+let __indexUnique (index: Stdlib.Sqlite.__Schema.__Index) (keys: List<List<Stdlib.Sqlite.Value>>) : Stdlib.Result.Result<Unit,String> =
+  if Stdlib.Bool.not index.unique then Ok ()
+  else Stdlib.List.sortByComparator keys Stdlib.Sqlite.__Index.__compare |> Stdlib.Result.andThen (fun keys ->
+    let (_,valid) = Stdlib.List.fold keys (None,true) (fun (previous,valid) key ->
+      let fields = Stdlib.List.take key (Stdlib.List.length index.fields)
+      let nullable = Stdlib.List.any fields (fun value -> Stdlib.Sqlite.__Eval.__rank value == 0)
+      let duplicate = match previous with | None -> false | Some old -> Stdlib.Sqlite.__Index.__compare old fields == 0
+      (Some fields,valid && (nullable || Stdlib.Bool.not duplicate)))
+    if valid then Ok () else Error ("SQLite: UNIQUE constraint failed: " + index.name))
+
+let __rebuildIndex (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (index: __IndexInfo) : Stdlib.Result.Result<Stdlib.Sqlite.__Pager.__State,String> =
+  __rows s table |> Stdlib.Result.andThen (fun (s,rows) -> __indexKeys table index.definition rows |> Stdlib.Result.andThen (fun keys ->
+    __indexUnique index.definition keys |> Stdlib.Result.andThen (fun _ -> Stdlib.Sqlite.__Index.__rebuild s index.root keys)))
+
+let __createIndex (s: Stdlib.Sqlite.__Pager.__State) (tables: List<__Table>) (definition: Stdlib.Sqlite.__Schema.__Index) : Stdlib.Result.Result<__Outcome,String> =
+  if Stdlib.String.startsWith (__lower definition.name) "sqlite_" then Error "SQLite: reserved index name"
+  else
+    let exists = Stdlib.List.any tables (fun t -> __lower t.name == __lower definition.name || Stdlib.List.any t.indexes (fun index -> __lower index.definition.name == __lower definition.name))
+    if exists then if definition.ignore then Ok (__Outcome { state = s, affected = -1, rows = [] }) else Error "SQLite: index already exists"
+    else __find tables definition.table |> Stdlib.Result.andThen (fun table ->
+      Stdlib.Sqlite.__Pager.__allocate s |> Stdlib.Result.andThen (fun (s,root) ->
+        Stdlib.Sqlite.__Index.__empty s root |> Stdlib.Result.andThen (fun s -> __rebuildIndex s table (__IndexInfo { definition = definition, root = root, schemaKey = 0 }))
+        |> Stdlib.Result.andThen (fun s -> __catalogAdd s "index" definition.name definition.table root (Stdlib.Sqlite.Value.Text definition.sql))
+        |> Stdlib.Result.andThen __bumpSchema |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] })))
 
 let __project (columns: List<Stdlib.Sqlite.__Sql.__Column>) (params: Dict<String, Stdlib.Sqlite.Value>) (fields: List<(Stdlib.Sqlite.__Sql.__Expr * String)>) (row: __Row)
   : Stdlib.Result.Result<Dict<String, Stdlib.Sqlite.Value>, String> =
@@ -214,26 +308,43 @@ let __updateRows (s: Stdlib.Sqlite.__Pager.__State) (table: __Table) (rows: List
         let primaryChanged = Stdlib.List.any table.columns (fun c -> c.primary && (Stdlib.Dict.get values (__lower c.name) != Stdlib.Dict.get row.values (__lower c.name)))
         if primaryChanged then Error "SQLite: changing INTEGER PRIMARY KEY is unsupported"
         else __checkRow table row.key values |> Stdlib.Result.andThen (fun fields ->
-          Stdlib.Sqlite.__Btree.__deleteAt s table.root row.key 0 |> Stdlib.Result.andThen (fun s ->
-            Stdlib.Sqlite.__Btree.__insert s table.root row.key (Stdlib.Sqlite.__Codec.__record fields))))))
+          __rows s table |> Stdlib.Result.andThen (fun (s,current) ->
+            __conflicts table (Stdlib.List.filter current (fun old -> old.key != row.key)) (__Row { key = row.key, values = values })
+            |> Stdlib.Result.andThen (fun conflict ->
+              if conflict then Error "SQLite: UNIQUE constraint failed"
+              else Stdlib.Sqlite.__Btree.__deleteAt s table.root row.key 0 |> Stdlib.Result.andThen (fun s ->
+                Stdlib.Sqlite.__Btree.__insert s table.root row.key (Stdlib.Sqlite.__Codec.__record fields))))))))
     |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = Stdlib.List.length rows, rows = [] })
 
-let __run (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String, Stdlib.Sqlite.Value>)
+let __runRaw (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String, Stdlib.Sqlite.Value>)
   : Stdlib.Result.Result<__Outcome, String> =
   __schema s (match statement with | Select _ -> true | _ -> false) |> Stdlib.Result.andThen (fun (s,tables) ->
     match statement with
-    | Create (name,ignore,columns) -> __create s tables name ignore columns
+    | Create (name,ignore,columns) ->
+      Stdlib.Sqlite.__Sql.__lex (__schemaSql name columns) 0 [] |> Stdlib.Result.andThen Stdlib.Sqlite.__Schema.__table
+      |> Stdlib.Result.andThen (fun definition -> __createDefinition s tables { definition with ignore = ignore })
+    | Catalog tokens ->
+      match tokens with
+      | Word _ :: Word kind :: _ when __lower kind == "table" ->
+        Stdlib.Sqlite.__Schema.__table tokens |> Stdlib.Result.andThen (fun definition -> __createDefinition s tables definition)
+      | _ -> Stdlib.Sqlite.__Schema.__index tokens |> Stdlib.Result.andThen (fun definition -> __createIndex s tables definition)
     | Drop (name,ignore) ->
       (match __find tables name with
       | Error e -> if ignore then Ok (__Outcome { state = s, affected = -1, rows = [] }) else Error e
-      | Ok table -> Stdlib.Sqlite.__Btree.__drop s [table.root] []
+      | Ok table ->
+        Stdlib.List.fold table.indexes (Ok s) (fun result index -> result |> Stdlib.Result.andThen (fun s ->
+          Stdlib.Sqlite.__Index.__clearAt s index.root 0 false |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__deleteAt s 1 index.schemaKey 0)))
+        |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__drop s [table.root] [])
         |> Stdlib.Result.andThen (fun s -> Stdlib.Sqlite.__Btree.__deleteAt s 1 table.schemaKey 0)
         |> Stdlib.Result.andThen __bumpSchema |> Stdlib.Result.map (fun s -> __Outcome { state = s, affected = -1, rows = [] }))
-    | Insert (name,names,expressions,ignore) -> __find tables name |> Stdlib.Result.andThen (fun table ->
-      __values [] (Dict {}) params expressions |> Stdlib.Result.andThen (fun values ->
-        let names = if Stdlib.List.isEmpty names then Stdlib.List.map table.columns (fun c -> c.name) else names
-        __input table names values |> Stdlib.Result.andThen (fun input ->
-          __rows s table |> Stdlib.Result.andThen (fun (s,rows) -> __insertRow s table rows input ignore))))
+    | Insert (name,names,expressionRows,ignore) -> __find tables name |> Stdlib.Result.andThen (fun table ->
+      Stdlib.List.fold expressionRows (Ok (__Outcome { state = s, affected = 0, rows = [] })) (fun result expressions ->
+        result |> Stdlib.Result.andThen (fun previous ->
+          __values [] (Dict {}) params expressions |> Stdlib.Result.andThen (fun values ->
+            let names = if Stdlib.List.isEmpty names then Stdlib.List.map table.columns (fun c -> c.name) else names
+            __input table names values |> Stdlib.Result.andThen (fun input ->
+              __rows previous.state table |> Stdlib.Result.andThen (fun (s,rows) -> __insertRow s table rows input ignore)
+              |> Stdlib.Result.map (fun outcome -> { outcome with affected = previous.affected + outcome.affected }))))))
     | Delete (name,predicate) -> __find tables name |> Stdlib.Result.andThen (fun table ->
       __validatePredicate table.columns params predicate |> Stdlib.Result.andThen (fun _ -> __rows s table)
       |> Stdlib.Result.andThen (fun (s,rows) -> __filtered table.columns rows params predicate |> Stdlib.Result.andThen (fun rows ->
@@ -249,6 +360,20 @@ let __run (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__S
       | None -> __selectRows s [] [__Row { key = 0, values = Dict {} }] params select
       | Some name -> __find tables name |> Stdlib.Result.andThen (fun table ->
         __rows s table |> Stdlib.Result.andThen (fun (s,rows) -> __selectRows s table.columns rows params select))))
+
+// Mutations maintain all affected index trees before their page transaction can
+// commit. Queries continue to use scans until query planning is introduced.
+let __run (s: Stdlib.Sqlite.__Pager.__State) (statement: Stdlib.Sqlite.__Sql.__Statement) (params: Dict<String,Stdlib.Sqlite.Value>)
+  : Stdlib.Result.Result<__Outcome,String> =
+  __runRaw s statement params |> Stdlib.Result.andThen (fun outcome ->
+    let name = match statement with | Insert (name,_,_,_) -> Some name | Update (name,_,_) -> Some name | Delete (name,_) -> Some name | _ -> None
+    match name with
+    | None -> Ok outcome
+    | Some name ->
+      if outcome.affected == 0 then Ok outcome
+      else __schema outcome.state false |> Stdlib.Result.andThen (fun (s,tables) -> __find tables name |> Stdlib.Result.andThen (fun table ->
+        Stdlib.List.fold table.indexes (Ok s) (fun result index -> result |> Stdlib.Result.andThen (fun s -> __rebuildIndex s table index))
+        |> Stdlib.Result.map (fun s -> { outcome with state = s }))))
 
 let __finish (opened: Stdlib.Sqlite.__Pager.__State) (result: Stdlib.Result.Result<__Outcome, String>)
   : Stdlib.Result.Result<__Outcome, String> =

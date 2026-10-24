@@ -204,6 +204,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/sqlite/__btree.dark` | `Darklang.Stdlib.Sqlite.__Btree` | Compiler rowid B-trees, splits and overflow chains |
 | `packages/darklang/stdlib/sqlite/__sql.dark` | `Darklang.Stdlib.Sqlite.__Sql` | Compiler restricted SQL tokenizer and parser |
 | `packages/darklang/stdlib/sqlite/__eval.dark` | `Darklang.Stdlib.Sqlite.__Eval` | Compiler SQL affinity and scalar evaluation |
+| `packages/darklang/stdlib/sqlite/__index.dark` | `Darklang.Stdlib.Sqlite.__Index` | Compiler index B-trees, promoted keys and overflow reclamation |
+| `packages/darklang/stdlib/sqlite/__schema.dark` | `Darklang.Stdlib.Sqlite.__Schema` | Compiler table declarations and implicit/explicit index definitions |
 | `packages/darklang/stdlib/sqlite/__engine.dark` | `Darklang.Stdlib.Sqlite.__Engine` | Compiler statement execution and public-operation lifetime |
 | `packages/darklang/stdlib/__builtin/__sqlite.dark` | `Builtin` | SQLite builtin contracts delegated to the Dark engine |
 | `packages/darklang/stdlib/dict/__hamt.dark` | `Darklang.Stdlib.Dict`  | Compiler dictionary representation; package defined in `packages/darklang/stdlib/dict.dark` |

@@ -33,7 +33,7 @@ let bindings = if params == "" then Dict {} else
     | None -> (line,Stdlib.Sqlite.Value.Null)))
 match Stdlib.Sqlite.__Engine.__executeTyped (env "SQLITE_TEST_DB") (env "SQLITE_TEST_SQL") bindings with
 | Error e -> Stdlib.printLine ("Error " + e)
-| Ok result -> Stdlib.printLine ("Ok " + Stdlib.String.join (Stdlib.List.map result.rows (fun row ->
+| Ok result -> if env "SQLITE_TEST_MODE" == "exec" then Stdlib.printLine ("Ok " + Stdlib.Int.toString result.affected) else Stdlib.printLine ("Ok " + Stdlib.String.join (Stdlib.List.map result.rows (fun row ->
   Stdlib.String.join (Stdlib.List.map (Stdlib.Dict.toList row) (fun (k,v) -> k + "=" + valueText v)) "|")) ";")
 '''
 
@@ -74,19 +74,28 @@ def main():
         connection.execute("ALTER TABLE config_v0 ADD COLUMN compatibility_probe TEXT DEFAULT 'old-row-default'")
         connection.commit()
 
+        def run(sql, bindings=None, mode='query', path=db):
+            bindings = bindings or {}
+            params = '\n'.join(k + '=' + ('N:' if v is None else ('B:' + v.hex() if isinstance(v,bytes) else 'T:' + v.encode().hex() if isinstance(v,str) else 'I:' + str(v) if isinstance(v,int) else 'R:' + repr(v))) for k,v in bindings.items())
+            result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=90,
+                                    env=dict(os.environ, SQLITE_TEST_DB=str(path), SQLITE_TEST_SQL=sql, SQLITE_TEST_PARAMS=params, SQLITE_TEST_MODE=mode))
+            assert result.returncode == 0, (sql, result.stdout, result.stderr)
+            return result.stdout.rstrip('\n')
+
         def check(sql, bindings=None):
             bindings = bindings or {}
             cursor = connection.execute(sql, {k[1:]: v for k, v in bindings.items()})
             names = [column[0] for column in cursor.description]
             expected = [dict(zip(names, map(encoded, row))) for row in cursor]
-            params = '\n'.join(k + '=' + ('N:' if v is None else ('B:' + v.hex() if isinstance(v,bytes) else 'T:' + v.encode().hex() if isinstance(v,str) else 'I:' + str(v) if isinstance(v,int) else 'R:' + repr(v))) for k,v in bindings.items())
-            result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=90,
-                                    env=dict(os.environ, SQLITE_TEST_DB=str(db), SQLITE_TEST_SQL=sql, SQLITE_TEST_PARAMS=params))
-            assert result.returncode == 0, (sql, result.stdout, result.stderr)
-            output = result.stdout.rstrip('\n')
+            output = run(sql, bindings)
             assert output.startswith('Ok '), (sql,output)
             actual = [dict(cell.split('=',1) for cell in row.split('|')) for row in output[3:].split(';')] if output[3:] else []
             assert actual == expected, (sql, actual, expected)
+
+        def execute(sql, bindings=None, count=1):
+            output = run(sql,bindings,'exec')
+            assert output == f'Ok {count}', (sql,output)
+            assert connection.execute('PRAGMA integrity_check').fetchall() == [('ok',)]
 
         corpus = json.loads((fixtures / 'corpus.json').read_text())
         reads = [entry for entry in corpus['entries'] if entry['source'].endswith('/RuntimeTypes.fs') and entry['kind']=='statement' and entry['sql'].lstrip().upper().startswith('SELECT')]
@@ -102,15 +111,32 @@ def main():
         check("SELECT json_extract('[9007199254740993,null,true,\"snow 雪\"]','$[0]') AS n, json_extract('[null]','$[0]') AS nil")
         check("SELECT substr(X'00010203',-2,2) AS tail, length(X'00FF') AS n, 'Æ' LIKE 'æ' AS unicode, 'Ab雪' LIKE 'a_%' AS ascii")
         check('SELECT @blob AS b, @int AS n, @real AS r, @nil AS nil', {'@blob':b'\x00\xff','@int':42,'@real':1.25,'@nil':None})
-        # Indexes must remain untouched until their write maintenance is implemented.
+        execute('INSERT INTO package_types(hash,pt_def,rt_def) VALUES ($hash,$pt,$rt)', {'$hash':'type-b','$pt':b'pt-b','$rt':b'rt-b'*5000})
+        assert connection.execute("SELECT rt_def FROM package_types WHERE hash='type-b'").fetchone()==(b'rt-b'*5000,)
+        assert connection.execute("SELECT created_at,description FROM package_types WHERE hash='type-b'").fetchone()[1]==''
+        execute('INSERT OR IGNORE INTO package_types(hash,pt_def,rt_def) VALUES ($hash,$pt,$rt)', {'$hash':'type-b','$pt':b'other','$rt':b'other'},count=0)
+        execute('UPDATE package_values SET value_type=@type WHERE hash=@hash', {'@hash':'value-a','@type':b'changed'})
+        assert connection.execute('SELECT hash FROM package_values INDEXED BY idx_package_values_type WHERE value_type=?',(b'changed',)).fetchall()==[('value-a',)]
+        execute("INSERT INTO package_ops(id,op_blob) VALUES ('op-a',X'00FF'),('op-b',X'01')",count=2)
+        execute("UPDATE package_ops SET applied=1 WHERE id='op-a'")
+        assert connection.execute('SELECT id FROM package_ops INDEXED BY idx_package_ops_applied WHERE applied=0').fetchall()==[('op-b',)]
+        execute("INSERT INTO package_dependencies VALUES ('fn-a','type-a','type',NULL,NULL,NULL)")
+        execute("INSERT OR IGNORE INTO package_dependencies VALUES ('fn-a','type-a','type','','','')",count=0)
         before = db.read_bytes()
-        rejected = subprocess.run([str(binary)],capture_output=True,text=True,timeout=90,
-                                  env=dict(os.environ,SQLITE_TEST_DB=str(db),SQLITE_TEST_SQL="DELETE FROM package_types",SQLITE_TEST_PARAMS=''))
-        assert rejected.returncode == 0 and rejected.stdout.startswith('Error '), rejected
-        assert db.read_bytes() == before
-        assert connection.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+        assert run("INSERT INTO package_dependencies VALUES ('fn-a','type-a','type','','','')",mode='exec').startswith('Error ')
+        assert db.read_bytes()==before,'unique expression index failure changed the file'
+        execute("DELETE FROM package_types WHERE hash='type-b'")
+        created = root/'dark-created.db'
+        output = run((fixtures/'schema.sql').read_text(),mode='exec',path=created)
+        assert output=='Ok 4',output  # Four account seed rows; DDL contributes no count.
+        with sqlite3.connect(created) as native:
+            assert native.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
+            expected = connection.execute("SELECT type,name,tbl_name FROM sqlite_schema WHERE type IN ('table','index') ORDER BY name").fetchall()
+            expected = [row for row in expected]  # ALTER above changes columns, not catalog object identity.
+            assert native.execute("SELECT type,name,tbl_name FROM sqlite_schema WHERE type IN ('table','index') ORDER BY name").fetchall()==expected
+            assert native.execute('SELECT count(*) FROM accounts_v0').fetchone()==(4,)
         connection.close()
-    print(f'Dark SQLite: {len(reads)} interpreter runtime-load query templates, typed cells and unchanged package schema passed')
+    print(f'Dark SQLite: {len(reads)} interpreter runtime-load query templates, typed cells, schema creation and maintained package indices passed')
 
 
 if __name__ == '__main__':

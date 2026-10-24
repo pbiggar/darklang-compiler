@@ -97,8 +97,10 @@ only after the callback succeeds. Multiple statements are parsed together and
 share that transaction. These internal operations do not add public Stdlib API.
 
 The catalog reader accepts rowid tables with text/composite keys, defaults,
-references and associated indexes for table-scan SELECTs. Writes to such stores
-are still rejected until index/constraint maintenance is implemented. Reading a
+references and associated indexes for table-scan SELECTs. Index writes use record-key B-trees with promoted interior keys and overflow
+chains. Their roots remain stable; rebuilding an affected index reclaims and
+reuses its other pages in the statement transaction. Package-store write and
+schema-creation integration is currently under validation. Reading a
 view or firing triggers is not implemented. Existing records shorter than an
 added column use its declared default. WAL files remain unsupported.
 
@@ -113,8 +115,9 @@ package-store schema in addition to the original page interoperability suite.
 Remaining milestones, in dependency order:
 
 1. Complete dynamic SQL workload captures and assertions for each call site.
-2. Schema creation/migrations and ordinary, unique, composite, partial and
-   expression index maintenance; defaults, affinities and foreign keys on writes.
+2. Finish schema/write integration validation, then implement migrations and
+   foreign-key checks. Index maintenance currently rebuilds affected trees;
+   incremental index deletion/rebalancing remains a performance improvement.
 3. Aliases, joins, DISTINCT, subqueries/tuple IN, grouping/aggregates and recursive
    CTE execution needed by dependency and branch queries.
 4. Bulk INSERT, INSERT SELECT, REPLACE and UPSERT/excluded semantics.

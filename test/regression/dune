@@ -118,3 +118,8 @@
   (source_tree ../fixtures/sqlite-package))
  (action (run python3 %{dep:sqlite_package_corpus.py} ../fixtures/sqlite-package
   %{dep:../../scripts/update-sqlite-package-corpus.py})))
+
+(rule
+ (alias runtest)
+ (deps sqlite_index_interop.py)
+ (action (run python3 %{dep:sqlite_index_interop.py} %{exe:../../bin/dark.exe})))
