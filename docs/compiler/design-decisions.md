@@ -6,14 +6,15 @@ This document explains the key architectural and implementation decisions in the
 
 **Decision**: Use a multi-stage pipeline with distinct intermediate representations:
 ```
-Source → parsed AST → checked AST → ANF → MIR → LIR → target ISA → Binary
+Source → WrittenTypes → checked AST → ANF → high-level SSA → MIR → LIR → target ISA → Binary
 ```
 
 **Rationale**:
 - Each IR focuses on specific concerns, making transformations simpler
 - **AST**: Preserves source structure for error messages and future tooling
 - **ANF**: Makes evaluation order explicit, simplifies code generation
-- **MIR**: Platform-independent 3-address code, enables future optimizations
+- **High-level SSA**: Typed control flow for optimization, specialization and ownership insertion
+- **MIR**: Platform-independent three-address code already in SSA form
 - **LIR**: Target-neutral instruction shapes with virtual registers, clean separation from register allocation
 - Easier to test each pass in isolation
 - Enables backend targets (ARM64 and x86-64 today, WASM in the future) by swapping post-MIR stages
@@ -56,8 +57,7 @@ Source → parsed AST → checked AST → ANF → MIR → LIR → target ISA →
 
 **Implementation details**:
 - Borrowed calling convention: callers retain ownership of arguments
-- Size-segregated free lists for memory reuse (256 bytes of free list heads)
-- X27 = free list base pointer, X28 = bump allocator pointer
+- Target-specific buffer recycling and raw allocation; see [reference counting](runtime/reference-counting.md) and [x64 allocation](backend/x64.md) for implemented policies
 
 ## Direct Binary Generation
 

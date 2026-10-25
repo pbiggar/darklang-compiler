@@ -200,7 +200,7 @@ HTTP/3 also has an authenticated UDP server listener described below. The pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
 and SETTINGS parsing. QPACK supports the RFC 9204 static table, static-name
 references, literal names/values and shared Huffman decoding. The static-only
-codec remains available with zero dynamic capacity. `test/fixtures/e2e/http3_qpack.e2e`
+codec remains available with zero dynamic capacity. `test/fixtures/e2e/stdlib-internal/http3_qpack.e2e`
 checks the RFC example, malformed references, table boundaries and list limits;
 `python3 scripts/test_qpack_peer.py` verifies both directions against test-only
 `pylsqpack==0.3.23`, including duplicate fields and compiled leak accounting.
@@ -229,7 +229,7 @@ never-indexed. Peer HTTP/2 and HTTP/3 decoded field-section limits are checked
 before outgoing headers when the setting is known. Focused encoder/limit
 fixtures and seven consecutive blocks decoded by the independent `hpack`
 implementation cover reuse, eviction and intermediate capacity changes.
-`test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
+`test/fixtures/e2e/stdlib-internal/http3_wire.e2e` checks encoding bounds,
 fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
 The QUIC v1 AES-128 protection layer derives initial keys, reconstructs packet
 numbers, masks headers, seals/opens packets and verifies Retry integrity tags.
@@ -244,7 +244,7 @@ keys. Transport parameters are parsed with RFC defaults and numeric/length
 bounds, duplicate detection, server-only restrictions and connection-ID binding
 (including Retry presence and equality). Unknown parameters are ignored.
 The profile caps the extension at 4096 bytes and 128 parameters.
-`test/fixtures/e2e/quic_parameters.e2e` and
+`test/fixtures/e2e/stdlib-internal/quic_parameters.e2e` and
 `python3 scripts/test_quic_parameters_peer.py` cover these checks against
 independent test-only aioquic encodings. `python3 scripts/test_quic_tls_peer.py`
 also tests live TLS flights that correctly sign wrong connection IDs, invalid

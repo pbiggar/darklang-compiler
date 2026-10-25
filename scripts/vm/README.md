@@ -120,6 +120,21 @@ supplied toolchain directory. The VM adapter supplies missing procfs stack
 attributes and redirects `/tmp` paths to that temporary directory. Configure
 probes run without a preload. Do not use this adapter on a normal host.
 
+Activation supplies compiler/package and native header/library paths. Retained
+opam build directories avoid recursive-cleanup failures on restricted Work
+filesystems. Keep the VM adapter out of compiler configure/build commands.
+Automated repository failure logs live under `TestResults/ai/`; see the
+[verification policy](../../docs/contributing/verification.md) for applicable
+correctness and leak checks.
+
+The compiler embeds its library and Unicode tables. Adding or moving a source
+requires updating `library-sources.list` and rebuilding, without a separate
+source installation. See [source organization](../../docs/compiler/source-organization.md).
+
+The performance gate is not applicable in ChatGPT Work; the
+[Work instructions](../../AGENTS.chatgpt.md#benchmark-gate-exception-for-chatgpt-work)
+own that exception. Do not provision benchmark tools for ordinary Work tasks.
+
 ## Troubleshooting
 
 | Symptom | Next step |
@@ -172,5 +187,5 @@ not alter test results or apply outside activation.
 
 To restore the pinned benchmark tool, run
 `python3 scripts/vm/setup-native-packages.py /absolute/toolchain --cachegrind`.
-Cachegrind still requires real `/proc/self/maps` and `/proc/self/exe`; when the
-host does not provide these, report the benchmark gate as blocked.
+Cachegrind requires real `/proc/self/maps` and `/proc/self/exe`. These optional
+measurement tools do not make the performance gate applicable in Work.

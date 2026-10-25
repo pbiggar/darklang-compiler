@@ -4,25 +4,16 @@ Direct self-recursive tail calls lower to control-flow loops instead of native
 calls. This removes call overhead and keeps stack usage constant.
 
 ```dark
-let sumTo(n: Int64, acc: Int64) : Int64 =
-    if n <= 0 then acc else sumTo(n - 1, acc + n)
+let sumTo (n: Int64) (acc: Int64) : Int64 =
+  if n <= 0L then acc else sumTo (n - 1L) (acc + n)
 ```
 
 ## Lowering
 
-During ANF-to-MIR conversion, a tail call whose target is the current function
-becomes parameter updates followed by a jump to the loop header. The function
-entry and recursive backedge give the header two predecessors, so SSA
-construction inserts typed phis for changed parameters.
-
-```text
-entry ──────┐
-            v
-         header <── backedge
-            |
-            v
-          return
-```
+Lowering high-level SSA to SSA-form MIR turns an eligible direct self-tail call
+into a jump to the loop header. The header has phi inputs from function entry
+and the recursive backedge, carrying the initial and next parameter values.
+No separate MIR SSA-construction pass is required.
 
 Register allocation resolves those phis into predecessor copies. Code
 generation then emits the copies and a local branch rather than a call.
