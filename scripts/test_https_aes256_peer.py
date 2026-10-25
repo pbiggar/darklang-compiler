@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Exercise the Dark TLS client against a forced local TLS 1.3 cipher suite."""
 
+import argparse
 import socket
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -28,10 +28,17 @@ def wait_for_port(port: int, peer: subprocess.Popen[bytes]) -> None:
 
 
 def main() -> None:
-    suite = sys.argv[1] if len(sys.argv) > 1 else "TLS_AES_256_GCM_SHA384"
-    authentication = sys.argv[2] if len(sys.argv) > 2 else "rsa"
-    ca_authentication = sys.argv[3] if len(sys.argv) > 3 else "rsa"
-    response_mode = sys.argv[4] if len(sys.argv) > 4 else "buffered"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("suite", nargs="?", default="TLS_AES_256_GCM_SHA384")
+    parser.add_argument("authentication", nargs="?", default="rsa")
+    parser.add_argument("ca_authentication", nargs="?", default="rsa")
+    parser.add_argument("response_mode", nargs="?", default="buffered")
+    parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    options = parser.parse_args()
+    suite = options.suite
+    authentication = options.authentication
+    ca_authentication = options.ca_authentication
+    response_mode = options.response_mode
     if suite not in ("TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"):
         raise ValueError(f"Unsupported TLS test suite: {suite}")
     if authentication not in ("rsa", "ecdsa"):
@@ -116,7 +123,7 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
 {operation}
 ''')
         binary = directory / "client"
-        subprocess.run([str(ROOT / "dark"), "--allow-internal", str(source), "-o", str(binary)],
+        subprocess.run([str(options.compiler.resolve()), "--allow-internal", str(source), "-o", str(binary)],
                        check=True, cwd=ROOT, stdout=subprocess.DEVNULL)
         with (directory / "peer.log").open("wb") as log:
             peer = subprocess.Popen(["openssl", "s_server", "-accept", str(port),
