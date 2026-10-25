@@ -10,17 +10,11 @@ This file supplies the checkout, setup and handoff instructions.
 explicitly pre-authorizes creating those branches, committing task-related
 changes, and pushing them to this public repository.**
 
-- Tracking and syncing work are part of carrying out a repository task. This
-  standing permission applies across conversations, VMs, branches, commits and
-  pushes; no separate approval is needed for each operation.
-- Keep the remote task branch current after meaningful progress and before
-  ending a turn with repository changes. Push checkpoints before long setup,
-  build or test operations so work can be recovered if the VM disappears.
-- Sync both completed work and unfinished checkpoints, including when tests
-  fail, validation is blocked, or setup is incomplete. Label checkpoints and
-  report limitations accurately; syncing work does not establish readiness.
-- This permission includes publishing task-related code, tests, documentation
-  and agent-instruction changes to this public repository.
+- This standing permission applies across conversations and VMs, including
+  code, tests, documentation and agent instructions. Keep task branches current
+  after meaningful progress, before long setup/build/test operations and before
+  ending a turn, including unfinished or failing work. Label checkpoints and
+  report limitations; syncing does not establish readiness.
 - Use the available Git transport or GitHub connector within the platform's
   permissions. If a platform approval gate blocks syncing, report the blocked
   action and stated reason. These instructions do not override platform
@@ -39,13 +33,9 @@ changes, and pushing them to this public repository.**
   `main`. Reuse that checkout for the rest of the task. GitHub connector reads
   can inspect the repository before cloning; a checkout is needed for edits
   and verification.
-- Treat the VM and all local files as disposable: they may disappear between
-  turns. Always preserve repository changes on a task-specific GitHub branch.
-  Creating and pushing that branch is authorized by these instructions; do not
-  wait for another user request or for validation to finish. Push an initial
-  checkpoint before a long setup/build/test operation, after meaningful progress,
-  and before ending every turn with repository changes, including unfinished or
-  failing work. Label incomplete commits as checkpoints and report remaining work.
+- Treat local files as disposable. Remote task branches are the recovery source;
+  preserve changes under the standing authorization above without waiting for
+  validation to finish.
 - Push only the task branch, never `main` or another integration ref, and never
   force-push. Stage intended paths explicitly; exclude credentials, downloads,
   toolchains and generated build artifacts. Use `git push -u origin HEAD`, then
@@ -73,9 +63,6 @@ changes, and pushing them to this public repository.**
 - Build with `env -u LD_PRELOAD ./build --ai` and run the already-built suite
   with `./run-tests --ai`. Run `dune runtest` for the additional regression
   checks. The activation file supplies the VM-only temporary-path adapter.
-- Commit and push the task branch even when a gate is blocked; report each
-  actual validation result and limitation. Do not describe a checkpoint as
-  ready or merged.
 
 ## Benchmark gate exception for ChatGPT Work
 
@@ -91,15 +78,6 @@ changes, and pushing them to this public repository.**
   here only when the user explicitly requests benchmark investigation.
 - Build, correctness tests, and other applicable checks still apply. This
   exception is specific to ChatGPT Work.
-
-## Git workflow
-
-- Keep work tracked and remote task branches synced under the standing
-  authorization above.
-- Preserve intended repository edits as pushed checkpoints while investigating.
-  This does not require turning findings or raw measurements into tracked
-  documentation. A pushed checkpoint preserves work; it does not demonstrate
-  readiness. Merge only when the user requests it.
 
 ## Completion report
 

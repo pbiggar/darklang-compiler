@@ -1,16 +1,7 @@
 # Tuple parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This parity repair revalidated compiler worktree baseline
-`87ebadfc66e6e807c35c99988f35e0733c4b9ced`, approved compiler evidence
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`, and darklang/dark revision
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
-`8a402797ccccda0ca47b516b356ae1de4d670038` was used only as a lead and its
-findings were rechecked against these sources.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The interpreter baseline is `backend/src/LibParser/Parser.fs` for tuple syntax,
 `backend/src/LibExecution/ProgramTypes.fs` and `RuntimeTypes.fs` for tuple

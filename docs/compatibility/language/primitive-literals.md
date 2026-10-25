@@ -1,17 +1,7 @@
 # Primitive literal parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-## Pinned evidence
-
-This revalidation used compiler evidence revision
-b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899 and darklang/dark revision
-04fbe9dcc995c6188757d583e273cbd30a3e2d3d. Implementation began at rebased
-compiler HEAD 07b61696c207e974a2dc3aa3714a8841c0cc07c8; DCB1 report 8a402797
-was used only as a lead.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The interpreter contract is anchored at backend/src/LibParser/Lexer.fs:31-135
 (shared escape/scalar decoding), backend/src/LibParser/Lexer.fs (number and raw literals),

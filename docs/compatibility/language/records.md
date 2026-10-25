@@ -1,20 +1,7 @@
 # Record parity evidence
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This implementation was revalidated against these exact revisions:
-
-- comparison compiler: `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`;
-- implementation-base compiler HEAD: `a78567efd773de86265e55a54445ddf5a5a8911c`;
-- interpreter: `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`;
-- DCB1 inventory starting point: report commit `8a402797`.
-
-DCB1 was used only to locate candidates. Every retained finding was checked
-again. The interpreter's public behavior is the baseline, and performance-only
-differences are excluded.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 | Contract | Compiler evidence | Pinned interpreter evidence | Result |
 | --- | --- | --- | --- |

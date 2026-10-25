@@ -1,24 +1,7 @@
 # Conditional and Sequence Parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This matrix records the behavior of conditional and sequential expressions.
-
-## Evidence revisions
-
-- Approved compiler evidence revision: `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`.
-- Compiler implementation revision: `50ccf016ee8faeb37640840d81bad99d932574f1`,
-  rebased onto `6cf18024e08406246c81c1399913c996651105b7`.
-- Post-rebase name-resolution repair revision:
-  `aee595658b4a6dbf926f5c870dc6c0232d08695e`.
-- Darklang interpreter revision compared in every row:
-  `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
-
-The interpreter revision was checked out directly and inspected at that exact
-HEAD. Compiler history is reproducible with `git show <revision>:<path>`.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 ## Source map
 

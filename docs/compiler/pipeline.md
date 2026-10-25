@@ -64,6 +64,20 @@ omit. ARM64 and x64 allocation use finalized callee writes to choose registers
 and reduce call saves. A session cache key includes the callee facts actually
 consumed by dependency compilation.
 
+An effect-free proof is weaker than a proof that a call can be removed: mutable
+reads, traps and divergence remain distinct. A typed constant return describes
+normal returns, not whether a call terminates. Preserve exact Float bits and
+managed-value identity when comparing summaries. Version summaries by function,
+compilation unit, target and relevant options; identical function IDs in separate
+units must not share incompatible facts.
+
+ARM64 excludes `Call.dest` from callee clobbers because its call operation emits
+only BL and a separate result move; x64 includes the destination because its
+call operation emits that move. Unknown calls use the full caller-clobber set.
+Backend/allocation changes that alter published writes must invalidate dependent
+caller results. Callee-first batching can add repeated setup cost, so scheduler
+changes should measure compilation latency as well as generated-code quality.
+
 ---
 
 ## Pass 1: Parser (`src/frontend/interpreter/Parser.ml`)

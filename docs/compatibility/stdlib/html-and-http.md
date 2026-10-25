@@ -1,17 +1,7 @@
 # Html and Http Parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This document records the compatibility slice implemented for the canonical
-Html and Http value modules. The comparison used compiler HEAD
-`f84551b75175a2a85b4a43c8cd5dadbf6d758557` and `darklang/dark` revision
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit `8a402797`
-and the existing parity documents were starting evidence only; every entry
-below was rechecked against those exact source revisions and focused executable
-probes.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The interpreter baseline is
 `packages/darklang/stdlib/html.dark:47-455` and
@@ -23,30 +13,30 @@ after Blob by `src/driver/StdlibCompilation.ml`.
 
 ## Compatibility matrix
 
-| Area | Pinned interpreter behavior | Compiler status | Classification |
+| Area | Observable contract | Compiler implementation | Classification |
 |---|---|---|---|
 | Html structural types | `Attribute` and `Attributes` are identical list aliases; `HtmlTag` is a name/attributes/children record; `Node` is the recursive `String | HtmlTag` sum (`html.dark:47-64`) | Same public types and recursive value representation (`Html.dark:5-14`) | Parity |
-| Html serialization | Fixed `&`, `<`, `>`, `"`, `'` escape order; raw String nodes, comments and attribute values; ordered and boolean attributes; case-sensitive void detection; ignored void children; explicit non-void closing tags; exact `<!DOCTYPE html>` prefix (`html.dark:67-212,438-455`) | Ported as pure Dark code (`Html.dark:16-97,175-179`) | Parity |
+| Html serialization | Fixed `&`, `<`, `>`, `"`, `'` escape order; raw String nodes; escaped attribute values; comments repeatedly break `--` runs; ordered and boolean attributes; case-sensitive void detection; ignored void children; explicit non-void closing tags; exact `<!DOCTYPE html>` prefix (`html.dark:67-212,438-455`) | Ported as pure Dark code (`Html.dark:16-97,175-179`) | Parity |
 | Html constructors | `br` and all declared document, text, grouping, table, form, media, semantic, and metadata constructors retain their childless/child-taking arities (`html.dark:215-435`) | Complete family (`Html.dark:101-173`) | Parity |
 | Blob bridge | Http bodies use `Blob`; `String.toBlob` and the bare `Blob.empty` value supply UTF-8 and empty bodies (`http.dark:4-7,91-208`) | `Blob` uses the compiler's dynamic-buffer layout; `String.toBlob` delegates to Blob and bare module values are materialized by AOT lowering | Parity dependency; no duplicate runtime layout |
-| Query parser | Last duplicate wins; empty segments ignored; bare keys get empty values; extra `=` and `?` are preserved; no percent/plus decoding (`http.dark:10-32`) | Direct immutable Dict accumulation preserves those results (`Http.dark:7-37`) | Parity |
+| Query parser | Last duplicate wins; empty segments ignored; bare keys get empty values; split at the first `=`; `+` becomes space and percent escapes decode as bytes, with invalid escapes preserved (`http.dark:10-32`) | Direct immutable Dict accumulation preserves those results (`Http.dark:7-37`) | Parity |
 | Header parser | CRLF normalized; blank/malformed lines omitted; names/values trimmed; extra colons preserved; original name casing retained; last duplicate wins (`http.dark:35-54`) | Direct immutable Dict accumulation preserves those results (`Http.dark:39-66`) | Parity |
-| Request accessors | Parameters split only for exactly one `=`; malformed parameters become whole keys with empty values; order and duplicates remain; duplicate lookup values join with commas. An absent or empty query produces one empty pair under frozen `String.split` behavior (`http.dark:57-88`) | Separate `Stdlib.Http.Request` module ports the exact behavior (`packages/darklang/stdlib/http/request.dark`) | Parity, intentionally distinct from `parseQueryString` |
+| Request accessors | Parameters split at the first `=` and keys/values are decoded; order and duplicates remain; duplicate lookup values join with commas. An absent or empty query produces one empty pair under frozen `String.split` behavior (`http.dark:57-88`) | Separate `Stdlib.Http.Request` module ports the exact behavior (`packages/darklang/stdlib/http/request.dark`) | Parity, intentionally distinct from `parseQueryString` |
 | Response helpers | Exact body/status/header argument order, status codes, spelling and order; HTML/text UTF-8 content types; JSON without charset; arbitrary redirect strings; empty 401/403/404 bodies (`http.dark:91-208`) | All helpers ported using Blob values (`Http.dark:68-121`) | Parity |
 | Cookie boundary | `Cookie` is a record; the only `cookie` implementation is commented out and dependency-incomplete (`http.dark:210-259`). The execution fixture's `setCookie` probes are also commented out | Public structural `Cookie` only; no `cookie` or `setCookie` API. Caller-provided ordered and duplicate `Set-Cookie` pairs pass unchanged through `responseWithHeaders` | Non-gap at pinned revision |
 | JSON boundary | `responseWithJson` accepts a serialized `String` (`http.dark:153-160`) | Same signature; no generic JSON serializer was introduced | Non-gap at pinned revision |
 
-There are no intentional Html or Http behavior divergences in the active
-pinned surface; void-tag detection is internal to Html serialization.
+Query decoding and attribute/comment escaping follow upstream corrections after
+the original comparison baseline. `html_http.e2e` pins those boundaries;
+void-tag detection is internal to Html serialization.
 
 ## Executable coverage and AOT boundaries
 
 `test/fixtures/e2e/html_http.e2e` covers compiler-supported Dark syntax, public records and sums,
 qualified aliases, every constructor, rendering boundaries, parser quirks,
 request accessors, Blob bodies, every response helper, ordered duplicate
-`Set-Cookie` headers, and Cookie construction. The imported Html
-execution fixture has local layout adaptations and is enabled with individual line gates. The imported Http
-fixture is currently whole-file gated; `html_http.e2e` supplies focused coverage.
+`Set-Cookie` headers, and Cookie construction. Imported source annotations own
+selection and diagnostic adaptations for the original Html/Http tests.
 
 Interpreter-style multiline list layout and qualified bare type aliases needed
 small parser compatibility support. Recursive Html nodes also required the
@@ -529,33 +519,3 @@ session peers' `--stream` modes cover framing, invalidation, reuse and cleanup,
 including independent 70 KiB TCP/TLS, HTTP/2 and HTTP/3 responses.
 `http_session_batch.e2e`, `quic_flow.e2e`, and the session peers' `--public`
 HTTP/2 and `--public --multiplex` HTTP/3 modes exercise these APIs.
-
-## Upstream correctness adoption (2026-10-11)
-
-The historical matrix above documents the earlier pinned interpreter behavior,
-not the current upstream contract. The branch `adopt/upstream-http-html-correctness`
-updates the pure surfaces to match darklang/dark PRs #5727 and #5735:
-
-- `Http.parseQueryString` decodes `+` as a space and percent escapes as bytes,
-  preserves invalid escapes, and keeps last-duplicate-wins dictionary semantics.
-- `Http.Request.queryParams` splits at the first `=` and decodes keys and
-  values while preserving ordered duplicates; `queryParam` still joins
-  duplicate values with commas.
-- `Html.nodeToString` escapes attribute values with `escapeHtml`, and
-  `Html.comment` rewrites `--` to `- -` to prevent premature closure.
-
-The updated `test/fixtures/e2e/html_http.e2e` pins the new behavior.
-On 2026-10-12, after incorporating compiler main at
-`26a2a769276e24c0d8ab6b03e025a0ead2214aaa`, native x86-64 validation passed:
-`env -u LD_PRELOAD ./build --ai`; the focused `--filter=html_http` run
-(37/37); `./run-tests --ai` (13,197/13,197); `dune runtest`; and
-`python3 scripts/check_compiled_leaks.py` (58/58 clean workloads).
-The VM used OCaml 5.5.1, Dune 3.24.2 and all 98 locked packages, with
-the repository's native compilation and Unix smoke checks passing.
-
-`./benchmarks/run_benchmarks.sh --verify-parent full` stopped before measurement:
-the existing x86-64 full snapshot has an incompatible workload contract digest
-(`2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861`,
-versus current `2a3f42ac1a2085fe75562c15a454d4ec18429c61d8f22ee22c9619d5d0ef029f`).
-This branch changes no benchmark sources, contracts or snapshots. Correctness
-checks passed; the performance gate is unverified and the PR remains unmerged.

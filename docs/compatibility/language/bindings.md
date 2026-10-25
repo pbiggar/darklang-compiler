@@ -1,20 +1,7 @@
 # Binding parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-Recursive binding scope and declaration groups are covered by the focused
-[recursion parity matrix](recursion.md).
-
-This comparison was revalidated against compiler revision
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and
-`darklang/dark` interpreter revision
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation work began from
-compiler HEAD `5ed3eebe4ddd0ddfaa31fc0e33dc0257950cf410`. Every comparison in this
-document uses that exact revision pair; DCB1 report `8a402797` was starting
-evidence only.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 ## Parity table
 
@@ -61,12 +48,3 @@ binding or evaluation rule.
 
 The compiler's native-code target, static type checking, and early diagnostics
 remain extensions.
-
-## Historical verification
-
-The repository-wide suite passed `5857/5857` tests with `./run-tests --ai`
-after rebasing the implementation onto compiler integration HEAD `ef1887ca`.
-The canonical full profile was recorded after the intentional lowering and
-syntax migration, then passed `./benchmarks/run_benchmarks.sh --verify full`
-for all 19 full-size benchmarks. The recorded performance ratio is **2.75x**
-versus the audited Rust references (`benchmarks/RESULTS.md`).

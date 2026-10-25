@@ -8,19 +8,8 @@ mutual calls, and terminating constructor-growing calls. The native compiler
 supports finite specialization; unbounded specialization is intentionally excluded
 from the compiler's language model.
 
-The rest of the source review dates from 2026-10-07 at
-`7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This matrix was revalidated with compiler revision
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and `darklang/dark`
-interpreter revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
-Implementation started from compiler HEAD
-`a78567efd773de86265e55a54445ddf5a5a8911c`. DCB1 report commit
-`8a402797` was starting evidence only; no result below is retained from it
-without a current source probe.
+Original matrix baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The focused executable corpus is
 `test/fixtures/e2e/interpreter/recursion_parity.e2e`. Local-declaration cases are
@@ -167,15 +156,3 @@ not public recursion syntax.
 - Existing behavioral coverage: `functions.e2e`, `tailcall.e2e`,
   `tuple-recursion.e2e`, closure tests, and
   `test/compiler-passes/TailCallDetectionTests.ml`
-
-## Historical verification
-
-The focused parser and E2E recursion corpora pass, including the million-step
-native tail-recursion completion probe. Representative self, mutual, shadowed,
-generic, and recursive-closure sources were inspected with `--dump-anf`,
-`--dump-mir`, and `--dump-lir`; mutual and self calls retain tail-call lowering
-while shadowed calls remain ordinary closure calls.
-
-The full suite passed `6893/6893` with `./run-tests --ai`. The canonical full
-profile passed all 19 benchmarks with no count changes. Performance ratio:
-**2.25x** versus the audited Rust references (`benchmarks/RESULTS.md`).

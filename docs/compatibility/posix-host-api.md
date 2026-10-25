@@ -58,28 +58,10 @@ Blob equality intentionally remains handle identity. Consequently the pinned
 upstream `File.areIdentical` compares separate Blob handles and can return
 false for identical file contents. The import preserves that behavior.
 
-## Verification and limits
-
-On 2026-10-08, the Linux x86_64 native build passed, the complete host suite
-passed **11,043/11,043**, and `dune runtest` passed all additional regression
-checks. The focused POSIX corpus passed **178/178**, including fixed cases
-compared with host libc fnmatch; the new closure corpus passed **3/3**.
-
-The parent benchmark gate stopped with
-`snapshot workload contract digest is incompatible`. This branch changes no
-benchmark workloads, PARITY contracts, profile arguments or expected outputs;
-no performance ratio is claimed and no baseline was reset.
-The VM subsequently exhausted its disk, preventing further filesystem commands
-and ARM64 cross-compilation checks. ARM64 and macOS runtime parity is not claimed.
+## Limits
 
 Account lookup uses `/etc/passwd` with a numeric UID fallback, consistently with
 the standalone native host implementation; it does not consult NSS or macOS
 Directory Services. Fnmatch uses C-locale byte semantics rather than a runtime
 locale database. Darwin errno text comes from target definitions and has not
 been compared on a macOS host.
-
-The canonical benchmark leak gate (`python3 scripts/check_compiled_leaks.py`)
-timed out in its batch-compilation phase after 600 seconds, before workload
-execution. No leak-gate pass is claimed. The subsequent attempt to remove
-reproducible scratch diagnostics could not launch: sandbox initialization
-itself failed with `No space left on device`.
