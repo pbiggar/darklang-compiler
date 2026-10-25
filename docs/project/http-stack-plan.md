@@ -35,6 +35,15 @@ shell programs or a host HTTP implementation.
 - [ ] CONNECT/extended CONNECT, WebSockets, HTTP/3 datagrams and WebTransport.
 - [ ] Server push and priority scheduling.
 - [ ] Client redirect, cookie-jar and proxy configuration.
+- [ ] Finish platform certificate trust parity with the interpreter. Linux
+  currently discovers PEM bundles and certificate directories at execution
+  time, including `SSL_CERT_FILE` and `SSL_CERT_DIR`. Certificate path search
+  accepts unordered intermediates with a shared 128-attempt budget and an
+  eight-intermediate depth limit. Remaining work includes macOS native
+  `SecTrust` evaluation (and the framework-call/linker support it requires),
+  .NET Linux user certificate stores in PKCS#12 format, and platform
+  differential coverage. PEM discovery and the custom verifier do not provide
+  full .NET trust parity. Keep HTTP policy/configuration work separate.
 - [ ] Finish typed protocol failures for ACK/recovery, CRYPTO/reassembly,
   connection IDs, key validation and handshake owners. Preserve the latest
   authenticated packet/key state and triggering frame type when producing wire
@@ -61,3 +70,11 @@ Follow the [verification policy](../contributing/verification.md), measuring
 performance against the task parent on a supported environment. A protocol
 fixture passing does not establish interoperability or coverage of a different
 native target.
+
+`python3 scripts/test_x509_paths.py` generates ephemeral certificate fixtures,
+checks their expected outcomes with OpenSSL, and runs the native verifier for
+chain selection, certificate rejection, bundle loading and directory loading.
+It requires Python `cryptography` and OpenSSL. Use `--compiler /path/to/dark`
+to select a fresh build, `--paths-only` to compare a compiler without the new
+source loader, or `--oracle-only` to check fixture expectations independently.
+This probe does not establish macOS or .NET user-store parity.
