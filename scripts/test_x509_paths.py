@@ -3,6 +3,7 @@
 
 import argparse
 import datetime
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -134,6 +135,8 @@ def main():
             source_mode = 1 if files != "[]" else 2
             anchors = files if source_mode == 1 else directories
             execution_cases.append((label, paths("[leaf, first, second]"), anchors, "service.example", True, source_mode))
+        if not options.paths_only:
+            execution_cases.append(("system discovery", paths("[leaf, first, second]"), "[]", "service.example", True, 3))
         rows = [f'("{label}", {chain}, {anchors}, "{host}", {str(expected).lower()}, {source_mode}L)'
                 for label, chain, anchors, host, expected, source_mode in execution_cases]
         # One verifier call keeps compilation bounded as more cases are added.
@@ -142,6 +145,7 @@ def main():
         trust = 'Ok (load anchors)'
         if not options.paths_only:
             trust = ('if sourceMode == 0L then Ok (load anchors) else\n'
+                     '    if sourceMode == 3L then Stdlib.__Tls13Client.loadSystemRoots () else\n'
                      '    Stdlib.__Tls13Client.__readRootsFromSources '
                      '(if sourceMode == 1L then anchors else []) '
                      '(if sourceMode == 2L then anchors else [])')
@@ -155,11 +159,20 @@ def main():
         binary = Path(temporary) / "paths"
         source.write_text(load + "\nlet cases = [" + ",\n".join(rows) + "]\n" + check + "\n")
         subprocess.run([str(options.compiler.resolve()), "--allow-internal", str(source), "-o", str(binary)], cwd=ROOT, check=True, timeout=180)
-        result = subprocess.run([str(binary)], text=True, capture_output=True, timeout=60, check=True)
-        expected = "".join(f"PASS {label}\n" for label, *_ in cases + sources)
-        if result.stdout != expected or result.stderr:
-            raise AssertionError(f"X.509 paths failed: {result.stdout!r} {result.stderr!r}")
-        print(f"Native X.509 path and trust-source checks: {len(cases) + len(sources)} passed")
+        expected = "".join(f"PASS {label}\n" for label, *_ in execution_cases)
+        environments = [("explicit roots", os.environ.copy())]
+        if not options.paths_only:
+            environments = [
+                ("system bundle", dict(os.environ, SSL_CERT_FILE=str(root_file), SSL_CERT_DIR="")),
+                ("system directory", dict(os.environ, SSL_CERT_FILE="", SSL_CERT_DIR=str(authorities))),
+            ]
+        # Reuse one binary with different execution-time trust locations.
+        for label, environment in environments:
+            result = subprocess.run([str(binary)], env=environment, text=True,
+                                    capture_output=True, timeout=60, check=True)
+            if result.stdout != expected or result.stderr:
+                raise AssertionError(f"X.509 paths failed ({label}): {result.stdout!r} {result.stderr!r}")
+            print(f"Native X.509 path and trust-source checks ({label}): {len(execution_cases)} passed")
 
 
 if __name__ == "__main__":
