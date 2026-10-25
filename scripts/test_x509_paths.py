@@ -80,12 +80,11 @@ def main():
         ("empty chain", "[]", "[root]", "service.example", False),
     ]
     with tempfile.TemporaryDirectory(prefix="dark-x509-paths-") as temporary:
-        declarations = []
+        certificate_paths = {}
         for name, (_, cert) in certificates.items():
             certificate_path = Path(temporary) / f"{name}.der"
             certificate_path.write_bytes(cert.public_bytes(serialization.Encoding.DER))
-            declarations.append(
-                f'let {name} = Builtin.unwrap (Stdlib.Cli.FileSystem.readFile "{certificate_path}")')
+            certificate_paths[name] = str(certificate_path)
         def pem(names):
             return b"".join(certificates[name][1].public_bytes(serialization.Encoding.PEM) for name in names)
 
@@ -124,20 +123,37 @@ def main():
         ]
         if options.paths_only:
             sources = []
-        execution_cases = list(cases)
-        for index, (label, files, directories) in enumerate(sources):
-            loaded = f'Stdlib.__Tls13Client.__readRootsFromSources {files} {directories}'
-            declarations.append(f'let discovered{index} = Builtin.unwrap ({loaded})')
-            execution_cases.append((label, "[leaf, first, second]", f"discovered{index}", "service.example", True))
-        rows = [f'("{label}", {chain}, {anchors}, "{host}", {str(expected).lower()})'
-                for label, chain, anchors, host, expected in execution_cases]
+        def paths(expression):
+            return "[" + ", ".join(f'"{certificate_paths[name]}"' for name in names(expression)) + "]"
+
+        execution_cases = [
+            (label, paths(chain), paths(anchors), host, expected, 0)
+            for label, chain, anchors, host, expected in cases
+        ]
+        for label, files, directories in sources:
+            source_mode = 1 if files != "[]" else 2
+            anchors = files if source_mode == 1 else directories
+            execution_cases.append((label, paths("[leaf, first, second]"), anchors, "service.example", True, source_mode))
+        rows = [f'("{label}", {chain}, {anchors}, "{host}", {str(expected).lower()}, {source_mode}L)'
+                for label, chain, anchors, host, expected, source_mode in execution_cases]
         # One verifier call keeps compilation bounded as more cases are added.
-        check = ('Stdlib.List.iter cases (fun (label, chain, anchors, host, expected) ->\n'
-                 '  let actual = Stdlib.Result.isOk (Stdlib.__X509Chain.verifyAt chain anchors host (Stdlib.DateTime.now ())) in\n'
+        load = ('let load (paths: List<String>) : List<Blob> =\n'
+                '  Stdlib.List.map paths (fun path -> Builtin.unwrap (Stdlib.Cli.FileSystem.readFile path))\n')
+        trust = 'Ok (load anchors)'
+        if not options.paths_only:
+            trust = ('if sourceMode == 0L then Ok (load anchors) else\n'
+                     '    Stdlib.__Tls13Client.__readRootsFromSources '
+                     '(if sourceMode == 1L then anchors else []) '
+                     '(if sourceMode == 2L then anchors else [])')
+        check = ('Stdlib.List.iter cases (fun (label, chain, anchors, host, expected, sourceMode) ->\n'
+                 f'  let trusted = {trust} in\n'
+                 '  let actual = match trusted with\n'
+                 '    | Error _ -> false\n'
+                 '    | Ok roots -> Stdlib.Result.isOk (Stdlib.__X509Chain.verifyAt (load chain) roots host (Stdlib.DateTime.now ())) in\n'
                  '  Stdlib.printLine ((if actual == expected then "PASS " else "FAIL ") + label))')
         source = Path(temporary) / "paths.dark"
         binary = Path(temporary) / "paths"
-        source.write_text("\n".join(declarations) + "\nlet cases = [" + ",\n".join(rows) + "]\n" + check + "\n")
+        source.write_text(load + "\nlet cases = [" + ",\n".join(rows) + "]\n" + check + "\n")
         subprocess.run([str(options.compiler.resolve()), "--allow-internal", str(source), "-o", str(binary)], cwd=ROOT, check=True, timeout=180)
         result = subprocess.run([str(binary)], text=True, capture_output=True, timeout=60, check=True)
         expected = "".join(f"PASS {label}\n" for label, *_ in cases + sources)
