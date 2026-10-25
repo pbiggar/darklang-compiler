@@ -21,7 +21,7 @@ def main():
     options = parser.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    def issue(name, issuer=None, ca=True, key=None):
+    def issue(name, issuer=None, ca=True, key=None, expired=False, server_auth=True, path_length=None):
         if key is None:
             key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
@@ -31,9 +31,9 @@ def main():
             .issuer_name(issuer[1].subject if issuer else subject)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(now - datetime.timedelta(hours=1))
-            .not_valid_after(now + datetime.timedelta(days=1))
-            .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+            .not_valid_before(now - datetime.timedelta(days=2))
+            .not_valid_after(now + datetime.timedelta(days=-1 if expired else 1))
+            .add_extension(x509.BasicConstraints(ca=ca, path_length=path_length), critical=True)
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), False)
             .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(
                 issuer[0].public_key() if issuer else key.public_key()), False)
@@ -41,7 +41,9 @@ def main():
         if not ca:
             certificate = certificate.add_extension(
                 x509.SubjectAlternativeName([x509.DNSName("service.example")]), False
-            ).add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), False)
+            ).add_extension(x509.ExtendedKeyUsage([
+                ExtendedKeyUsageOID.SERVER_AUTH if server_auth else ExtendedKeyUsageOID.CLIENT_AUTH
+            ]), False)
         return key, certificate.sign(issuer[0] if issuer else key, hashes.SHA256())
 
     root = issue("Root")
@@ -50,7 +52,17 @@ def main():
     leaf = issue("service.example", second, False)
     other_root = issue("Other root")
     decoy = issue("First", other_root)
-    certificates = dict(root=root, first=first, second=second, leaf=leaf, decoy=decoy)
+    expired = issue("service.example", second, False, expired=True)
+    client_only = issue("service.example", second, False, server_auth=False)
+    not_ca = issue("Not CA", root, False)
+    bad_issuer_leaf = issue("service.example", not_ca, False)
+    limited_root = issue("Limited root", path_length=0)
+    limited_ca = issue("Limited intermediate", limited_root)
+    limited_leaf = issue("service.example", limited_ca, False)
+    certificates = dict(root=root, first=first, second=second, leaf=leaf, decoy=decoy,
+                        expired=expired, clientOnly=client_only, notCA=not_ca,
+                        badIssuerLeaf=bad_issuer_leaf, limitedRoot=limited_root,
+                        limitedCA=limited_ca, limitedLeaf=limited_leaf)
     declarations = []
     for name, (_, cert) in certificates.items():
         encoded = cert.public_bytes(serialization.Encoding.DER).hex()
@@ -63,6 +75,10 @@ def main():
         ("missing issuer", "[leaf, first]", "[root]", "service.example", False),
         ("wrong root", "[leaf, second, first]", "[decoy]", "service.example", False),
         ("wrong host", "[leaf, second, first]", "[root]", "wrong.example", False),
+        ("expired leaf", "[expired, second, first]", "[root]", "service.example", False),
+        ("client-only usage", "[clientOnly, second, first]", "[root]", "service.example", False),
+        ("issuer is not CA", "[badIssuerLeaf, notCA]", "[root]", "service.example", False),
+        ("CA path length", "[limitedLeaf, limitedCA]", "[limitedRoot]", "service.example", False),
         ("empty chain", "[]", "[root]", "service.example", False),
     ]
     checks = []
@@ -86,7 +102,8 @@ def main():
             intermediate_path = Path(temporary) / "oracle-intermediates.pem"
             leaf_path.write_bytes(pem(members[:1]))
             anchor_path.write_bytes(pem(names(anchors)))
-            arguments = ["openssl", "verify", "-trusted", str(anchor_path), "-verify_hostname", host]
+            arguments = ["openssl", "verify", "-trusted", str(anchor_path),
+                         "-purpose", "sslserver", "-verify_hostname", host]
             if len(members) > 1:
                 intermediate_path.write_bytes(pem(members[1:]))
                 arguments += ["-untrusted", str(intermediate_path)]
