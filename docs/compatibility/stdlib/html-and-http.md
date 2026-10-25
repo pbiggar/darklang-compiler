@@ -342,6 +342,17 @@ the native heap during that fallback check. `rsa_montgomery.e2e` and
 `python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
 and 48 independent Python `pow` vectors through 8192-bit moduli. This public
 exponent operation is not a private-key signing implementation.
+
+Linux clients discover certificate trust at execution time. `SSL_CERT_FILE`
+selects a PEM bundle and `SSL_CERT_DIR` selects colon-separated certificate
+directories; unset values use standard system locations, while explicit empty
+values suppress that category's defaults. Directories skip unreadable files,
+subdirectories and non-PEM contents. Chain validation searches unordered server
+intermediates with a shared 128-attempt budget and an eight-intermediate depth
+limit, preserving signature, hostname, validity and server-purpose checks.
+The [remaining certificate work](../../project/http-stack-plan.md) includes
+macOS native trust evaluation and .NET Linux user certificate stores.
+
 Buffered sessions also keep up to eight idle authenticated HTTP/2 origins for
 thirty seconds, preserving HPACK, TLS keys, connection credit and monotonically
 allocated odd stream IDs. Checkout consumes ready control frames and retires
