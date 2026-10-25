@@ -11,7 +11,6 @@ grouped by purpose; each subject has one canonical source.
 
 ## Contributing
 
-- [ChatGPT Work VM setup](contributing/work-vm-setup.md)
 - [Implementation workflow](contributing/workflow.md)
 - [OCaml coding guidelines](contributing/coding-guidelines.md)
 - [Test DSLs](contributing/testing.md)
@@ -30,7 +29,6 @@ grouped by purpose; each subject has one canonical source.
 - [Complete embedded library source inventory](compiler/library-sources.md)
 - [Compiler identities](compiler/identities.md)
 - [Intermediate representations](compiler/intermediate-representations.md)
-- [End-to-end example](compiler/end-to-end-example.md)
 - [Design decisions](compiler/design-decisions.md)
 - [Frontend](compiler/frontend/)
 - [Runtime and language representations](compiler/runtime/)
@@ -48,7 +46,6 @@ grouped by purpose; each subject has one canonical source.
 - [Language compatibility ledgers](compatibility/language/)
 - [Standard-library compatibility ledgers](compatibility/stdlib/)
 - [CLI compatibility](compatibility/cli.md)
-- [Known issues](project/known-issues.md)
 - [Roadmap](project/roadmap.md)
 - [AST correctness follow-up](project/ast-correctness-next.md)
 - [Native HTTP stack plan](project/http-stack-plan.md)

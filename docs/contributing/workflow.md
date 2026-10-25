@@ -45,3 +45,15 @@ only when the task explicitly includes it. Keep verbose artifacts under
 
 Compiler source is in `src/`, translated unit tests and tooling are in
 `test/`, and unchanged language/DSL fixtures remain in `test/fixtures/`.
+
+## Record reproducible issues
+
+A compiler issue needs a minimal source reproduction, expected and actual
+behavior, the affected target or pass, and a focused failing test (or a reason
+one cannot yet be committed). Put language and stdlib gaps in the
+[source ledger](../porting/README.md); engineering work without a reproducer
+belongs in the [roadmap](../project/roadmap.md).
+
+When an issue is fixed, keep the regression test and durable behavior in the
+relevant compiler or compatibility document, and remove the issue entry.
+Git history retains the investigation.

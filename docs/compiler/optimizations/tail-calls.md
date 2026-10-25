@@ -7,18 +7,16 @@ recursive ownership are recorded in the
 
 ## Detection
 
-Pass `src/passes/anf/TailCallDetection.ml` recognizes direct, indirect, and closure calls
-whose result is returned without further computation:
-
-```text
-Let(resultId, Call(target, args), Return(Var resultId))
-```
+Production pass `src/passes/anf/SSATailCallDetection.ml` recognizes calls whose
+result is returned without further computation in high-level SSA blocks. It
+propagates alias, borrow, retain and release facts across edges, then uses the
+shared ownership-safe rewrite helpers in `TailCallDetection.ml`.
 
 The pass runs after reference-count insertion. It may move cleanup before the
 tail call only when doing so cannot release a call argument. Otherwise the call
 remains ordinary because cleanup after a jump would be unreachable.
 
-The resulting ANF cases are `TailCall`, `IndirectTailCall`, and
+The resulting operations carried in SSA blocks are `TailCall`, `IndirectTailCall`, and
 `ClosureTailCall`. Direct calls lower to `B` on ARM64 and `JMP` on x86-64;
 indirect calls lower to `BR` and indirect `JMP`, respectively.
 

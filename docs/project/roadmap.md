@@ -3,7 +3,7 @@
 This file contains concrete work that is not yet represented by a focused
 failing test or external issue. Compatibility gaps are tracked in the
 [compatibility documentation](../compatibility/overview.md); reproducible
-compiler bugs belong in [known issues](known-issues.md).
+compiler bugs follow the [reproducer guidance](../contributing/workflow.md#record-reproducible-issues).
 
 ## Current work
 

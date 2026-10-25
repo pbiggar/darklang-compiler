@@ -40,7 +40,7 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 5.5  | Function tree shaking   | `src/passes/lir/FunctionTreeShaking.ml`                         | LIR → pruned LIR                              |
 | 6    | Code generation         | `src/backend/arm64/Backend_Arm64_CodeGen.ml` and `src/backend/x64/CodeGen_X86_64.ml`                           | LIR → ISA instructions                        |
 | 7    | Encode & resolve        | `src/backend/arm64/ARM64_Encoding.ml` and `src/backend/x64/X86_64_Encoding.ml` + `src/backend/arm64/ARM64_Resolve.ml` and `src/backend/x64/X86_64_Resolve.ml`         | ISA → machine code bytes                      |
-| 8    | Binary generation       | `backend/{arm64,x64}/Binary_Generation_*.fs`                 | Blob → Mach-O or ELF executable              |
+| 8    | Binary generation       | `src/backend/{arm64,x64}/*Binary_Generation*.ml`                 | Blob → Mach-O or ELF executable              |
 
 Passes 1–5 are shared across targets. Passes 6–8 live under
 `backend/arm64/` or `backend/x64/`. The host is validated once as a

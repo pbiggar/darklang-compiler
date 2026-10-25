@@ -52,10 +52,10 @@ Unicode helpers are layered on top of the byte representation:
 - `fromCodepoints` allocates a dynamic string and encodes UTF-8 bytes.
 - `codepointLength`, `toUppercase`, `toLowercase`, and `reverse` use the
   codepoint conversion helpers.
-- Private grapheme helpers use the shared UAX #29 segmenter.
-  It keeps combining marks, variation selectors, selected emoji modifiers, and
-  CR/LF with their surrounding cluster, but it does not implement the full UAX
-  #29 rules needed for complex skin-tone and zero-width-joiner emoji sequences.
+- Private grapheme helpers use the shared UAX #29 segmenter, including controls,
+  Hangul, Extend/ZWJ/SpacingMark, Prepend, emoji ZWJ sequences, regional-indicator
+  pairs and Indic conjuncts. The [text contract](../../compatibility/stdlib/text.md#unicode-contract)
+  owns Unicode versions and segmentation boundaries.
 
 Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
 `replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
@@ -102,18 +102,17 @@ The IR operations are:
 
 Both operations access the refcount directly at the value pointer.
 
-## Remaining Work
+## Allocation and release boundaries
 
-The basic string lifetime model is implemented, but edge coverage and memory
-reuse work remain:
+Last-owner release participates in native buffer recycling. The
+[x64 backend](../backend/x64.md) documents its small size classes and exact-size
+large-buffer reuse, including live-alias protection and the absence of block
+splitting/coalescing. ARM64 recycling remains separate work; do not infer
+allocator parity from balanced leak counters.
 
-- string-producing runtime paths such as float display and file I/O need more
-  leak-check coverage
-- deeply nested container combinations should move from ad hoc backend helpers
-  to shape-driven release plans
-- zero-refcount dynamic strings balance leak accounting, but variable-size
-  buffer reuse is still a deferred allocator-policy decision
-- x64 recursive payload parity trails ARM64
+Nested managed payloads use typed release shapes and plans. The
+[reference-counting guide](reference-counting.md) owns these contracts; remaining
+coverage and allocator work belong in the [roadmap](../../project/roadmap.md).
 
 ## Implementation Files
 
@@ -121,7 +120,7 @@ reuse work remain:
 |---|---|
 | `src/backend/binary/LiteralPool.ml` | literal string pool |
 | `src/ir/lir/LIR.ml` | string and dynamic-buffer RC instructions |
-| `src/passes/anf/RefCountInsertion.ml` | string lifetime insertion |
+| `src/passes/anf/ownership/RcSSARefCountInsertion.ml` | SSA string lifetime insertion |
 | `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 string allocation and RC |
 | `src/backend/x64/CodeGen_X86_64.ml` | x64 string allocation and RC |
 | `packages/darklang/stdlib/string.dark` | stdlib string functions |

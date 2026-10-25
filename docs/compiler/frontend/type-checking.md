@@ -4,16 +4,21 @@ This document describes the type checking pass in the Dark compiler.
 
 ## Overview
 
-The Dark compiler uses **top-down type checking** with targeted local inference
-for generic call sites. Function parameters and return types require explicit
-annotations; let bindings have optional annotations.
+The compiler checks declared function signatures and infers local bindings,
+unannotated lambda parameters and generic uses from bodies and contextual
+constraints. Named function declarations can carry parameter and return
+annotations; ordinary local value annotations are rejected. See the
+[binding contract](../../compatibility/language/bindings.md) for source syntax.
+
+For example, `let increment = fun x -> x + 1L in increment 2L` infers an Int64
+parameter and result. Generic arithmetic requirements can also be refined by
+later uses, as covered by `forward-arithmetic-inference.e2e`.
 
 ## Design Philosophy
 
-- **Explicit over implicit**: Type annotations required at function boundaries
-- **Simple implementation**: Local type-variable unification for generics, not
-  global constraint solving
-- **Fast compilation**: Single-pass, no iteration to fixed point for types
+- Preserve written annotations separately from inferred and resolved types.
+- Unify generic and local inference variables with contextual constraints.
+- Enforce statically knowable type and match errors ahead of execution.
 
 ## Type representations
 
@@ -132,7 +137,7 @@ Stdlib.Int64.bitwiseNot x
 
 ### Function Calls
 ```dark
-add 1 2
+add 1L 2L
 ```
 1. Look up function signature
 2. Check argument types match parameter types
@@ -143,12 +148,12 @@ add 1 2
 The type checker desugars partial application:
 
 ```dark
-let addFive = add(5)  // Partial application
+let addFive = add 5L  // Partial application
 ```
 
 Desugars to:
 ```dark
-let addFive = fun x -> add 5 x
+let addFive = fun x -> add 5L x
 ```
 
 This is handled by generating lambda wrappers with fresh parameter names.

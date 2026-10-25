@@ -16,7 +16,7 @@ model, context precedence, diagnostics, and pinned interpreter evidence.
 ## IR Pipeline
 
 ```
-Source -> Parsed AST -> Checked AST -> ANF -> MIR -> LIR -> RegAlloc -> CodeGen -> Encode -> Binary
+Source -> WrittenTypes -> Checked AST -> ANF -> high-level SSA -> MIR -> LIR -> RegAlloc -> CodeGen -> Encode -> Binary
 ```
 
 Passes 1-5 run through parsing, type checking, target-independent IR lowering,
@@ -30,8 +30,9 @@ Each IR is designed to make specific transformations easier:
 | IR  | Purpose                | Key Transformations                                       |
 |-----|------------------------|-----------------------------------------------------------|
 | AST | Close to source syntax | Type checking, error messages with source locations      |
-| ANF | Explicit eval order    | Monomorphization, lambda lifting, ref counting            |
-| MIR | Control flow graph     | SSA construction, optimizations, target-independent       |
+| ANF | Explicit eval order | Structured lowering and accumulator helpers |
+| High-level SSA | Typed blocks and edges | Optimization, inlining, specialization, escape analysis, ref counting |
+| MIR | Lower control-flow graph | SSA-form lowering and target-independent optimization |
 | LIR | Close to machine code  | Register constraints, instruction selection               |
 | ISA | Architecture-specific  | Encoding, branch offset calculation (ARM64 or x86-64)     |
 
@@ -58,8 +59,15 @@ boundary, storage contract, and remaining general HIR migration.
 - Enables:
   - **Monomorphization**: Generate specialized code for each generic instantiation
   - **Lambda lifting**: Convert closures to top-level functions
-  - **Reference count insertion**: Add memory management operations
 - Types defined in `src/ir/anf/ANF.ml`
+
+### High-level SSA
+
+`src/ir/anf/SSAANF.ml` converts structured ANF into typed blocks with ordered
+parameters and explicit edges. Optimization, inlining, higher-order/direct-call
+specialization and escape analysis operate on those blocks. Reference-count
+insertion follows, then ownership-safe tail-call detection. The
+[pipeline reference](pipeline.md) owns the exact production pass order.
 
 ### MIR (Mid-level IR)
 
@@ -156,7 +164,8 @@ Each pass must maintain certain properties:
 | Parser      | Valid source string | Well-formed parsed AST                   |
 | TypeChecker | Well-formed parsed AST | Structurally valid checked AST        |
 | AST->ANF    | Checked AST         | All expressions named, lambdas lifted    |
-| ANF->MIR    | Named expressions   | Valid CFG with basic blocks              |
+| ANF->SSA | Named expressions | Typed blocks, unique definitions and explicit edges |
+| SSA->MIR | Typed ownership-checked blocks | SSA-form MIR with typed phis |
 | MIR->LIR    | Valid CFG           | Target-compatible LIR instructions       |
 | RegAlloc    | Virtual registers   | Physical registers assigned              |
 | CodeGen     | Physical registers  | Valid ISA instruction sequence           |
