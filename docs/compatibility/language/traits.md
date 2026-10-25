@@ -38,6 +38,15 @@ ambiguity checks. Different implementations keep independent identities even
 when they alias the same function. Equally applicable competitors are compile
 errors, without newest-wins arbitration.
 
+Implementation parameters can be explicit or inferred from variables in the
+self type and trait arguments, matching the interpreter. Explicit parameters
+retain their order and bounds; inferred parameters follow in first-seen order.
+Methods share these parameters, which remain generic during signature checking.
+For example, `impl Zero for List<'a>` binds `'a` implicitly, while
+`impl<'a: Show> Show for List<'a>` also requires `Show` for its elements.
+`traits-implicit-parameters.e2e` covers both forms and rejects concrete
+specialization of a generic implementation method.
+
 Trait coalescing follows upstream hash-relevant fields, including effect
 ceilings, binder names and method order; declaration and parameter names are
 cosmetic. Imported `permissionCeiling` is identity metadata, not an enforced

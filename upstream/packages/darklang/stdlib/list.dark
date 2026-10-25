@@ -6,9 +6,7 @@ module Darklang.Stdlib.List
 val empty = []
 
 /// The empty list is what `+` starts from, as `0` is for a number
-// @compiler blocked: container-adaptation diagnostic="Undeclared type parameter 'a'"
 impl Stdlib.Zero for List<'a> =
-  // @compiler blocked: container-adaptation diagnostic="Containing implementation Darklang.Stdlib.List.impl Stdlib.Zero for List<'a>: Undeclared type parameter 'a'"
   let zero () : List<'a> = []
 
 /// Returns a one-element list containing the given <param val>

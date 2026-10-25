@@ -33,10 +33,10 @@ dispositions:
     replace: 35
     run: 1744
   stdlib:
-    blocked: 630
+    blocked: 626
     excluded: 3
     replace: 1142
-    run: 223
+    run: 227
   tests:
     blocked: 46
     run: 1692
@@ -59,7 +59,7 @@ reasons:
     compiler-implementation: 1139
     compiler-timeout: 1
     constructor-identity: 2
-    container-adaptation: 490
+    container-adaptation: 486
     interpreter-intrinsic: 1
     runtime-reflection: 3
     test-counter: 2
