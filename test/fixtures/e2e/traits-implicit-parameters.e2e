@@ -1,0 +1,58 @@
+// Implicit implementation parameters come from self types and trait arguments.
+Stdlib.Zero.zero<List<Int64>> () = []
+Stdlib.Zero.zero<List<String>> () = []
+Stdlib.Zero.zero<Dict<String, Int64>> () = Dict { }
+
+trait ImplicitEmpty<'self> =
+  let empty () : 'self
+impl ImplicitEmpty for List<'a> =
+  let empty () : List<'a> = []
+impl ImplicitEmpty for Dict<'k, 'v> =
+  let empty () : Dict<'k, 'v> = Dict { }
+ImplicitEmpty.empty<List<Int64>> () = []
+ImplicitEmpty.empty<List<String>> () = []
+ImplicitEmpty.empty<Dict<String, Int64>> () = Dict { }
+
+trait ImplicitConvert<'self, 'result> =
+  let convert (value: 'self) (other: 'result) : 'result
+impl ImplicitConvert<'result> for List<'a> =
+  let convert (value: List<'a>) (other: 'result) : 'result = other
+ImplicitConvert.convert [42L] "text" = "text"
+ImplicitConvert.convert ["text"] 42L = 42L
+
+trait ImplicitAlias<'self> =
+  let identity (value: 'self) : 'self
+let implicitIdentity (value: List<'a>) : List<'a> = value
+impl ImplicitAlias for List<'a> =
+  let identity = implicitIdentity
+ImplicitAlias.identity [42L] = [42L]
+ImplicitAlias.identity ["text"] = ["text"]
+
+trait ImplicitBound<'a> =
+  let describe (value: 'a) : String
+impl ImplicitBound for Int64 =
+  let describe (value: Int64) : String = "integer"
+trait ImplicitMixed<'self> =
+  let describe (value: 'self) : String
+impl<'a: ImplicitBound> ImplicitMixed for ('a * 'b) =
+  let describe (value: ('a * 'b)) : String =
+    let (first, second) = value in ImplicitBound.describe first
+ImplicitMixed.describe (42L, "text") = "integer"
+
+(
+trait ImplicitRigid<'self> =
+  let value (input: 'self) : 'self
+impl ImplicitRigid for List<'a> =
+  let value (input: List<Int64>) : List<Int64> = input
+0L
+) = compileerror="Trait method signature mismatch"
+
+(
+trait ImplicitRepeated<'self> =
+  let repeated (value: 'self) : Bool
+impl ImplicitRepeated for ('a * 'a) =
+  let repeated (value: ('a * 'a)) : Bool = true
+ImplicitRepeated.repeated (42L, "text")
+) = compileerror="No implementation of trait 'ImplicitRepeated'"
+
+ImplicitMixed.describe ("missing bound", 42L) = compileerror="No implementation of trait 'ImplicitMixed'"

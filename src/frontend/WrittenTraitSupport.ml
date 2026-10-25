@@ -136,7 +136,26 @@ let predeclare allowInternal types (base : globals) items symbols =
 let materialize offset items =
   let rec loop ordinal reversed implementations = function
     | [] -> (List.rev reversed, List.rev implementations)
-    | (WS.Impl (path, declaration) as item) :: rest ->
+    | WS.Impl (path, declaration) :: rest ->
+        (* Like function signatures, implementation headers bind referenced
+           variables implicitly. Explicit parameters retain their order and
+           bounds; methods share the resulting implementation parameters. *)
+        let explicitParams = List.map fst declaration.WT.typeParams in
+        let allParams =
+          List.fold_left collectWrittenTypeParams explicitParams
+            (declaration.WT.forType :: declaration.WT.trait_.WT.typeArgs)
+        in
+        let implicitParams =
+          List.filter (fun name -> not (List.mem name explicitParams)) allParams
+          |> List.map (fun name -> (name, declaration.WT.range))
+        in
+        let declaration =
+          {
+            declaration with
+            WT.typeParams = declaration.WT.typeParams @ implicitParams;
+          }
+        in
+        let item = WS.Impl (path, declaration) in
         let methodPath = path @ [ "__trait_impl_" ^ string_of_int ordinal ] in
         let methods =
           List.filter_map
