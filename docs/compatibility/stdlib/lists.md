@@ -1,23 +1,7 @@
 # List parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This is the revision-stamped record for list syntax, typing, lowering, runtime
-behavior, and the public `Stdlib.List` contract. Every comparison in this file
-uses this evidence pair:
-
-- compiler comparison HEAD: `14dc38f7964ad6a8fc6e383b43fb44f424c0f064`
-- darklang/dark interpreter: `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
-
-The approved compiler evidence revision
-`b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`, DCB1 report commit
-`8a402797ccccda0ca47b516b356ae1de4d670038`, and the other parity documents
-were starting evidence only. Every finding retained below was checked again at
-the comparison HEAD and interpreter revision. Performance is excluded unless
-it changes observable behavior.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 ## Source anchors and probes
 

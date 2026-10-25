@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Native compiler executable to verify")
     parser.add_argument("--oracle-only", action="store_true", help="Validate generated path fixtures with OpenSSL without compiling Dark")
+    parser.add_argument("--paths-only", action="store_true", help="Skip trust-source discovery when comparing verifier versions")
     options = parser.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -81,11 +83,6 @@ def main():
         ("CA path length", "[limitedLeaf, limitedCA]", "[limitedRoot]", "service.example", False),
         ("empty chain", "[]", "[root]", "service.example", False),
     ]
-    checks = []
-    for label, chain, roots, host, expected in cases:
-        actual = (f'Stdlib.Result.isOk (Stdlib.__X509Chain.verifyAt {chain} {roots} '
-                  f'"{host}" (Stdlib.DateTime.now ()))')
-        checks.append(f'Stdlib.printLine (if {actual} == {str(expected).lower()} then "PASS {label}" else "FAIL {label}")')
     with tempfile.TemporaryDirectory(prefix="dark-x509-paths-") as temporary:
         def pem(names):
             return b"".join(certificates[name][1].public_bytes(serialization.Encoding.PEM) for name in names)
@@ -123,16 +120,23 @@ def main():
             ("bundle discovery", f'["{root_file}"]', "[]"),
             ("directory discovery", "[]", f'["{authorities}"]'),
         ]
-        for label, files, directories in sources:
+        if options.paths_only:
+            sources = []
+        execution_cases = list(cases)
+        for index, (label, files, directories) in enumerate(sources):
             loaded = f'Stdlib.__Tls13Client.__readRootsFromSources {files} {directories}'
-            verified = (f'{loaded} |> Stdlib.Result.andThen (fun anchors -> '
-                        'Stdlib.__X509Chain.verifyAt [leaf, first, second] anchors '
-                        '"service.example" (Stdlib.DateTime.now ())) |> Stdlib.Result.isOk')
-            checks.append(f'Stdlib.printLine (if ({verified}) then "PASS {label}" else "FAIL {label}")')
+            declarations.append(f'let discovered{index} = Builtin.unwrap ({loaded})')
+            execution_cases.append((label, "[leaf, first, second]", f"discovered{index}", "service.example", True))
+        rows = [f'("{label}", {chain}, {anchors}, "{host}", {str(expected).lower()})'
+                for label, chain, anchors, host, expected in execution_cases]
+        # One verifier call keeps compilation bounded as more cases are added.
+        check = ('Stdlib.List.iter cases (fun (label, chain, anchors, host, expected) ->\n'
+                 '  let actual = Stdlib.Result.isOk (Stdlib.__X509Chain.verifyAt chain anchors host (Stdlib.DateTime.now ())) in\n'
+                 '  Stdlib.printLine ((if actual == expected then "PASS " else "FAIL ") + label))')
         source = Path(temporary) / "paths.dark"
         binary = Path(temporary) / "paths"
-        source.write_text("\n".join(declarations + checks) + "\n")
-        subprocess.run([str(ROOT / "dark"), "--allow-internal", str(source), "-o", str(binary)], cwd=ROOT, check=True)
+        source.write_text("\n".join(declarations) + "\nlet cases = [" + ",\n".join(rows) + "]\n" + check + "\n")
+        subprocess.run([str(options.compiler.resolve()), "--allow-internal", str(source), "-o", str(binary)], cwd=ROOT, check=True)
         result = subprocess.run([str(binary)], text=True, capture_output=True, timeout=60, check=True)
         expected = "".join(f"PASS {label}\n" for label, *_ in cases + sources)
         if result.stdout != expected or result.stderr:

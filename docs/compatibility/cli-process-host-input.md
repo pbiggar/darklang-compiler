@@ -1,16 +1,7 @@
 # CLI, process, host, and input parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This contract was revalidated against compiler HEAD
-`cce6860f02b13d416295ff342341eeeae997f49f` and darklang/dark
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
-`8a402797` was only a discovery index. The approved evidence revision
-`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` has no public CLI family.
-All same-source comparisons in this work use those exact revisions.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../porting/README.md) owns current support and test dispositions.
 
 ## Public contract
 
@@ -115,15 +106,49 @@ ends in both architecture code generators. Focused native evidence is
 in `test/compiler-passes/ARM64CodeGenTests.ml`, and executable Linux x86_64 coverage runs the native
 operations under QEMU in `test/compiler-passes/X86_64CodeGenTests.ml`.
 
-## Historical verification record
+## Host adapter contracts
 
-The implementation was rebased onto compiler commit
-`fb61d714723f34d6c43e9bdc03dd96fb46f0c4ea`. Compiler commit
-`252f1af6b6dcb4a3b9b2eca3eeaaed5f69c81ae9` passed the complete test suite
-(`6338/6338`) with a zero-warning, zero-error build. Before
-that final rebase, the process implementation verified equal to the full
-baseline. Current main's exact-byte presentation repair adds one observable
-final LF write (nine instructions) to every benchmark, so the old snapshot
-reported `1.000019`. After the required compatibility reset, all 19 programs
-verified equal at a current/baseline geometric ratio of `1.000000`; the
-`RESULTS.md` performance ratio remains `2.75x`.
+`Builtin.timeNowMs` converts the syscall-backed monotonic clock to Int and
+raises with errno on clock failure. Only elapsed differences are meaningful.
+`Builtin.getBuildHash` uses the same build-time abbreviated Git stamp as
+`--version`, or `dev` without metadata; deployed programs do not invoke Git.
+
+`currentExecutablePath` discovers the running image. Linux uses `/proc/self/exe`
+with a captured `AT_EXECFN`/startup cwd/PATH fallback; macOS uses Darwin
+`proc_info`. Never infer the path solely from `argv[0]`. Discovery retains a
+bounded cache (8175-byte payload); unavailable or oversized paths fail through
+the public String-returning error boundary.
+
+`currentUser` preserves LOGNAME, USER, then builtin precedence. The builtin
+matches the real UID in `/etc/passwd`, ignores environment overrides, and
+returns None for missing/unreadable data or an unmatched UID. It does not
+resolve NSS-only or macOS Directory Services accounts. Linux CPU count uses
+the process affinity mask; macOS queries HW_AVAILCPU, with a minimum-one
+fallback. This can differ from the interpreter's online-CPU count.
+PID and UID adapters expose native real process/user IDs as Int.
+
+## Terminal and input boundaries
+
+Terminal facts use direct terminal-attribute queries and the native TERM value.
+Viewport size tries stdout, stdin and stderr, rejects zero kernel dimensions,
+then accepts positive Int32 COLUMNS/LINES independently, defaulting to 80/24.
+Color requires terminal stdout and unset/empty NO_COLOR; any nonempty value,
+including `0` or whitespace, disables it. TERM and stdin do not affect color.
+Interactivity is true when either stdin or stdout is a terminal.
+
+Row inspection measures plain EGC display width, including escape payloads;
+C0/C1/CRLF control detection tells the caller when to sanitize. Shared stdin
+buffering preserves bytes across line, counted and whole-stream reads. Lines
+accept CR, LF and CRLF and return empty at EOF. All/count reads replace malformed
+UTF-8; counts measure UTF-16 units, reject invalid counts and preserve a remaining
+surrogate when a read splits an astral character. Native strings render an
+isolated surrogate as replacement rather than preserving raw UTF-16 identity.
+
+Key reads temporarily disable canonical mode, echo and terminal signals, then
+restore attributes and masks. Text/CSI/SS3 events and modifiers are decoded;
+repeat/paste coalescing has 4 ms quiet and 40 ms total bounds. A differing control
+key is retained, resize while waiting yields NoName, and redirected stdin yields
+Escape. Secret input retains owned text chunks, Enter, grapheme Backspace and
+paste behavior. Its redirected fallback tests stdin itself: the general
+stdin-or-stdout interactivity predicate would otherwise loop on Escape when
+only stdout is a terminal.

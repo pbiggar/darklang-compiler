@@ -389,35 +389,47 @@ let __trustedRoot (current: Stdlib.__X509Chain.Certificate)
           Stdlib.__X509Chain.__signedBy current anchor) then true
       else Stdlib.__X509Chain.__trustedRoot current rest now caBelow
 
-let __walk (current: Stdlib.__X509Chain.Certificate) (remaining: List<Blob>)
-  (roots: List<Blob>) (now: Int64) (caBelow: Int64) (depth: Int64)
-  (budget: Int64) : (Bool * Int64) =
-  if depth > 8L || budget <= 0L || Stdlib.Bool.not (Stdlib.__X509Chain.__validAt current now) then (false, budget)
-  else if Stdlib.__X509Chain.__trustedRoot current roots now caBelow then (true, budget)
-  else
-    Stdlib.__X509Chain.__issuers current remaining remaining roots now caBelow depth budget
+type Path = {
+  current: Stdlib.__X509Chain.Certificate,
+  remaining: List<Blob>,
+  caBelow: Int64,
+  depth: Int64
+}
 
 // Charge every issuer attempt to one shared budget across all alternative paths.
 // Removing the selected certificate from descendants also prevents chain cycles.
-let __issuers (current: Stdlib.__X509Chain.Certificate) (candidates: List<Blob>)
-  (remaining: List<Blob>) (roots: List<Blob>) (now: Int64)
-  (caBelow: Int64) (depth: Int64) (budget: Int64) : (Bool * Int64) =
-  if budget <= 0L then (false, budget)
+let __issuers (path: Stdlib.__X509Chain.Path) (candidates: List<Blob>)
+  (accepted: List<Stdlib.__X509Chain.Path>) (budget: Int64)
+  : (List<Stdlib.__X509Chain.Path> * Int64) =
+  if budget <= 0L then (Stdlib.List.reverse accepted, budget)
   else match candidates with
-    | [] -> (false, budget)
+    | [] -> (Stdlib.List.reverse accepted, budget)
     | next :: rest ->
-      let attempt = match Stdlib.__X509Chain.parse next with
-        | Error _ -> (false, budget - 1L)
+      let pending = match Stdlib.__X509Chain.parse next with
+        | Error _ -> accepted
         | Ok parent ->
-          let subordinateCAs = if current.extensions.isCA then caBelow + 1L else caBelow in
+          let subordinateCAs = if path.current.extensions.isCA then path.caBelow + 1L else path.caBelow in
           if Stdlib.__X509Chain.__caAllowed parent subordinateCAs &&
-             Stdlib.__X509Chain.__signedBy current parent then
-            let unused = Stdlib.List.filter remaining (fun candidate -> Stdlib.Bool.not (Stdlib.__X509Chain.__same candidate next)) in
-            Stdlib.__X509Chain.__walk parent unused roots now subordinateCAs (depth + 1L) (budget - 1L)
-          else (false, budget - 1L) in
-      let (valid, available) = attempt in
-      if valid then (true, available)
-      else Stdlib.__X509Chain.__issuers current rest remaining roots now caBelow depth available
+             Stdlib.__X509Chain.__signedBy path.current parent then
+            let unused = Stdlib.List.filter path.remaining (fun candidate -> Stdlib.Bool.not (Stdlib.__X509Chain.__same candidate next)) in
+            Stdlib.List.push accepted (Stdlib.__X509Chain.Path { current = parent, remaining = unused, caBelow = subordinateCAs, depth = path.depth + 1L })
+          else accepted in
+      Stdlib.__X509Chain.__issuers path rest pending (budget - 1L)
+
+// Keep alternative paths in an explicit bounded worklist rather than nested calls.
+let __search (pending: List<Stdlib.__X509Chain.Path>) (roots: List<Blob>)
+  (now: Int64) (budget: Int64) : Bool =
+  match pending with
+  | [] -> false
+  | path :: rest ->
+    if Stdlib.Bool.not (Stdlib.__X509Chain.__validAt path.current now) then
+      Stdlib.__X509Chain.__search rest roots now budget
+    else if Stdlib.__X509Chain.__trustedRoot path.current roots now path.caBelow then true
+    else if path.depth >= 8L || budget <= 0L then
+      Stdlib.__X509Chain.__search rest roots now budget
+    else
+      let (parents, available) = Stdlib.__X509Chain.__issuers path path.remaining [] budget in
+      Stdlib.__X509Chain.__search (parents @ rest) roots now available
 
 let verifyAt (chain: List<Blob>) (roots: List<Blob>) (host: String)
   (date: DateTime) : Stdlib.Result.Result<Stdlib.__X509Chain.VerifiedLeaf, String> =
@@ -446,7 +458,8 @@ let verifyAt (chain: List<Blob>) (roots: List<Blob>) (host: String)
           | Error error -> Error error
           | Ok () ->
             let now = Stdlib.__X509Identity.__dateNumber date in
-            let (trusted, _budget) = Stdlib.__X509Chain.__walk parsed rest roots now 0L 0L 128L in
+            let initial = Stdlib.__X509Chain.Path { current = parsed, remaining = rest, caBelow = 0L, depth = 0L } in
+            let trusted = Stdlib.__X509Chain.__search [initial] roots now 128L in
             if trusted then
               Ok (Stdlib.__X509Chain.VerifiedLeaf { spki = parsed.spki })
             else Error "X.509 certificate chain is not trusted"

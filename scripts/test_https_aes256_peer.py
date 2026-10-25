@@ -116,7 +116,7 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
 {operation}
 ''')
         binary = directory / "client"
-        subprocess.run([str(ROOT / "dark"), str(source), "-o", str(binary)],
+        subprocess.run([str(ROOT / "dark"), "--allow-internal", str(source), "-o", str(binary)],
                        check=True, cwd=ROOT, stdout=subprocess.DEVNULL)
         with (directory / "peer.log").open("wb") as log:
             peer = subprocess.Popen(["openssl", "s_server", "-accept", str(port),

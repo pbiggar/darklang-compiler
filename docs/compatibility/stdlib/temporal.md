@@ -1,33 +1,7 @@
 # DateTime and Duration parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This document records the temporal parity contract implemented by compiler
-revision `882f633f4f01af85b89bd847c686d94815321955`. The comparison baseline is
-darklang/dark revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d` from
-2026-08-10. The pre-change compiler HEAD used to reproduce every retained gap
-was `69f92d2f9cd8d47476c0123557175387e411366c`.
-
-Integration rebased that implementation without semantic changes onto compiler
-main `1f5282a113b2abbc15622d5ad7187fb29199964b`, producing implementation
-revision `493d51575a842c6f38fb3e3721fa44518c834d6a`. The complete post-rebase
-conformance run used compiler HEAD
-`449b8a8bafe519fcd5c3f6778ddeddbb34cdb9f9` and the same exact interpreter
-revision above.
-
-The historical DCB1 report at
-`8a402797ccccda0ca47b516b356ae1de4d670038`, the earlier compiler snapshots
-`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` and
-`87a850eed3c5298800df254ebb05d46684e0bd2c`, and their line references were
-starting evidence only. Every statement below was rechecked against the exact
-revisions above. Interpreter range constants were also checked against the
-NodaTime 3.2.2 source at `e56daa2599a4d1917065c015bda923e7a352a236`.
-
-Performance is outside this comparison except where it changes a returned
-value or error.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 ## Representation and type boundary
 
@@ -128,21 +102,16 @@ unit character exactly:
 
 ## Conformance evidence
 
-| Contract | Compiler evidence at `882f633f…` | Interpreter evidence at `04fbe9dc…` | Result |
+| Contract | Compiler evidence | Interpreter evidence at `04fbe9dc…` | Result |
 | --- | --- | --- | --- |
 | Distinct value/type traversal | `src/AST.ml`, `src/frontend/interpreter/Parser.ml`, `src/frontend/WrittenChecking.ml`, `src/ir/anf/ANF.ml`, `src/passes/anf/AST_to_ANF.ml`, `src/passes/anf/RefCountInsertion.ml`, `src/passes/mir/MIR_to_LIR.ml`, `src/passes/lir/RegisterAllocation.ml` | `backend/src/LibExecution/RuntimeTypes.fs:133-153,948-969` | Aligned |
 | Clock and tick precision | `src/backend/arm64/instructions/ARM64EmitNativeEffects.ml`, `src/backend/x64/instructions/X64EmitNativeEffects.ml` | `Builtins.Time/Libs/DateTime.fs:14-45`, `DarkDateTime.fs` | Aligned to available host precision |
 | Public signatures and behavior | `packages/darklang/stdlib/dateTime.dark` | `packages/darklang/stdlib/dateTime.dark:4-136`, `Builtins.Pure/Libs/DateTime.fs:13-536` | Aligned |
 | Duration grammar and errors | `packages/darklang/stdlib/duration.dark`, `packages/darklang/stdlib/int.dark` | `packages/darklang/stdlib/duration.dark:6-28`, `Builtins.Pure/Libs/Int.fs:359-379` | Aligned for the documented grammar |
-| Same-source DateTime corpus | `test/fixtures/e2e/upstream/stdlib/date.dark`; no line allowlist | `backend/testfiles/execution/stdlib/date.dark` | Exact file, 222/222 compiler cases pass |
-| Same-source Duration corpus | `test/fixtures/e2e/upstream/stdlib/duration.dark`; no line allowlist | `backend/testfiles/execution/stdlib/duration.dark` | Exact file, 10/10 compiler cases pass |
-| Type, range, rounding and grammar probes | `test/fixtures/e2e/temporal-parity.e2e`, `stdlib-internal/datetime.e2e` | Focused expectations derived from the pinned builtins and NodaTime constants | 29/29 pass |
+| Same-source DateTime corpus | `test/fixtures/e2e/upstream/stdlib/date.dark`; no line allowlist | `backend/testfiles/execution/stdlib/date.dark` | Exact file, DateTime behavior cases |
+| Same-source Duration corpus | `test/fixtures/e2e/upstream/stdlib/duration.dark`; no line allowlist | `backend/testfiles/execution/stdlib/duration.dark` | Exact file, Duration behavior cases |
+| Type, range, rounding and grammar probes | `test/fixtures/e2e/temporal-parity.e2e`, `stdlib-internal/datetime.e2e` | Focused expectations derived from the pinned builtins and NodaTime constants | Type, range, rounding and grammar cases |
 | Non-host x64 syscall lowering | `test/compiler-passes/X86_64CodeGenTests.ml` DateTimeNow test | N/A | 100ns conversion inspected directly |
-
-The copied date and duration fixtures have SHA-256 values
-`3939d8b7e1d28fa82c381d287b54901913894d4b991cb3b82fc586073660dbbc`
-and `303dcdc71d922f286d37454a024cdfd31d740aad52b3a141f72f9d41b6c403d0`
-respectively, identical to the pinned interpreter files.
 
 ## Intentional AOT differences
 

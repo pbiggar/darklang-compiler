@@ -15,6 +15,7 @@ mutation/results/checkpoint.txt
 mutation/results/mutation_sites.txt
 mutation/results/report.txt
 mutation/results/results.csv
+mutation/results/addressed.txt
 /differential-test-results/
 
 # Output files

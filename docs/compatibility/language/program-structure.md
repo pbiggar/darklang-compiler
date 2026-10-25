@@ -1,16 +1,7 @@
 # Program structure parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This ledger records the program-level comparison against compiler evidence
-revision `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark release
-`v0.0.35`, revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. Implementation and source
-revalidation started from compiler HEAD
-`a78567efd773de86265e55a54445ddf5a5a8911c`. DCB1 report `8a402797` and the
-existing parity documents were used only as finding inventories.
+Semantic comparison baseline: `darklang/dark@0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The interpreter evidence was rechecked in `LibParser/Parser.fs`,
 `LibParser/SourceFile.fs`, `LibParser/NameResolver.fs`,

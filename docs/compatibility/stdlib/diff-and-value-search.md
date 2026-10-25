@@ -1,18 +1,7 @@
 # Diff and ValueSearch parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-This document records the observable parity contract for the compiler's
-`Darklang.Stdlib.Diff` and `Darklang.Stdlib.ValueSearch` modules. The
-comparison was revalidated directly between compiler HEAD
-`1f5282a113b2abbc15622d5ad7187fb29199964b` and `darklang/dark`
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The older compiler snapshots
-`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3` and
-`d6b58ef4`, and DCB1 report commit `8a402797`, were starting inventory only;
-no finding from them was retained without checking these exact revisions.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 The interpreter sources used for the comparison are
 `packages/darklang/stdlib/diff.dark:1-69`,

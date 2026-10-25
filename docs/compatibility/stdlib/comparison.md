@@ -1,25 +1,10 @@
 # Equality, ordering, and comparability parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
-See the [current audit](../current-audit.md) for post-port status and validation.
-Older revision pairs and executed counts below are historical evidence, not
-a fresh test result for this revision.
-
-The public prelude contract was revalidated between compiler starting HEAD
-`c609b56ce1ec488afc3146c585b6f45a2fcf22a8` and darklang/dark
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation comparison commit
-`ab81ead7f4b232b4ffa181d8ddb71e9381c510c8` was tested against that same exact
-interpreter revision. Compiler evidence revision
-`51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, DCB1 report commit `8a402797`, and
-the previous parity document were starting evidence only; every retained
-prelude finding was checked again at the exact revisions above.
+Semantic comparison baseline: `darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+The [source ledger](../../porting/README.md) owns current support and test dispositions.
 
 JSON's separate serialization and parsing parity boundary is documented in
 [the JSON ledger](json.md).
-
-At the implementation comparison commit the focused matrix passed 140/140
-cases. Performance is outside this contract unless it changes observable
-behavior.
 
 The executable matrix is `test/fixtures/e2e/comparison-parity.e2e`. It covers the
 operators `==`, `!=`, `<`, `>`, `<=`, and `>=` plus the unversioned public

@@ -207,9 +207,9 @@ Write an E2E test that would FAIL if this mutation were applied (i.e., the test 
 2. **Design** a test input that would produce different output with the mutation applied. Validate the test fails if the mutation is present, and passes with the mutation removed.
 3. **Add** the test to the appropriate .e2e file in test/fixtures/e2e/
 4. **Build** ./build --ai, then **run** ./run-tests --ai to verify your test passes with the original code
-5. **Commit** your changes with message: 'Add E2E test for mutation #$id'
+5. **Commit** your changes with a message describing the behavior covered
    - Include the .e2e file you modified
-   - Include mutation/results/addressed.txt (add line: $id)
+   - Keep mutation/results/addressed.txt local; its numeric IDs belong to this run
 
 ### E2E Test Format
 E2E tests use the format: \`expression = expected_result\`
@@ -227,7 +227,8 @@ true && false = false
 - The test should pass normally but would fail if the operator were changed
 
 ### After Adding the Test
-Mark this mutation as addressed by adding "$id" to mutation/results/addressed.txt
+Mark this mutation as addressed locally by adding "$id" to mutation/results/addressed.txt.
+A fresh mutation run clears this file; --resume preserves it with the existing results.
 EOF
 }
 

@@ -42,22 +42,18 @@ grouped by purpose; each subject has one canonical source.
 - [How to read and update the compiler compatibility ledger](porting/README.md)
 - [Current compiler port status](porting/generated/ledger.md)
 - [Darklang compatibility overview](compatibility/overview.md)
-- [Approved upstream adoption](compatibility/upstream-adoption.md)
-- [Historical compatibility failure audits](compatibility/current-audit.md)
+- [Upstream adoption decisions](compatibility/upstream-adoption.md)
+- [Deferred package-review decisions](compatibility/package-review.md)
 - [Complete upstream import and per-item annotations](porting/upstream-import.md)
 - [Language compatibility ledgers](compatibility/language/)
 - [Standard-library compatibility ledgers](compatibility/stdlib/)
 - [CLI compatibility](compatibility/cli.md)
 - [Known issues](project/known-issues.md)
 - [Roadmap](project/roadmap.md)
-- [Parsed and checked AST boundary plan](project/parsed-checked-ast-plan.md)
 - [AST correctness follow-up](project/ast-correctness-next.md)
 - [Native HTTP stack plan](project/http-stack-plan.md)
 - [SSA boundary plan](project/ssa-boundary-plan.md)
-- [Call-graph-directed pipeline plan](project/callgraph-pipeline-plan.md)
 - [In-place mutation optimization checklist](project/perceus-checklist.md)
-- [Host test and compiler runtime profile (2026-09-27)](project/test-runtime-profile-2026-09-27.md)
-- [Historical host-suite compile-time comparison (2026-09-29)](project/test-runtime-history-2026-09-29.md)
 
 ## Benchmarks
 
@@ -72,3 +68,8 @@ grouped by purpose; each subject has one canonical source.
 maintained from their named interpreter revision, source implementation, and
 focused tests. Other documentation should link to those sources instead of
 copying their current-state claims.
+
+Keep durable contracts, decisions and unresolved work in these canonical sources.
+Retire completed plans after moving their invariants into implementation docs;
+keep run receipts and transient diagnostics in ignored artifacts. Git history
+retains superseded investigations and verification records.
