@@ -151,5 +151,5 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | Area | Assessments |
 | --- | --- |
 | features | 6 excluded, 9 missing, 1 partial, 199 supported |
-| parser | 1 partial, 30 supported |
+| parser | 31 supported |
 | builtins | 169 missing, 79 present, 533 unassessed |
