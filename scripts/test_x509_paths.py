@@ -153,7 +153,9 @@ def main():
                  f'  let trusted = {trust} in\n'
                  '  let actual = match trusted with\n'
                  '    | Error _ -> false\n'
-                 '    | Ok roots -> Stdlib.Result.isOk (Stdlib.__X509Chain.verifyAt (load chain) roots host (Stdlib.DateTime.now ())) in\n'
+                 '    | Ok roots -> match Stdlib.__X509Chain.verifyAt (load chain) roots host (Stdlib.DateTime.now ()) with\n'
+                 '      | Error _ -> false\n'
+                 '      | Ok verified -> Stdlib.Result.isOk (Stdlib.__RsaSpki.parse verified.spki) in\n'
                  '  Stdlib.printLine ((if actual == expected then "PASS " else "FAIL ") + label))')
         source = Path(temporary) / "paths.dark"
         binary = Path(temporary) / "paths"
