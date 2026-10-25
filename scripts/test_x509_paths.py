@@ -65,10 +65,6 @@ def main():
                         expired=expired, clientOnly=client_only, notCA=not_ca,
                         badIssuerLeaf=bad_issuer_leaf, limitedRoot=limited_root,
                         limitedCA=limited_ca, limitedLeaf=limited_leaf)
-    declarations = []
-    for name, (_, cert) in certificates.items():
-        encoded = cert.public_bytes(serialization.Encoding.DER).hex()
-        declarations.append(f'let {name} = Builtin.unwrap (Stdlib.Blob.fromHex "{encoded}")')
     cases = [
         ("ordered", "[leaf, second, first]", "[root]", "service.example", True),
         ("reordered", "[leaf, first, second]", "[root]", "service.example", True),
@@ -84,6 +80,12 @@ def main():
         ("empty chain", "[]", "[root]", "service.example", False),
     ]
     with tempfile.TemporaryDirectory(prefix="dark-x509-paths-") as temporary:
+        declarations = []
+        for name, (_, cert) in certificates.items():
+            certificate_path = Path(temporary) / f"{name}.der"
+            certificate_path.write_bytes(cert.public_bytes(serialization.Encoding.DER))
+            declarations.append(
+                f'let {name} = Builtin.unwrap (Stdlib.Cli.FileSystem.readFile "{certificate_path}")')
         def pem(names):
             return b"".join(certificates[name][1].public_bytes(serialization.Encoding.PEM) for name in names)
 
@@ -136,7 +138,7 @@ def main():
         source = Path(temporary) / "paths.dark"
         binary = Path(temporary) / "paths"
         source.write_text("\n".join(declarations) + "\nlet cases = [" + ",\n".join(rows) + "]\n" + check + "\n")
-        subprocess.run([str(options.compiler.resolve()), "--allow-internal", str(source), "-o", str(binary)], cwd=ROOT, check=True)
+        subprocess.run([str(options.compiler.resolve()), "--allow-internal", str(source), "-o", str(binary)], cwd=ROOT, check=True, timeout=180)
         result = subprocess.run([str(binary)], text=True, capture_output=True, timeout=60, check=True)
         expected = "".join(f"PASS {label}\n" for label, *_ in cases + sources)
         if result.stdout != expected or result.stderr:
