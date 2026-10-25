@@ -2,6 +2,7 @@
 """Exercise the Dark TLS client against a forced local TLS 1.3 cipher suite."""
 
 import argparse
+import contextlib
 import socket
 import subprocess
 import tempfile
@@ -34,6 +35,7 @@ def main() -> None:
     parser.add_argument("ca_authentication", nargs="?", default="rsa")
     parser.add_argument("response_mode", nargs="?", default="buffered")
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    parser.add_argument("--artifacts", type=Path, help="Retain generated TLS fixtures for debugging")
     options = parser.parse_args()
     suite = options.suite
     authentication = options.authentication
@@ -47,7 +49,12 @@ def main() -> None:
         raise ValueError(f"Unsupported TLS test CA: {ca_authentication}")
     if response_mode not in ("buffered", "stream"):
         raise ValueError(f"Unsupported TLS response mode: {response_mode}")
-    with tempfile.TemporaryDirectory(prefix="dark-https-aes256-") as temporary:
+    if options.artifacts:
+        options.artifacts = options.artifacts.resolve()
+        options.artifacts.mkdir(parents=True, exist_ok=False)
+    workspace = (contextlib.nullcontext(str(options.artifacts)) if options.artifacts
+                 else tempfile.TemporaryDirectory(prefix="dark-https-aes256-"))
+    with workspace as temporary:
         directory = Path(temporary)
         ca_key = directory / "ca.key"
         ca_cert = directory / "ca.pem"
@@ -136,12 +143,12 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
                 result = subprocess.run([str(binary)], cwd=ROOT, text=True,
                                         capture_output=True, timeout=30)
                 if result.returncode != 0 or "TLS OK" not in result.stdout:
-                    raise RuntimeError(f"Dark TLS probe failed: {result.stdout} {result.stderr}")
+                    raise RuntimeError(f"Dark TLS probe failed (exit {result.returncode}): {result.stdout} {result.stderr}")
                 rejection_case = "badroot" if response_mode == "stream" else "wrong.local"
                 rejected = subprocess.run([str(binary), rejection_case], cwd=ROOT,
                                           text=True, capture_output=True, timeout=30)
                 if rejected.returncode != 0 or "TLS failed:" not in rejected.stdout:
-                    raise RuntimeError(f"Invalid trust or hostname was accepted: {rejected.stdout} {rejected.stderr}")
+                    raise RuntimeError(f"Trust rejection probe failed (exit {rejected.returncode}): {rejected.stdout} {rejected.stderr}")
                 rejection = "untrusted root" if response_mode == "stream" else "invalid hostname"
                 print(f"{suite} with {authentication} leaf and {ca_authentication} CA, {response_mode} OK; {rejection} rejected")
             finally:
