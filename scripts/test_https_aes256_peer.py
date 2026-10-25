@@ -140,7 +140,7 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
                                     stdout=log, stderr=subprocess.STDOUT)
             try:
                 wait_for_port(port, peer)
-                result = subprocess.run([str(binary)], cwd=ROOT, text=True,
+                result = subprocess.run([str(binary), "localhost"], cwd=ROOT, text=True,
                                         capture_output=True, timeout=30)
                 if result.returncode != 0 or "TLS OK" not in result.stdout:
                     raise RuntimeError(f"Dark TLS probe failed (exit {result.returncode}): {result.stdout} {result.stderr}")
