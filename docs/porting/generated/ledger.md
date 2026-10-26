@@ -10,7 +10,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 
 | Area | Source dispositions |
 | --- | --- |
-| packages | 1,922 blocked, 2 excluded, 35 replace, 1,744 run |
+| packages | 1,919 blocked, 25 excluded, 35 replace, 1,724 run |
 | stdlib | 626 blocked, 3 excluded, 1,142 replace, 227 run |
 | tests | 46 blocked, 1,692 run, 621 xfail |
 
@@ -113,14 +113,14 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | --- | --- | --- |
 | packages | `aot-type-error` | 8 |
 | packages | `compiler-contract` | 15 |
-| packages | `compiler-gap` | 17 |
+| packages | `compiler-gap` | 16 |
 | packages | `compiler-implementation` | 34 |
 | packages | `constructor-identity` | 18 |
 | packages | `runtime-reflection` | 2 |
-| packages | `script-entrypoint` | 1 |
+| packages | `superseded-test-script` | 23 |
 | packages | `test-counter` | 1 |
 | packages | `test-diagnostics` | 1 |
-| packages | `upstream-dependency` | 1,862 |
+| packages | `upstream-dependency` | 1,861 |
 | stdlib | `compiler-contract` | 6 |
 | stdlib | `compiler-gap` | 1 |
 | stdlib | `compiler-implementation` | 1,139 |
