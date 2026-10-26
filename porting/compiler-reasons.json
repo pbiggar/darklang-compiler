@@ -8,7 +8,7 @@
   "compiler-contract": "The existing compiler implementation has a different public contract or the upstream contract cannot yet be established.",
   "container-adaptation": "This trait, implementation or member still needs adaptation to the compiler.",
   "missing-implementation": "Legacy unvalidated imported declaration; its source implementation exists but has not yet been enabled. Probe it and replace this tag with a concrete blocker or remove its annotation.",
-  "script-entrypoint": "The imported item is an executable script body, not a reusable library declaration.",
+  "superseded-test-script": "The legacy test script is superseded by tests/language/archivedArgs.dark or archivedSelf.dark and was removed upstream in c063baf22b32e9f5c9ce0cda66e4f48db11a367b; its duplicate helpers and executable body are intentionally excluded until the source pin advances.",
   "pending-validation": "This test is imported but has not yet been classified by execution.",
   "upstream-dependency": "The item depends on an imported declaration that is not yet available to the compiler.",
   "compiler-gap": "The compiler behavior for this case still differs from the interpreter.",

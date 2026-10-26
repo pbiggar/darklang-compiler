@@ -175,8 +175,14 @@ both with and without imported test helpers. It also compiles a trivial caller
 against each library to check that its context can be reused.
 This catches failures that source checking alone cannot establish. Run it before
 embedding a newly enabled batch, then rebuild and run the complete host suite.
-Executable script bodies remain blocked with `script-entrypoint`: importing a
-script does not make its entry expressions reusable library declarations.
+The legacy `test/test_earg.dark` and `test/test_eself.dark` scripts remain in the
+pinned corpus, but their helpers and executable bodies are excluded with
+`superseded-test-script`. Upstream removed them in
+[`c063baf`](https://github.com/darklang/dark/commit/c063baf22b32e9f5c9ce0cda66e4f48db11a367b)
+after migrating their coverage to `tests/language/archivedArgs.dark` and
+`archivedSelf.dark`. Keep those named tests and their genuine support gaps;
+remove these obsolete sources when the interpreter pin advances. Library
+selection still requires declarations only.
 
 Both execution assertions and named tests are discovered from the parsed AST.
 Documentation examples in string literals are never tests. A named test is
