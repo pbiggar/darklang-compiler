@@ -28,10 +28,10 @@ builtins:
   unassessed: 533
 dispositions:
   packages:
-    blocked: 1922
-    excluded: 2
+    blocked: 1919
+    excluded: 25
     replace: 35
-    run: 1744
+    run: 1724
   stdlib:
     blocked: 626
     excluded: 3
@@ -45,14 +45,14 @@ reasons:
   packages:
     aot-type-error: 8
     compiler-contract: 15
-    compiler-gap: 17
+    compiler-gap: 16
     compiler-implementation: 34
     constructor-identity: 18
     runtime-reflection: 2
-    script-entrypoint: 1
+    superseded-test-script: 23
     test-counter: 1
     test-diagnostics: 1
-    upstream-dependency: 1862
+    upstream-dependency: 1861
   stdlib:
     compiler-contract: 6
     compiler-gap: 1
